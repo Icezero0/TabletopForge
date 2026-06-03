@@ -57,15 +57,16 @@ Backend Application
 
 ## 4.2 Room Domain
 
-负责房间、成员、审批、房间设置。
+负责房间、成员、审批。
 
 包含：
 
 - rooms
 - room_members
 - room_join_requests
-- role_change_requests
 - permissions
+
+当前后端地基已移除房间配置空壳；后续如需要房间配置，再按具体业务重新设计。
 
 ## 4.3 Communication Domain
 
@@ -98,6 +99,8 @@ Backend Application
 - maps
 - tokens
 - assets
+
+当前已实现的 assets 只承载头像与反馈图片。业务资源库中的 image、地图背景、Token 素材后续在 Tabletop Domain 落地。
 
 ## 4.6 Rule Domain
 
@@ -225,7 +228,7 @@ ROOM channel：房间级事件
 - 对象存储
 - 其他可访问文件服务
 
-数据库中只保存资源元信息和访问 URL。
+数据库中保存资源元信息和相对存储路径，不直接保存文件二进制。
 
 ---
 

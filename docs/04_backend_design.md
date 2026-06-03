@@ -17,6 +17,7 @@
 
 - 用户认证
 - 用户资料管理
+- 头像与反馈图片等基础 assets 管理
 - 房间管理
 - 成员关系与审批
 - 权限校验
@@ -24,7 +25,7 @@
 - RP 消息持久化
 - 角色卡与状态管理
 - 场景、地图、Token 管理
-- 资源元信息管理
+- 业务资源库管理
 - 骰子计算与记录
 - 操作日志
 - WebSocket 实时广播
@@ -203,25 +204,38 @@ get_characters
 
 ## 10.2 members
 
-负责房间成员关系和 room_role / game_role。
+负责房间成员关系和 room role。
 
-## 10.3 characters
+当前后端地基只实现 `owner / manager / member`。game role 后续随角色、地图、Token 等游戏业务一起设计。
+
+## 10.3 assets
+
+负责基础文件资产元信息与文件读取。
+
+当前只承载：
+
+- 用户头像 `avatar`
+- 反馈图片 `feedback_image`
+
+长期用户资源库中的业务 `image`、地图素材和 Token 图片后续再扩展。
+
+## 10.4 characters
 
 负责角色卡基础信息。
 
-## 10.4 character_states
+## 10.5 character_states
 
 负责角色当前状态和高频状态修改。
 
-## 10.5 scenes / maps / tokens
+## 10.6 scenes / maps / tokens
 
 负责地图桌面相关数据。
 
-## 10.6 dice
+## 10.7 dice
 
 负责骰子表达式解析、计算和记录。
 
-## 10.7 operation_logs
+## 10.8 operation_logs
 
 负责操作日志写入和查询。
 

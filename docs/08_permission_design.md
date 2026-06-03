@@ -29,21 +29,20 @@ game_role
 
 site_role 是站点级身份，存储在用户表中。
 
-建议枚举：
+枚举：
 
 ```text
-USER
-SITE_ADMIN
-SUPER_ADMIN
+user
+admin
 ```
 
 负责：
 
-- 查看反馈
+- 提交反馈
+- 查看自己的反馈
+- 查看全部反馈
 - 处理反馈
-- 管理站点公告
-- 查看站点统计
-- 用户状态管理
+- 设置其他用户的 site_role
 
 site_role 不自动授予任何房间内权限。
 
@@ -53,22 +52,22 @@ site_role 不自动授予任何房间内权限。
 
 room_role 是房间级身份，存储在 room_members 中。
 
-建议枚举：
+枚举：
 
 ```text
-OWNER
-ADMIN
-MEMBER
+owner
+manager
+member
 ```
 
 负责：
 
 - 审批加入房间
 - 踢出成员
-- 修改房间设置
-- 设置 room_role
-- 审批 game_role 变更
-- 管理房间公告
+- 修改房间信息
+- 设置或解除 manager
+
+当前后端地基已移除房间配置空壳；房间配置能力后续有明确业务需求时再设计。
 
 ---
 
@@ -108,24 +107,36 @@ NPC_CONTROLLER
 
 ## 6.1 site 权限
 
-| 权限 | USER | SITE_ADMIN | SUPER_ADMIN |
-|---|---|---|---|
-| 提交反馈 | 是 | 是 | 是 |
-| 查看反馈 | 否 | 是 | 是 |
-| 处理反馈 | 否 | 是 | 是 |
-| 管理用户状态 | 否 | 否/可配置 | 是 |
+| 权限 | user | admin |
+|---|---|---|
+| create_feedback | 是 | 是 |
+| view_own_feedback | 是 | 是 |
+| view_all_feedback | 否 | 是 |
+| update_feedback | 否 | 是 |
+| delete_feedback | 否 | 是 |
+| manage_site_roles | 否 | 是 |
 
 ## 6.2 room 权限
 
-| 权限 | OWNER | ADMIN | MEMBER |
+| 权限 | owner | manager | member |
 |---|---|---|---|
-| 修改房间信息 | 是 | 是/可配置 | 否 |
+| view_room | 是 | 是 | 是 |
+| update_room | 是 | 是 | 否 |
+| delete_room | 是 | 否 | 否 |
+| view_members | 是 | 是 | 是 |
+| invite_user | 是 | 是 | 是 |
 | 审批加入房间 | 是 | 是 | 否 |
-| 踢出成员 | 是 | 是 | 否 |
-| 设置 ADMIN | 是 | 否 | 否 |
-| 修改 room_role | 是 | 否/可配置 | 否 |
-| 审批 game_role 变更 | 是 | 是 | 否 |
-| 删除房间 | 是 | 否 | 否 |
+| manage_members | 是 | 是 | 否 |
+| manage_managers | 是 | 否 | 否 |
+| view_messages | 是 | 是 | 是 |
+| send_message | 是 | 是 | 是 |
+
+移除成员规则：
+
+- 移除普通成员需要 `manage_members`，owner 和 manager 均可执行。
+- 移除 manager 需要 `manage_managers`，当前只有 owner 可执行。
+- owner 不能被移除。
+- 成员主动退出房间走 leave room，不走 remove member。
 
 ## 6.3 game 权限
 
@@ -152,16 +163,16 @@ NPC_CONTROLLER
 ## 7.1 加入房间
 
 1. 用户提交加入申请。
-2. 用户可选择期望 game_role。
-3. OWNER 或 ADMIN 审批。
-4. 审批通过后创建 room_member。
-5. 默认 room_role 为 MEMBER。
-6. game_role 根据审批结果写入。
+2. 房间侧由 owner 或 manager 审批。
+3. 审批通过后创建 room_member。
+4. 默认 room role 为 member。
+
+当前还保留自动通过、手动审核和自动拒绝三种入房审核模式。
 
 ## 7.2 game_role 变更
 
 1. 成员提交 game_role 变更申请。
-2. OWNER 或 ADMIN 审批。
+2. owner 或 manager 审批。
 3. 审批通过后更新 room_members.game_role。
 4. 写入操作日志。
 5. 广播成员身份变化事件。

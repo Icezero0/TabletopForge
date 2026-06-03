@@ -23,16 +23,20 @@
 
 ```text
 id
-username
 email
-password_hash
-avatar_url
+username
+hashed_password
+avatar_asset_id
 site_role
 created_at
-updated_at
 ```
 
-## 2.2 feedback
+当前后端地基：
+
+- `site_role` 取值为 `user` 或 `admin`。
+- `avatar_asset_id` 指向当前头像 asset 的 id，但不建立数据库外键，避免 users 与 assets 形成双向建表依赖。
+
+## 2.2 feedbacks
 
 用途：存储用户反馈。
 
@@ -40,15 +44,20 @@ updated_at
 
 ```text
 id
-user_id
-category
-content
+creator_id
+handled_by_id
+feedback_type
+page
+title
+description
 status
-handled_by
+admin_note
 handled_at
 created_at
 updated_at
 ```
+
+反馈图片通过 `assets.feedback_id` 关联。
 
 ---
 
@@ -63,14 +72,10 @@ updated_at
 ```text
 id
 name
-description
-owner_user_id
-ruleset
+owner_id
 visibility
-current_scene_id
+join_audit_mode
 created_at
-updated_at
-deleted_at
 ```
 
 ## 3.2 room_members
@@ -80,25 +85,19 @@ deleted_at
 核心字段：
 
 ```text
-id
 room_id
 user_id
-room_role
-game_role
-status
+role
 joined_at
-created_at
-updated_at
 ```
 
 索引建议：
 
 ```text
 unique(room_id, user_id)
-index(user_id)
-index(room_id, room_role)
-index(room_id, game_role)
 ```
+
+当前后端地基只实现 `role = owner | manager | member`。`game_role` 后续随游戏业务模块加入。
 
 ## 3.3 room_join_requests
 
@@ -109,12 +108,13 @@ index(room_id, game_role)
 ```text
 id
 room_id
-applicant_user_id
-requested_game_role
-message
+initiator_user_id
+target_user_id
+source
 status
-reviewed_by
-reviewed_at
+room_action
+target_action
+room_action_by_user_id
 created_at
 updated_at
 ```
@@ -122,6 +122,8 @@ updated_at
 ## 3.4 role_change_requests
 
 用途：存储 room_role 或 game_role 变更申请。
+
+当前后端地基暂未实现该表。管理员设置与解除通过 room member API 直接完成。
 
 核心字段：
 
@@ -366,26 +368,34 @@ index(linked_character_id)
 
 ## 7.1 assets
 
-用途：图片资源元信息。
+用途：基础图片资产元信息。
 
 核心字段：
 
 ```text
 id
-owner_user_id
-room_id
 asset_type
-name
-url
-mime_type
+owner_id
+feedback_id
+original_filename
+storage_path
+content_type
 size_bytes
-width
-height
 created_at
-updated_at
 ```
 
-room_id 为空时表示个人资源。
+当前已实现的 `asset_type`：
+
+```text
+avatar
+feedback_image
+```
+
+说明：
+
+- 文件二进制存储在 `DATA_DIR/assets` 下。
+- 数据库只存储相对路径和元信息。
+- 长期用户资源库中的业务 `image` 后续再扩展，不在当前地基中实现。
 
 ---
 

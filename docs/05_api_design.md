@@ -47,15 +47,15 @@ GET  /auth/me
 ```text
 GET   /users/me
 PATCH /users/me
+POST  /users/me/avatar
+GET   /users/me/rooms
+GET   /users/me/owned-rooms
+GET   /users
 GET   /users/{user_id}
+PATCH /users/{user_id}/site-role
 ```
 
-站点管理接口：
-
-```text
-GET   /admin/users
-PATCH /admin/users/{user_id}
-```
+`PATCH /users/{user_id}/site-role` 需要 `manage_site_roles` 站点权限。当前用于由 `admin` 将另一个用户设置为 `admin` 或 `user`。
 
 ---
 
@@ -74,35 +74,38 @@ DELETE /rooms/{room_id}
 # 7 成员与审批 API
 
 ```text
-POST /rooms/{room_id}/join-requests
-GET  /rooms/{room_id}/join-requests
-POST /rooms/{room_id}/join-requests/{request_id}/approve
-POST /rooms/{room_id}/join-requests/{request_id}/reject
+POST   /rooms/{room_id}/join-requests/apply
+POST   /rooms/{room_id}/join-requests/invite
+GET    /rooms/{room_id}/join-requests
+GET    /join-requests
+POST   /join-requests/{request_id}/approve
+POST   /join-requests/{request_id}/reject
 
 GET    /rooms/{room_id}/members
-PATCH  /rooms/{room_id}/members/{member_id}/room-role
-PATCH  /rooms/{room_id}/members/{member_id}/game-role
-DELETE /rooms/{room_id}/members/{member_id}
+PUT    /rooms/{room_id}/members/{target_user_id}/manager
+DELETE /rooms/{room_id}/members/{target_user_id}/manager
+DELETE /rooms/{room_id}/members/{target_user_id}
+DELETE /rooms/{room_id}/members/me
 ```
 
 可能触发事件：
 
-- ROOM_MEMBER_JOINED
-- ROOM_MEMBER_REMOVED
-- ROOM_MEMBER_ROLE_CHANGED
+- `room_members`
+- `notification`
+- `session_closed`
 
 ---
 
 # 8 普通消息 API
 
 ```text
-POST /rooms/{room_id}/messages
-GET  /rooms/{room_id}/messages
+POST /messages/rooms/{room_id}
+GET  /messages/rooms/{room_id}
 ```
 
 触发事件：
 
-- CHAT_MESSAGE_CREATED
+- `message`
 
 ---
 
@@ -115,7 +118,7 @@ GET  /rooms/{room_id}/rp-messages
 
 触发事件：
 
-- RP_MESSAGE_CREATED
+- 后续实现 RP 消息后定义。
 
 ---
 
@@ -131,9 +134,7 @@ DELETE /characters/{character_id}
 
 触发事件：
 
-- CHARACTER_CREATED
-- CHARACTER_UPDATED
-- CHARACTER_DELETED
+- 后续实现角色模块后定义。
 
 ---
 
@@ -150,12 +151,7 @@ POST  /characters/{character_id}/resources/{resource_id}/change
 
 触发事件：
 
-- CHARACTER_STATE_CHANGED
-- CHARACTER_HP_CHANGED
-- CHARACTER_EFFECT_ADDED
-- CHARACTER_EFFECT_REMOVED
-- CHARACTER_RESOURCE_CHANGED
-- OPERATION_LOG_CREATED
+- 后续实现角色状态和操作日志模块后定义。
 
 ---
 
@@ -174,10 +170,7 @@ PATCH  /scenes/{scene_id}/map
 
 触发事件：
 
-- SCENE_CREATED
-- SCENE_UPDATED
-- SCENE_CHANGED
-- MAP_UPDATED
+- 后续实现场景地图模块后定义。
 
 ---
 
@@ -202,28 +195,31 @@ DELETE /tokens/{token_id}
 
 触发事件：
 
-- TOKEN_CREATED
-- TOKEN_MOVED
-- TOKEN_UPDATED
-- TOKEN_DELETED
+- 后续实现 Token 模块后定义。
 
 ---
 
-# 14 资源 API
+# 14 Asset API
+
+当前后端地基只实现与业务无关的基础图片资产：
+
+- `avatar`：用户头像。
+- `feedback_image`：反馈图片。
+
+业务资源库中的长期 `image`，以及地图、Token、handout 等业务用途，后续在业务模块落地时再扩展。
 
 ```text
-POST   /assets
-GET    /assets
-GET    /rooms/{room_id}/assets
-PATCH  /assets/{asset_id}
-DELETE /assets/{asset_id}
+GET    /assets/{asset_id}/content
+POST   /users/me/avatar
+POST   /feedback
 ```
 
-触发事件：
+说明：
 
-- ASSET_CREATED
-- ASSET_UPDATED
-- ASSET_DELETED
+- `POST /users/me/avatar` 以 multipart 上传头像图片。
+- `POST /feedback` 可通过 multipart 字段 `images` 上传反馈图片。
+- `GET /assets/{asset_id}/content` 返回图片内容。
+- avatar 当前登录用户可读；feedback_image 仅提交者和具备查看全部反馈权限的 admin 可读。
 
 ---
 
@@ -236,7 +232,7 @@ GET  /rooms/{room_id}/dice-rolls
 
 触发事件：
 
-- DICE_ROLLED
+- 后续实现骰子模块后定义。
 
 ---
 
@@ -260,12 +256,13 @@ GET /rooms/{room_id}/operation-logs
 
 ```text
 POST /feedback
-GET  /admin/feedback
-GET  /admin/feedback/{feedback_id}
-PATCH /admin/feedback/{feedback_id}
+GET  /feedback
+GET  /feedback/{feedback_id}
+GET  /feedback/admin
+PATCH /feedback/admin/{feedback_id}
 ```
 
-管理接口需要 site_role 权限。
+管理接口需要 site 权限。
 
 ---
 

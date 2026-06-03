@@ -28,7 +28,7 @@ async def create_feedback(
     page: FeedbackPage = Form(...),
     title: str = Form(...),
     description: str = Form(...),
-    images: list[UploadFile] | None = File(default=None),
+    images: list[UploadFile] = File(default_factory=list),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> FeedbackResponse:

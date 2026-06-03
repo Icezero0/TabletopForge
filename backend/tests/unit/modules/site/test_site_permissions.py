@@ -34,4 +34,3 @@ def test_site_user_only_has_self_service_feedback_permissions():
 def test_require_site_permission_raises_for_missing_permission():
     with pytest.raises(ForbiddenError):
         require_site_permission(SiteRole.USER, SitePermission.UPDATE_FEEDBACK)
-

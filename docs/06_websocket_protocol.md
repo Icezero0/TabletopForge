@@ -105,20 +105,30 @@ ERROR
 
 # 6 业务事件
 
+当前后端地基已实现的事件类型为：
+
+```text
+notification
+room_info
+room_members
+room_user_presence
+session_closed
+message
+```
+
+下面列出的角色、场景、Token、骰子、日志、战斗事件属于后续业务模块扩展方向。
+
 ## 6.1 房间成员事件
 
 ```text
-ROOM_MEMBER_JOINED
-ROOM_MEMBER_LEFT
-ROOM_MEMBER_REMOVED
-ROOM_MEMBER_ROLE_CHANGED
+room_members
+session_closed
 ```
 
 ## 6.2 消息事件
 
 ```text
-CHAT_MESSAGE_CREATED
-RP_MESSAGE_CREATED
+message
 ```
 
 ## 6.3 角色事件
