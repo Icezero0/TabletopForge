@@ -62,3 +62,14 @@ async def get_current_user(
     request.state.user_id = user.id
     set_log_context(user_id=user.id)
     return user
+
+
+async def get_optional_current_user(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    if not credentials:
+        return None
+
+    return await get_current_user(request, credentials, db)

@@ -1,13 +1,9 @@
 <script setup lang="ts">
-import { computed } from "vue";
 import RoomMemberAvatar from "@/features/room/components/RoomMemberAvatar.vue";
-import { getQfaceLabel, getQfaceUrl } from "@/features/chat/emoji";
-import ChatInlineMedia from "./ChatInlineMedia.vue";
-import { useAssetsStore } from "@/stores/assets.store";
 import type { ChatSegment } from "@/features/chat/types";
 import type { MemberStatus } from "@/features/room/types";
 
-const props = defineProps<{
+defineProps<{
   author: string;
   avatarUrl?: string | null;
   segments: ChatSegment[];
@@ -18,29 +14,6 @@ const props = defineProps<{
   role?: "owner" | "manager" | "member";
   status?: MemberStatus;
 }>();
-
-const assetsStore = useAssetsStore();
-const firstSegment = computed(() => props.segments[0] ?? null);
-
-const isStandaloneMediaMessage = computed(() => (
-  props.segments.length === 1 &&
-  firstSegment.value?.type === "media" &&
-  (firstSegment.value.kind === "image" || firstSegment.value.kind === "sticker")
-));
-
-function getSegmentDisplayMode(segment: ChatSegment) {
-  if (segment.type !== "media") return "inline" as const;
-  return isStandaloneMediaMessage.value ? "block" as const : "inline" as const;
-}
-
-function getSegmentLayoutClass(segment: ChatSegment) {
-  if (segment.type !== "media") return null;
-  return isStandaloneMediaMessage.value ? "segment-media-block" : "segment-media-inline";
-}
-
-function getQfaceDisplayUrl(emojiId: string) {
-  return assetsStore.getAssetDisplayUrl("qface", emojiId) || getQfaceUrl(emojiId);
-}
 </script>
 
 <template>
@@ -66,55 +39,13 @@ function getQfaceDisplayUrl(emojiId: string) {
     <div class="content" :class="{ compact: showAuthor === false }">
       <div v-if="showAuthor !== false" class="author">{{ author }}</div>
 
-      <div
-        class="bubble"
-        :class="{ bubbleless: isStandaloneMediaMessage }"
-      >
+      <div class="bubble">
         <span
           v-for="segment in segments"
           :key="segment.id"
           class="segment"
-          :class="[
-            `segment-${segment.type}`,
-            segment.type === 'media' ? `segment-media-${segment.kind}` : null,
-            getSegmentLayoutClass(segment),
-          ]"
         >
-          <template v-if="segment.type === 'text'">
-            {{ segment.content }}
-          </template>
-          <template v-else-if="segment.type === 'emoji'">
-            <ChatInlineMedia
-              v-if="getQfaceDisplayUrl(segment.emojiId)"
-              kind="emoji"
-              context="message"
-              display-mode="inline"
-              :src="getQfaceDisplayUrl(segment.emojiId) || undefined"
-              :alt="getQfaceLabel(segment.emojiId)"
-              :emoji-id="segment.emojiId"
-              :animated="segment.animated"
-            />
-            <span v-else>{{ getQfaceLabel(segment.emojiId) }}</span>
-          </template>
-          <template v-else>
-            <ChatInlineMedia
-              v-if="segment.src"
-              :kind="segment.kind"
-              context="message"
-              :display-mode="getSegmentDisplayMode(segment)"
-              :asset-id="segment.assetId"
-              :src="segment.src"
-              :alt="segment.alt"
-            />
-            <ChatInlineMedia
-              v-else
-              :kind="segment.kind"
-              context="message"
-              :display-mode="getSegmentDisplayMode(segment)"
-              :asset-id="segment.assetId"
-              :alt="segment.alt"
-            />
-          </template>
+          {{ segment.content }}
         </span>
       </div>
     </div>
@@ -162,7 +93,7 @@ function getQfaceDisplayUrl(emojiId: string) {
   flex: 0 1 auto;
   display: grid;
   gap: 6px;
-  max-width: min(calc(100% - ((var(--avatar-size) * 2) + var(--avatar-gap))), 420px);
+  max-width: min(calc(100% - ((var(--avatar-size) * 2) + var(--avatar-gap))), 520px);
   align-items: start;
   justify-items: start;
 }
@@ -199,45 +130,12 @@ function getQfaceDisplayUrl(emojiId: string) {
   justify-self: end;
 }
 
-.bubble.bubbleless {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  line-height: 0;
-}
-
-.bubble::selection {
-  background: rgb(59 130 246 / 0.28);
-}
-
-.bubble *::selection {
-  background: rgb(59 130 246 / 0.28);
-}
-
 .segment {
+  display: block;
   font-size: 13px;
   color: var(--c-text);
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.segment-media-image,
-.segment-media-sticker {
-  white-space: normal;
-}
-
-.segment-media-block {
-  display: block;
-  line-height: 0;
-}
-
-.segment-media-inline {
-  display: inline;
-}
-
-.segment-emoji {
-  display: inline;
-  white-space: normal;
 }
 </style>

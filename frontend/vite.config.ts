@@ -25,15 +25,7 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
       proxy: {
-        '/avatar': {
-          target: apiOrigin,
-          changeOrigin: true,
-        },
-        '/image': {
-          target: apiOrigin,
-          changeOrigin: true,
-        },
-        '/sticker': {
+        '/api': {
           target: apiOrigin,
           changeOrigin: true,
         },
@@ -43,16 +35,8 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
-            if (id.includes('qface.index.json')) {
-              return 'chat-qface-data'
-            }
-
             if (!id.includes('node_modules')) {
               return undefined
-            }
-
-            if (id.includes('@tiptap') || id.includes('prosemirror')) {
-              return 'vendor-editor'
             }
 
             if (id.includes('@heroicons')) {

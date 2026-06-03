@@ -1,22 +1,6 @@
 import type { MemberStatus, RoomRole } from "@/features/room/types";
 
-export type ChatSegment =
-  | { id: number | string; type: "text"; content: string }
-  | {
-    id: number | string;
-    type: "emoji";
-    emojiId: string;
-    animated?: boolean;
-  }
-  | {
-    id: number | string;
-    type: "media";
-    alt: string;
-    kind: "sticker" | "image";
-    src?: string;
-    assetId?: string;
-    animated?: boolean;
-  };
+export type ChatSegment = { id: number | string; type: "text"; content: string };
 
 export type ChatMessage = {
   id: number | string;

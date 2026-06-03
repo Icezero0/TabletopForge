@@ -4,7 +4,7 @@ export type UserResponse = {
   id: number
   email: string
   username: string | null
-  auto_accept: boolean
+  avatar_asset_id: number | null
   avatar_url: string | null
 }
 
@@ -15,6 +15,7 @@ export type SitePermission =
   | 'view_all_feedback'
   | 'update_feedback'
   | 'delete_feedback'
+  | 'manage_site_roles'
 
 export type UserMeResponse = UserResponse & {
   site_role: SiteRole
@@ -32,11 +33,6 @@ export type UserListResponse = {
 export type UserPatchPayload = {
   username?: string | null
   password?: string | null
-  auto_accept?: boolean | null
-}
-
-export type AvatarUploadResponse = {
-  avatar_url: string | null
 }
 
 export async function getUserById(userId: number) {
@@ -70,7 +66,7 @@ export async function patchMyAvatar(file: File) {
   const form = new FormData()
   form.append('file', file)
 
-  const { data } = await http.patch<AvatarUploadResponse>(
+  const { data } = await http.post<UserMeResponse>(
     '/users/me/avatar',
     form,
     {

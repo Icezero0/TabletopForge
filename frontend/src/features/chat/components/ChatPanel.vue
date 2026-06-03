@@ -20,7 +20,6 @@ const props = defineProps<{
   loadingLabel?: string;
   emptyLabel?: string;
   sendMessage?: (segments: ChatSegment[]) => Promise<void> | void;
-  captureScreenshot?: () => Promise<void> | void;
   memberStatusByUserId?: Map<number, MemberStatus>;
 }>();
 const emit = defineEmits<{
@@ -137,7 +136,6 @@ const newMessagesLabel = computed(() =>
       :send-label="sendLabel"
       :sending="sending"
       :send-message="handleSend"
-      :capture-screenshot="captureScreenshot"
       @send="handleSend"
     />
   </div>

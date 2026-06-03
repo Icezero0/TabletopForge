@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import routes from './routes'
 import { useAuthStore } from '@/stores/auth.store'
 
-const INITIAL_ROOM_ENTRY_KEY = "icinema:initial-room-entry";
+const INITIAL_ROOM_ENTRY_KEY = "tabletopforge:initial-room-entry";
 
 const router = createRouter({
   history: createWebHistory(),

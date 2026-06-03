@@ -13,8 +13,6 @@ import {
 } from "@/features/chat/segments";
 import { useAuthStore } from "@/stores/auth.store";
 import { useEntitiesStore } from "@/stores/entities.store";
-import { useAssetsStore } from "@/stores/assets.store";
-import { resolveMediaUrl } from "@/infra/media";
 
 type RoomMessagesState = {
   items: MessageResponse[];
@@ -54,11 +52,7 @@ function extractErrorMessage(error: any, fallback: string) {
 
 function normalizeMessages(messages: MessageResponse[]) {
   const map = new Map<number, MessageResponse>();
-
-  messages.forEach((message) => {
-    map.set(message.id, message);
-  });
-
+  messages.forEach((message) => map.set(message.id, message));
   return Array.from(map.values()).sort((a, b) => a.id - b.id);
 }
 
@@ -67,147 +61,9 @@ function mergeMessages(
   incoming: MessageResponse[],
   mode: "replace" | "append" | "prepend",
 ) {
-  if (mode === "replace") {
-    return normalizeMessages(incoming);
-  }
-
-  if (mode === "append") {
-    return normalizeMessages([...existing, ...incoming]);
-  }
-
+  if (mode === "replace") return normalizeMessages(incoming);
+  if (mode === "append") return normalizeMessages([...existing, ...incoming]);
   return normalizeMessages([...incoming, ...existing]);
-}
-
-function parseAssetId(assetId: string | undefined) {
-  if (!assetId) return null;
-
-  const parsed = Number(assetId);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
-function slugifyFilenamePart(value: string | undefined, fallback: string) {
-  const normalized = (value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-  return normalized || fallback;
-}
-
-function inferFileExtension(mimeType: string | undefined, fallback: string) {
-  if (!mimeType) return fallback;
-
-  if (mimeType === "image/jpeg") return "jpg";
-  if (mimeType === "image/png") return "png";
-  if (mimeType === "image/gif") return "gif";
-  if (mimeType === "image/webp") return "webp";
-  if (mimeType === "image/svg+xml") return "svg";
-
-  const [, subtype] = mimeType.split("/");
-  return subtype || fallback;
-}
-
-function sniffImageMimeType(bytes: Uint8Array) {
-  if (bytes.length >= 6) {
-    const header = String.fromCharCode(...bytes.slice(0, 6));
-    if (header === "GIF87a" || header === "GIF89a") {
-      return "image/gif";
-    }
-  }
-
-  if (
-    bytes.length >= 8 &&
-    bytes[0] === 0x89 &&
-    bytes[1] === 0x50 &&
-    bytes[2] === 0x4e &&
-    bytes[3] === 0x47 &&
-    bytes[4] === 0x0d &&
-    bytes[5] === 0x0a &&
-    bytes[6] === 0x1a &&
-    bytes[7] === 0x0a
-  ) {
-    return "image/png";
-  }
-
-  if (
-    bytes.length >= 3 &&
-    bytes[0] === 0xff &&
-    bytes[1] === 0xd8 &&
-    bytes[2] === 0xff
-  ) {
-    return "image/jpeg";
-  }
-
-  if (
-    bytes.length >= 12 &&
-    String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" &&
-    String.fromCharCode(...bytes.slice(8, 12)) === "WEBP"
-  ) {
-    return "image/webp";
-  }
-
-  return null;
-}
-
-async function createUploadFileFromSegment(
-  segment: Extract<ChatSegment, { type: "media" }>,
-) {
-  if (!segment.src) {
-    throw new Error("Media segment is missing source data");
-  }
-
-  const response = await fetch(segment.src);
-  if (!response.ok) {
-    throw new Error("Failed to read media content before upload");
-  }
-
-  const blob = await response.blob();
-  const bytes = new Uint8Array(await blob.arrayBuffer());
-  const actualMimeType = sniffImageMimeType(bytes) ?? blob.type;
-  const extension = inferFileExtension(
-    actualMimeType,
-    segment.kind === "sticker" ? "webp" : "png",
-  );
-  const basename = slugifyFilenamePart(
-    segment.alt,
-    segment.kind === "sticker" ? "sticker" : "image",
-  );
-
-  return new File([bytes], `${basename}.${extension}`, {
-    type: actualMimeType || undefined,
-  });
-}
-
-async function prepareSegmentsForSend(
-  segments: ChatSegment[],
-  assets: ReturnType<typeof useAssetsStore>,
-) {
-  const resolvedSegments = await Promise.all(segments.map(async (segment) => {
-    if (segment.type !== "media") {
-      return segment;
-    }
-
-    if (parseAssetId(segment.assetId)) {
-      return segment;
-    }
-
-    const uploadFile = await createUploadFileFromSegment(segment);
-    const uploaded = segment.kind === "sticker"
-      ? await assets.uploadSticker(uploadFile)
-      : await assets.uploadImage(uploadFile);
-
-    const resolvedSegment = {
-      ...segment,
-      assetId: String(uploaded.id),
-      src: resolveMediaUrl(uploaded.url) || segment.src,
-    } satisfies ChatSegment;
-
-    Object.assign(segment, resolvedSegment);
-    return resolvedSegment;
-  }));
-
-  return resolvedSegments;
 }
 
 function mapChatSegmentsToMessageSegments(segments: ChatSegment[]) {
@@ -215,41 +71,9 @@ function mapChatSegmentsToMessageSegments(segments: ChatSegment[]) {
   const normalizedSegments = trimTrailingInvisibleTextSegments([...segments]);
 
   normalizedSegments.forEach((segment) => {
-    if (segment.type === "text") {
-      const text = stripChatTextCursorAnchors(segment.content);
-      if (!text) return;
-      result.push({
-        type: "text",
-        text,
-      });
-      return;
-    }
-
-    if (segment.type === "emoji") {
-      result.push({
-        type: "emoji",
-        id: segment.emojiId,
-      });
-      return;
-    }
-
-    const assetId = parseAssetId(segment.assetId);
-    if (!assetId) {
-      return;
-    }
-
-    if (segment.kind === "sticker") {
-      result.push({
-        type: "sticker",
-        id: assetId,
-      });
-      return;
-    }
-
-    result.push({
-      type: "image",
-      id: assetId,
-    });
+    const text = stripChatTextCursorAnchors(segment.content);
+    if (!text) return;
+    result.push({ type: "text", text });
   });
 
   return result;
@@ -260,7 +84,6 @@ function mapMessageToChatMessage(
   currentUserId: number | null | undefined,
   roomMemberRole: ChatMessage["role"],
   avatarUrl: string | null,
-  getMediaDisplayUrl: (kind: "image" | "sticker", id: number, fallbackUrl: string | null) => string | undefined,
 ): ChatMessage {
   const author =
     message.sender?.username ||
@@ -279,32 +102,11 @@ function mapMessageToChatMessage(
     avatarVariant: "room",
     role: roomMemberRole,
     status: "idle",
-    segments: message.content.segments.map((segment, index) => {
-      if (segment.type === "text") {
-        return {
-          id: `${message.id}-${index}`,
-          type: "text",
-          content: segment.text,
-        } satisfies ChatSegment;
-      }
-
-      if (segment.type === "emoji") {
-        return {
-          id: `${message.id}-${index}`,
-          type: "emoji",
-          emojiId: segment.id,
-        } satisfies ChatSegment;
-      }
-
-      return {
-        id: `${message.id}-${index}`,
-        type: "media",
-        alt: segment.type === "sticker" ? "Sticker" : "Image",
-        src: getMediaDisplayUrl(segment.type, segment.id, segment.url),
-        kind: segment.type === "sticker" ? "sticker" : "image",
-        assetId: String(segment.id),
-      } satisfies ChatSegment;
-    }),
+    segments: message.content.segments.map((segment, index) => ({
+      id: `${message.id}-${index}`,
+      type: "text",
+      content: segment.text,
+    })),
   };
 }
 
@@ -337,17 +139,12 @@ export const useMessagesStore = defineStore("messages", {
         return items.map((message) => {
           const roomMember = entities.getRoomMember(roomId, message.sender_user_id);
           const senderUser = entities.getUser(message.sender_user_id);
-          const assets = useAssetsStore();
-          const avatarUrl = resolveMediaUrl(message.sender?.avatar_url ?? senderUser?.avatar_url);
+          const avatarUrl = message.sender?.avatar_url ?? senderUser?.avatar_url ?? null;
           return mapMessageToChatMessage(
             message,
             auth.me?.id,
             roomMember?.role ?? "member",
             avatarUrl,
-            (kind, id, fallbackUrl) =>
-              assets.getAssetDisplayUrl(kind, id) ||
-              resolveMediaUrl(fallbackUrl) ||
-              undefined,
           );
         });
       };
@@ -362,28 +159,7 @@ export const useMessagesStore = defineStore("messages", {
 
     hydrateDependencies(messages: MessageResponse[]) {
       const entities = useEntitiesStore();
-      const assets = useAssetsStore();
-
       entities.upsertUsers(messages.map((message) => message.sender));
-
-      messages.forEach((message) => {
-        message.content.segments.forEach((segment) => {
-          if (segment.type === "image") {
-            assets.upsertMessageImageAsset({
-              id: segment.id,
-              url: resolveMediaUrl(segment.url),
-            });
-            return;
-          }
-
-          if (segment.type === "sticker") {
-            assets.upsertMessageStickerAsset({
-              id: segment.id,
-              url: resolveMediaUrl(segment.url),
-            });
-          }
-        });
-      });
     },
 
     setRoomMessages(
@@ -457,16 +233,14 @@ export const useMessagesStore = defineStore("messages", {
 
     async sendSegments(roomId: number, segments: ChatSegment[]) {
       const roomState = this.ensureRoomState(roomId);
-      const assets = useAssetsStore();
       roomState.isSending = true;
       roomState.error = null;
 
       try {
-        const preparedSegments = await prepareSegmentsForSend(segments, assets);
-        const messageSegments = mapChatSegmentsToMessageSegments(preparedSegments);
+        const messageSegments = mapChatSegmentsToMessageSegments(segments);
 
         if (messageSegments.length === 0) {
-          throw new Error("No valid message segments to send");
+          throw new Error("No valid message text to send");
         }
 
         const payload: MessageContentIn = {

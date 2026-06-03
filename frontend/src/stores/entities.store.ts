@@ -6,53 +6,15 @@ import {
   type RoomBrief,
   type RoomJoinRequest,
   type RoomMember,
-  type RoomSettings,
   type RoomUserBrief,
 } from "@/infra/api/rooms.api";
 import type { UserBrief as NotificationUserBrief } from "@/infra/api/notifications.api";
-import {
-  readPersistedState,
-  writePersistedState,
-} from "@/stores/persistence";
-
-export type LocalRoomSyncStrategy =
-  | "adaptive-speed"
-  | "auto-seek"
-  | "manual-sync";
-
-export const DEFAULT_LOCAL_ROOM_SYNC_STRATEGY: LocalRoomSyncStrategy = "adaptive-speed";
-export const DEFAULT_LOCAL_ROOM_VOLUME = 50;
-
-function isLocalRoomSyncStrategy(value: unknown): value is LocalRoomSyncStrategy {
-  return (
-    value === "adaptive-speed" ||
-    value === "auto-seek" ||
-    value === "manual-sync"
-  );
-}
-
-function roomLocalSyncStrategyStorageKey(roomId: number) {
-  return `icinema:room:${roomId}:localSyncStrategy`;
-}
-
-function roomLocalVolumeStorageKey(roomId: number) {
-  return `icinema:room:${roomId}:volume`;
-}
-
-function normalizeLocalRoomVolume(value: unknown) {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return DEFAULT_LOCAL_ROOM_VOLUME;
-  }
-
-  return Math.min(100, Math.max(0, Math.round(value)));
-}
-
 type EntityUser = {
   id: number;
   email?: string | null;
   username?: string | null;
+  avatar_asset_id?: number | null;
   avatar_url?: string | null;
-  auto_accept?: boolean | null;
 };
 
 type EntityRoom = {
@@ -64,11 +26,6 @@ type EntityRoom = {
   visibility?: Room["visibility"];
   my_role?: Room["my_role"];
   join_audit_mode?: Room["join_audit_mode"];
-  selected_room_video_source_type?: RoomSettings["selected_room_video_source_type"];
-  sync_policy?: RoomSettings["sync_policy"];
-  active_sync_permission?: RoomSettings["active_sync_permission"];
-  local_sync_strategy?: LocalRoomSyncStrategy;
-  local_volume?: number;
 };
 
 type EntityRoomMember = {
@@ -94,6 +51,7 @@ type UserSummaryInput =
       id: number;
       email?: string | null;
       username?: string | null;
+      avatar_asset_id?: number | null;
       avatar_url?: string | null;
     };
 type RoomSummaryInput = Room | RoomBrief;
@@ -115,8 +73,8 @@ function normalizeUser(user: UserSummaryInput): EntityUser {
     id: user.id,
     email: user.email,
     username: user.username,
+    avatar_asset_id: "avatar_asset_id" in user ? user.avatar_asset_id : undefined,
     avatar_url: user.avatar_url,
-    auto_accept: "auto_accept" in user ? user.auto_accept : undefined,
   };
 }
 
@@ -194,76 +152,6 @@ export const useEntitiesStore = defineStore("entities", {
 
     upsertRooms(rooms: Array<RoomSummaryInput | null | undefined>) {
       rooms.forEach((room) => this.upsertRoom(room));
-    },
-
-    upsertRoomSettings(settings: RoomSettings | null | undefined) {
-      if (!settings?.room_id) return;
-
-      this.roomsById[settings.room_id] = mergeDefined(this.roomsById[settings.room_id], {
-        id: settings.room_id,
-        selected_room_video_source_type: settings.selected_room_video_source_type,
-        sync_policy: settings.sync_policy,
-        active_sync_permission: settings.active_sync_permission,
-      });
-    },
-
-    setRoomLocalSyncStrategy(roomId: number, strategy: LocalRoomSyncStrategy) {
-      if (!roomId) return;
-
-      this.roomsById[roomId] = mergeDefined(this.roomsById[roomId], {
-        id: roomId,
-        local_sync_strategy: strategy,
-      });
-      writePersistedState(roomLocalSyncStrategyStorageKey(roomId), strategy);
-    },
-
-    loadRoomLocalSyncStrategy(roomId: number) {
-      if (!roomId) return DEFAULT_LOCAL_ROOM_SYNC_STRATEGY;
-
-      const persisted = readPersistedState<unknown>(
-        roomLocalSyncStrategyStorageKey(roomId),
-        DEFAULT_LOCAL_ROOM_SYNC_STRATEGY,
-      );
-      const strategy = isLocalRoomSyncStrategy(persisted)
-        ? persisted
-        : DEFAULT_LOCAL_ROOM_SYNC_STRATEGY;
-
-      this.roomsById[roomId] = mergeDefined(this.roomsById[roomId], {
-        id: roomId,
-        local_sync_strategy: strategy,
-      });
-
-      return strategy;
-    },
-
-    setRoomLocalVolume(roomId: number, volume: number) {
-      const normalizedVolume = normalizeLocalRoomVolume(volume);
-      if (!roomId) return normalizedVolume;
-
-      this.roomsById[roomId] = mergeDefined(this.roomsById[roomId], {
-        id: roomId,
-        local_volume: normalizedVolume,
-      });
-      writePersistedState(roomLocalVolumeStorageKey(roomId), normalizedVolume);
-
-      return normalizedVolume;
-    },
-
-    loadRoomLocalVolume(roomId: number) {
-      if (!roomId) return DEFAULT_LOCAL_ROOM_VOLUME;
-
-      const persisted = readPersistedState<unknown>(
-        roomLocalVolumeStorageKey(roomId),
-        DEFAULT_LOCAL_ROOM_VOLUME,
-      );
-      const volume = normalizeLocalRoomVolume(persisted);
-
-      this.roomsById[roomId] = mergeDefined(this.roomsById[roomId], {
-        id: roomId,
-        local_volume: volume,
-      });
-
-      return volume;
     },
 
     upsertRoomMembers(members: Array<RoomMember | null | undefined>) {

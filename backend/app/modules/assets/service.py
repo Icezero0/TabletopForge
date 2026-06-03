@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.error_reasons import ErrorReason
-from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
+from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError, UnauthorizedError
 from app.modules.assets.constants import ALLOWED_IMAGE_CONTENT_TYPES, AssetType
 from app.modules.assets.models import Asset
 from app.modules.assets.repository import AssetRepository
@@ -84,9 +84,15 @@ class AssetService:
             )
         return asset
 
-    def require_asset_access(self, asset: Asset, user: User) -> None:
+    def require_asset_access(self, asset: Asset, user: User | None) -> None:
         if asset.asset_type == AssetType.AVATAR:
             return
+
+        if user is None:
+            raise UnauthorizedError(
+                "Missing authorization token",
+                reason=ErrorReason.MISSING_AUTHORIZATION_TOKEN,
+            )
 
         if asset.asset_type == AssetType.FEEDBACK_IMAGE:
             if asset.owner_id == user.id:

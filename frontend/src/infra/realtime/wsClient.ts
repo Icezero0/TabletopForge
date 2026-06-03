@@ -3,27 +3,15 @@ type WSMessageType = "auth" | "heartbeat" | "command" | "event" | "error" | "ack
 export type WSCommandAction =
   | "room_enter"
   | "room_leave"
-  | "room_presence_get"
-  | "room_video_runtime_get"
-  | "playback_pause"
-  | "playback_play"
-  | "playback_seek"
-  | "room_video_source_set"
-  | "user_resource_status";
+  | "room_presence_get";
 
 export type WSEventName =
   | "notification"
   | "room_info"
-  | "room_settings"
   | "room_members"
   | "room_user_presence"
   | "session_closed"
-  | "message"
-  | "playback_pause"
-  | "playback_play"
-  | "playback_seek"
-  | "room_video_source_set"
-  | "user_resource_states";
+  | "message";
 
 export type WSErrorCode =
   | "unauthorized"

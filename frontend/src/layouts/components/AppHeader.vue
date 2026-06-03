@@ -59,7 +59,7 @@ onMounted(() => {
       <BaseIconButton :aria-label="t('appShell.toggleNavigation')" @click="toggleSidebar">
         <AppIcon :icon="Bars3Icon" :size="22" />
       </BaseIconButton>
-      <span class="brand">iCinema</span>
+      <span class="brand">TabletopForge</span>
     </div>
 
     <div class="spacer" aria-hidden="true" />

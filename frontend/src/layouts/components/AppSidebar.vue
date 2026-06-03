@@ -8,7 +8,6 @@ import {
   HomeIcon,
   InformationCircleIcon,
   PlayCircleIcon,
-  UserCircleIcon,
 } from "@heroicons/vue/24/outline";
 import AppIcon from "@/ui/base/AppIcon.vue";
 import { useAuthStore } from "@/stores/auth.store";
@@ -44,7 +43,6 @@ const items = computed(() => [
     icon: BellIcon,
     badge: badgeText.value,
   },
-  { to: "/profile", label: t("sidebar.profile"), icon: UserCircleIcon },
   ...(auth.canManageFeedback
     ? [
         {

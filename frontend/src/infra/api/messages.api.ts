@@ -6,26 +6,7 @@ export type TextSegmentIn = {
   text: string;
 };
 
-export type EmojiSegmentIn = {
-  type: "emoji";
-  id: string;
-};
-
-export type ImageSegmentIn = {
-  type: "image";
-  id: number;
-};
-
-export type StickerSegmentIn = {
-  type: "sticker";
-  id: number;
-};
-
-export type MessageSegmentIn =
-  | TextSegmentIn
-  | EmojiSegmentIn
-  | ImageSegmentIn
-  | StickerSegmentIn;
+export type MessageSegmentIn = TextSegmentIn;
 
 export type MessageContentIn = {
   segments: MessageSegmentIn[];
@@ -36,28 +17,7 @@ export type TextSegmentOut = {
   text: string;
 };
 
-export type EmojiSegmentOut = {
-  type: "emoji";
-  id: string;
-};
-
-export type ImageSegmentOut = {
-  type: "image";
-  id: number;
-  url: string | null;
-};
-
-export type StickerSegmentOut = {
-  type: "sticker";
-  id: number;
-  url: string | null;
-};
-
-export type MessageSegmentOut =
-  | TextSegmentOut
-  | EmojiSegmentOut
-  | ImageSegmentOut
-  | StickerSegmentOut;
+export type MessageSegmentOut = TextSegmentOut;
 
 export type MessageContentOut = {
   segments: MessageSegmentOut[];

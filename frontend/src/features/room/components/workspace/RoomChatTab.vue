@@ -16,7 +16,6 @@ defineProps<{
   loadingLabel: string;
   emptyLabel: string;
   sendMessage?: (segments: ChatSegment[]) => Promise<void> | void;
-  captureScreenshot?: () => Promise<void> | void;
   memberStatusByUserId?: Map<number, MemberStatus>;
 }>();
 
@@ -42,7 +41,6 @@ const emit = defineEmits<{
       :loading-label="loadingLabel"
       :empty-label="emptyLabel"
       :send-message="sendMessage"
-      :capture-screenshot="captureScreenshot"
       :member-status-by-user-id="memberStatusByUserId"
       @send="emit('send', $event)"
       @load-older="emit('loadOlder')"

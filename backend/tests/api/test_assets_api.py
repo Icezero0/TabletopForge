@@ -1,7 +1,7 @@
 from app.modules.site.constants import SiteRole
 
 
-async def test_user_can_upload_and_read_own_avatar(
+async def test_user_can_upload_and_read_avatar_without_authorization_header(
     api_client,
     factories,
     auth_headers,
@@ -21,10 +21,7 @@ async def test_user_can_upload_and_read_own_avatar(
     assert body["avatar_asset_id"] is not None
     assert body["avatar_url"] == f"/api/v1/assets/{body['avatar_asset_id']}/content"
 
-    content_response = await api_client.get(
-        body["avatar_url"],
-        headers=auth_headers(user),
-    )
+    content_response = await api_client.get(body["avatar_url"])
 
     assert content_response.status_code == 200
     assert content_response.content == sample_upload_bytes
@@ -69,6 +66,9 @@ async def test_feedback_image_access_follows_feedback_visibility(
         headers=auth_headers(admin),
     )
     assert admin_response.status_code == 200
+
+    anonymous_response = await api_client.get(image["url"])
+    assert anonymous_response.status_code == 401
 
     other_response = await api_client.get(
         image["url"],

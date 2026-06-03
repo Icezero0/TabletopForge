@@ -42,6 +42,7 @@ export type RoomUserBrief = {
   id: number;
   email: string;
   username: string | null;
+  avatar_asset_id?: number | null;
   avatar_url: string | null;
 };
 
@@ -90,26 +91,6 @@ export type RoomJoinRequestListResponse = {
   page: number;
   page_size: number;
   total_pages: number;
-};
-
-export type RoomVideoSourceType = "external_url" | "local_file";
-export type RoomSyncPolicy = "auto_sync" | "disabled";
-export type RoomActiveSyncPermission =
-  | "owner_only"
-  | "owner_and_manager"
-  | "all_members";
-
-export type RoomSettings = {
-  room_id: number;
-  selected_room_video_source_type: RoomVideoSourceType;
-  sync_policy: RoomSyncPolicy;
-  active_sync_permission: RoomActiveSyncPermission;
-};
-
-export type RoomSettingsPatchPayload = {
-  selected_room_video_source_type?: RoomVideoSourceType | null;
-  sync_policy?: RoomSyncPolicy | null;
-  active_sync_permission?: RoomActiveSyncPermission | null;
 };
 
 type RoomResponse = {
@@ -288,22 +269,6 @@ export async function setRoomMemberManager(roomId: number, targetUserId: number)
 export async function unsetRoomMemberManager(roomId: number, targetUserId: number) {
   const { data } = await http.delete<RoomMember>(
     `/rooms/${roomId}/members/${targetUserId}/manager`,
-  );
-  return data;
-}
-
-export async function getRoomSettings(roomId: number) {
-  const { data } = await http.get<RoomSettings>(`/rooms/${roomId}/settings`);
-  return data;
-}
-
-export async function patchRoomSettings(
-  roomId: number,
-  payload: RoomSettingsPatchPayload,
-) {
-  const { data } = await http.patch<RoomSettings>(
-    `/rooms/${roomId}/settings`,
-    payload,
   );
   return data;
 }

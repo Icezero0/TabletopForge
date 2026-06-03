@@ -3,16 +3,10 @@ import wsClient, { type WSConnectionStatus } from "@/infra/realtime/wsClient";
 import {
   enterRoomRealtime,
   getRoomRealtimePresence,
-  getRoomRealtimeVideoRuntime,
   leaveRoomRealtime,
-  type RoomRealtimePlaybackState,
   type RoomRealtimePresenceState,
   type RoomRealtimeSessionClosed,
   type RoomRealtimeSnapshot,
-  type RoomRealtimeResourceStatus,
-  type RoomRealtimeUserResourceState,
-  type RoomRealtimeUserResourceStatesState,
-  type RoomRealtimeVideoSourceState,
 } from "@/infra/realtime/roomRealtime";
 import type { MessageResponse } from "@/infra/api/messages.api";
 import { useAuthStore } from "@/stores/auth.store";
@@ -23,31 +17,8 @@ type UseRoomRealtimeSessionOptions = {
   refreshRoom: () => void | Promise<void>;
   refreshRoomMembers: () => void | Promise<void>;
   refreshRoomRequests: () => void | Promise<void>;
-  refreshRoomSettings: () => void | Promise<void>;
   onSessionClosed?: (payload: RoomRealtimeSessionClosed) => void;
 };
-
-type RoomRealtimePlaybackEventAction =
-  | "snapshot"
-  | "playback_play"
-  | "playback_pause"
-  | "playback_seek";
-
-type RoomRealtimePlaybackEvent = {
-  action: RoomRealtimePlaybackEventAction;
-  state: RoomRealtimePlaybackState;
-};
-
-type RoomRealtimeVideoSourceEventAction =
-  | "snapshot"
-  | "room_video_source_set";
-
-type RoomRealtimeVideoSourceEvent = {
-  action: RoomRealtimeVideoSourceEventAction;
-  state: RoomRealtimeVideoSourceState | null;
-};
-
-const ROOM_REALTIME_DEBUG = false;
 
 function payloadRoomId(payload: unknown) {
   if (!payload || typeof payload !== "object") return null;
@@ -67,38 +38,11 @@ function normalizePresentUserIds(snapshot: RoomRealtimeSnapshot) {
     : [];
 }
 
-function normalizeRealtimeResourceStatus(status: unknown): RoomRealtimeResourceStatus | null {
-  if (status === "ready" || status === "stalling" || status === "error") return status;
-  return null;
-}
-
-function normalizeUserResourceStates(state: RoomRealtimeUserResourceStatesState | null | undefined) {
-  if (!Array.isArray(state?.user_resource_states)) return [];
-
-  return state.user_resource_states.flatMap((item): RoomRealtimeUserResourceState[] => {
-    const status = normalizeRealtimeResourceStatus(item?.status);
-    if (
-      typeof item?.room_id !== "number" ||
-      typeof item?.user_id !== "number" ||
-      !status
-    ) {
-      return [];
-    }
-
-    return [{ ...item, status }];
-  });
-}
-
 export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
   const auth = useAuthStore();
   const messagesStore = useMessagesStore();
   const presentUserIds = ref<number[]>([]);
   const hasPresenceSnapshot = ref(false);
-  const roomVideoSource = ref<RoomRealtimeVideoSourceState | null>(null);
-  const roomVideoSourceEvent = ref<RoomRealtimeVideoSourceEvent | null>(null);
-  const roomPlayback = ref<RoomRealtimePlaybackState | null>(null);
-  const roomPlaybackEvent = ref<RoomRealtimePlaybackEvent | null>(null);
-  const userResourceStates = ref<RoomRealtimeUserResourceState[]>([]);
   const isRealtimeActive = ref(false);
   const realtimeStatus = ref<WSConnectionStatus>(wsClient.connectionStatus);
   const realtimeError = ref("");
@@ -140,16 +84,6 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
       isRealtimeActive.value = true;
       presentUserIds.value = normalizePresentUserIds(snapshot);
       hasPresenceSnapshot.value = true;
-      roomVideoSource.value = snapshot.room_video_source ?? null;
-      roomVideoSourceEvent.value = {
-        action: "snapshot",
-        state: snapshot.room_video_source ?? null,
-      };
-      roomPlayback.value = snapshot.playback ?? null;
-      roomPlaybackEvent.value = snapshot.playback
-        ? { action: "snapshot", state: snapshot.playback }
-        : null;
-      userResourceStates.value = normalizeUserResourceStates(snapshot.user_resource_states);
     } catch (error) {
       if (attempt !== enterAttempt) return;
       isRealtimeActive.value = false;
@@ -170,11 +104,6 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
     isRealtimeActive.value = false;
     presentUserIds.value = [];
     hasPresenceSnapshot.value = false;
-    roomVideoSource.value = null;
-    roomVideoSourceEvent.value = null;
-    roomPlayback.value = null;
-    roomPlaybackEvent.value = null;
-    userResourceStates.value = [];
 
     if (wsClient.connectionStatus !== "ready") return;
 
@@ -204,34 +133,6 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
     messagesStore.appendRealtimeMessage(payload);
   }
 
-  function handleRoomVideoSource(payload: RoomRealtimeVideoSourceState) {
-    if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
-    roomVideoSource.value = payload ?? null;
-    roomVideoSourceEvent.value = {
-      action: "room_video_source_set",
-      state: payload ?? null,
-    };
-  }
-
-  function handlePlayback(
-    action: Exclude<RoomRealtimePlaybackEventAction, "snapshot">,
-    payload: RoomRealtimePlaybackState,
-  ) {
-    if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
-    if (ROOM_REALTIME_DEBUG) {
-      console.info("[iCinema realtime playback debug]", {
-        event: "playbackEventReceived",
-        action,
-        roomId: options.roomId.value,
-        payload,
-        previousRoomPlayback: roomPlayback.value,
-        previousRoomPlaybackEvent: roomPlaybackEvent.value,
-      });
-    }
-    roomPlayback.value = payload ?? null;
-    roomPlaybackEvent.value = payload ? { action, state: payload } : null;
-  }
-
   async function fetchPresenceSnapshot() {
     const response = await getRoomRealtimePresence();
     const presence = response.presence;
@@ -240,50 +141,12 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
     handlePresence(presence);
   }
 
-  async function fetchVideoRuntimeSnapshot(options?: { updateState?: boolean }) {
-    const response = await getRoomRealtimeVideoRuntime();
-    const shouldUpdateState = options?.updateState ?? true;
-
-    roomVideoSource.value = response.room_video_source ?? null;
-    roomPlayback.value = response.playback ?? null;
-    userResourceStates.value = normalizeUserResourceStates(response.user_resource_states);
-
-    if (shouldUpdateState) {
-      roomVideoSourceEvent.value = {
-        action: "snapshot",
-        state: response.room_video_source ?? null,
-      };
-      roomPlaybackEvent.value = response.playback
-        ? { action: "snapshot", state: response.playback }
-        : null;
-    }
-
-    return response;
-  }
-
-  function handleUserResourceStates(payload: RoomRealtimeUserResourceStatesState) {
-    if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
-    if (ROOM_REALTIME_DEBUG) {
-      console.info("[iCinema realtime playback debug]", {
-        event: "userResourceStatesReceived",
-        roomId: options.roomId.value,
-        payload,
-      });
-    }
-    userResourceStates.value = normalizeUserResourceStates(payload);
-  }
-
   function handleSessionClosed(payload: RoomRealtimeSessionClosed) {
     if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
     enteredRoomId = null;
     isRealtimeActive.value = false;
     presentUserIds.value = [];
     hasPresenceSnapshot.value = true;
-    roomVideoSource.value = null;
-    roomVideoSourceEvent.value = null;
-    roomPlayback.value = null;
-    roomPlaybackEvent.value = null;
-    userResourceStates.value = [];
     options.onSessionClosed?.(payload);
   }
 
@@ -291,9 +154,6 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
     stopEventSubscriptions = [
       wsClient.onEvent("room_info", (payload) => {
         refreshIfCurrentRoom(payload, options.refreshRoom);
-      }),
-      wsClient.onEvent("room_settings", (payload) => {
-        refreshIfCurrentRoom(payload, options.refreshRoomSettings);
       }),
       wsClient.onEvent("room_members", (payload) => {
         refreshIfCurrentRoom(payload, () => {
@@ -303,17 +163,6 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
       }),
       wsClient.onEvent<RoomRealtimePresenceState>("room_user_presence", handlePresence),
       wsClient.onEvent<MessageResponse>("message", handleMessage),
-      wsClient.onEvent<RoomRealtimeVideoSourceState>("room_video_source_set", handleRoomVideoSource),
-      wsClient.onEvent<RoomRealtimePlaybackState>("playback_play", (payload) => {
-        handlePlayback("playback_play", payload);
-      }),
-      wsClient.onEvent<RoomRealtimePlaybackState>("playback_pause", (payload) => {
-        handlePlayback("playback_pause", payload);
-      }),
-      wsClient.onEvent<RoomRealtimePlaybackState>("playback_seek", (payload) => {
-        handlePlayback("playback_seek", payload);
-      }),
-      wsClient.onEvent<RoomRealtimeUserResourceStatesState>("user_resource_states", handleUserResourceStates),
       wsClient.onEvent<RoomRealtimeSessionClosed>("session_closed", handleSessionClosed),
     ];
   }
@@ -369,16 +218,10 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
   return {
     presentUserIds,
     hasPresenceSnapshot,
-    roomVideoSource,
-    roomVideoSourceEvent,
-    roomPlayback,
-    roomPlaybackEvent,
-    userResourceStates,
     isRealtimeActive,
     realtimeStatus,
     realtimeError,
     enterCurrentRoom,
     fetchPresenceSnapshot,
-    fetchVideoRuntimeSnapshot,
   };
 }
