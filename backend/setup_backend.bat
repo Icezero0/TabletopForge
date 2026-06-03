@@ -113,6 +113,10 @@ if errorlevel 1 (
 
 echo.
 echo [INFO] Running Alembic upgrade head...
+if not exist "..\data" (
+    echo [INFO] Creating data directory: ..\data
+    mkdir "..\data"
+)
 "%VENV_PYTHON%" -m alembic upgrade head
 if errorlevel 1 (
     echo.

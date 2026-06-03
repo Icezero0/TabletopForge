@@ -105,6 +105,7 @@ echo "[INFO] Installing base backend dependencies..."
 
 echo
 echo "[INFO] Running Alembic upgrade head..."
+mkdir -p ../data
 "$VENV_PYTHON" -m alembic upgrade head
 
 echo

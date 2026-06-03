@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 from logging.config import fileConfig
+from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -13,9 +15,29 @@ import app.db.models  # noqa: F401
 config = context.config
 settings = get_settings()
 
+database_url = os.getenv("ALEMBIC_DATABASE_URL", settings.alembic_database_url)
+
+
+def _ensure_sqlite_parent_dir(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme != "sqlite":
+        return
+
+    db_path = unquote(parsed.path)
+    if os.name == "nt" and db_path.startswith("/") and len(db_path) >= 3:
+        db_path = db_path[1:]
+
+    if not db_path or db_path == ":memory:":
+        return
+
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+
+
+_ensure_sqlite_parent_dir(database_url)
+
 config.set_main_option(
     "sqlalchemy.url",
-    os.getenv("ALEMBIC_DATABASE_URL", settings.alembic_database_url),
+    database_url,
 )
 
 if config.config_file_name is not None:
