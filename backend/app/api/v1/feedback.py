@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, Query
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -28,6 +28,7 @@ async def create_feedback(
     page: FeedbackPage = Form(...),
     title: str = Form(...),
     description: str = Form(...),
+    images: list[UploadFile] | None = File(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> FeedbackResponse:
@@ -38,6 +39,7 @@ async def create_feedback(
         page=page,
         title=title,
         description=description,
+        images=images,
     )
     return _build_feedback_response(feedback)
 

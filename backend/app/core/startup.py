@@ -16,6 +16,7 @@ logger = logging.getLogger("app.startup")
 
 async def ensure_runtime_paths() -> None:
     settings.data_dir_path.mkdir(parents=True, exist_ok=True)
+    settings.assets_dir_path.mkdir(parents=True, exist_ok=True)
 
 
 def _build_alembic_config() -> Config:

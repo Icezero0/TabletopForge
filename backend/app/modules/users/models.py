@@ -16,6 +16,10 @@ class User(Base):
     )
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    avatar_asset_id: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
     site_role: Mapped[str] = mapped_column(
         String(16),
         nullable=False,

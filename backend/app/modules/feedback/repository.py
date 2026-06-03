@@ -10,6 +10,7 @@ class FeedbackRepository:
         return (
             selectinload(Feedback.creator),
             selectinload(Feedback.handled_by),
+            selectinload(Feedback.images),
         )
 
     async def create_feedback(

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -40,6 +40,16 @@ async def patch_me(
     current_user: User = Depends(get_current_user),
 ) -> UserMeResponse:
     updated = await user_service.patch_me(db, current_user, payload)
+    return UserMeResponse.model_validate(updated)
+
+
+@router.post("/me/avatar", response_model=UserMeResponse)
+async def update_my_avatar(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserMeResponse:
+    updated = await user_service.update_my_avatar(db, user=current_user, file=file)
     return UserMeResponse.model_validate(updated)
 
 

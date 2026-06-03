@@ -62,6 +62,14 @@ class UserBriefResponse(BaseModel):
     id: int
     email: EmailStr
     username: str | None
+    avatar_asset_id: int | None = None
+
+    @computed_field
+    @property
+    def avatar_url(self) -> str | None:
+        if self.avatar_asset_id is None:
+            return None
+        return f"/api/v1/assets/{self.avatar_asset_id}/content"
 
 
 class UserResponse(UserBriefResponse):

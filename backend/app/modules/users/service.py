@@ -1,11 +1,14 @@
 from math import ceil
 
+from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_reasons import ErrorReason
 from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.security import hash_password
 from app.core.validators import normalize_email
+from app.modules.assets.constants import AssetType
+from app.modules.assets.service import AssetService
 from app.modules.rooms.constants import RoomRole
 from app.modules.rooms.room.repository import RoomRepository
 from app.modules.site.constants import SitePermission, SiteRole
@@ -19,6 +22,7 @@ class UserService:
     def __init__(self) -> None:
         self.repo = UserRepository()
         self.room_repo = RoomRepository()
+        self.asset_service = AssetService()
 
     async def create_user(self, db: AsyncSession, payload: UserCreate) -> User:
         if await self.repo.get_by_email(db, payload.email):
@@ -135,6 +139,24 @@ class UserService:
         if "password" in updates:
             user.hashed_password = hash_password(updates["password"])
 
+        user = await self.repo.save(db, user)
+        await db.commit()
+        return user
+
+    async def update_my_avatar(
+        self,
+        db: AsyncSession,
+        *,
+        user: User,
+        file: UploadFile,
+    ) -> User:
+        avatar = await self.asset_service.create_image_asset(
+            db,
+            file=file,
+            asset_type=AssetType.AVATAR,
+            owner_id=user.id,
+        )
+        user.avatar_asset_id = avatar.id
         user = await self.repo.save(db, user)
         await db.commit()
         return user

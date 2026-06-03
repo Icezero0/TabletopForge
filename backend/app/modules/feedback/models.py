@@ -60,3 +60,8 @@ class Feedback(Base):
 
     creator = relationship("User", foreign_keys=[creator_id])
     handled_by = relationship("User", foreign_keys=[handled_by_id])
+    images = relationship(
+        "Asset",
+        back_populates="feedback",
+        cascade="all, delete-orphan",
+    )

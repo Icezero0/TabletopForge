@@ -3,6 +3,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.validators import normalize_optional_non_empty_str, normalize_required_str
+from app.modules.assets.schemas import AssetResponse
 from app.modules.feedback.constants import FeedbackPage, FeedbackStatus, FeedbackType
 from app.modules.users.schemas import UserBriefResponse
 
@@ -35,6 +36,7 @@ class FeedbackResponse(BaseModel):
 
     creator: UserBriefResponse | None = None
     handled_by: UserBriefResponse | None = None
+    images: list[AssetResponse] = Field(default_factory=list)
 
 
 class FeedbackListResponse(BaseModel):

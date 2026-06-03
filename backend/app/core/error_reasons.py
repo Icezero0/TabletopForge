@@ -14,6 +14,10 @@ class ErrorReason(StrEnum):
     MISSING_AUTHORIZATION_TOKEN = "missing_authorization_token"
     USER_NOT_FOUND = "user_not_found"
     SITE_PERMISSION_DENIED = "site_permission_denied"
+    ASSET_NOT_FOUND = "asset_not_found"
+    ASSET_PERMISSION_DENIED = "asset_permission_denied"
+    INVALID_ASSET_FILE = "invalid_asset_file"
+    ASSET_FILE_TOO_LARGE = "asset_file_too_large"
 
     CANNOT_REMOVE_SELF_FROM_ROOM = "cannot_remove_self_from_room"
     INVALID_ROOM_ID = "invalid_room_id"

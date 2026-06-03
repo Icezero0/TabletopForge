@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     # 数据目录 / DB
     data_dir: str = Field("../data", alias="DATA_DIR")
     db_filename: str = Field("TabletopForge.db", alias="DB_FILENAME")
+    max_asset_upload_bytes: int = Field(5 * 1024 * 1024, alias="MAX_ASSET_UPLOAD_BYTES")
 
     # JWT
     jwt_secret_key: str = Field(..., alias="JWT_SECRET_KEY")
@@ -52,6 +53,10 @@ class Settings(BaseSettings):
     @property
     def db_path(self) -> Path:
         return (self.data_dir_path / self.db_filename).resolve()
+
+    @property
+    def assets_dir_path(self) -> Path:
+        return (self.data_dir_path / "assets").resolve()
 
     @property
     def database_url(self) -> str:

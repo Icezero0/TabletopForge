@@ -2,9 +2,12 @@ from datetime import datetime, timezone
 from math import ceil
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import UploadFile
 
 from app.core.error_reasons import ErrorReason
 from app.core.exceptions import ForbiddenError, NotFoundError
+from app.modules.assets.constants import AssetType
+from app.modules.assets.service import AssetService
 from app.modules.feedback.constants import FeedbackPage, FeedbackStatus, FeedbackType
 from app.modules.feedback.models import Feedback
 from app.modules.feedback.repository import FeedbackRepository
@@ -21,6 +24,7 @@ from app.modules.users.models import User
 class FeedbackService:
     def __init__(self) -> None:
         self.repo = FeedbackRepository()
+        self.asset_service = AssetService()
 
     def _site_role(self, user: User) -> SiteRole:
         try:
@@ -47,6 +51,7 @@ class FeedbackService:
         page: FeedbackPage,
         title: str,
         description: str,
+        images: list[UploadFile] | None = None,
     ) -> Feedback:
         self._require(user, SitePermission.CREATE_FEEDBACK)
         normalized_title = normalize_feedback_title(title)
@@ -60,6 +65,15 @@ class FeedbackService:
             title=normalized_title,
             description=normalized_description,
         )
+
+        for image in images or []:
+            await self.asset_service.create_image_asset(
+                db,
+                file=image,
+                asset_type=AssetType.FEEDBACK_IMAGE,
+                owner_id=user.id,
+                feedback_id=feedback.id,
+            )
         await db.commit()
 
         stored = await self.repo.find_feedback_by_id(db, feedback.id)
