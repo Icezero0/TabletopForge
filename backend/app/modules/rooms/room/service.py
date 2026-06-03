@@ -10,7 +10,6 @@ from app.modules.rooms.models import Room
 from app.modules.rooms.permissions import require_room_permission
 from app.modules.rooms.room.repository import RoomRepository
 from app.modules.rooms.room.schemas import RoomCreate, RoomPatch
-from app.modules.rooms.settings.repository import RoomSettingsRepository
 from app.modules.users.models import User
 
 
@@ -18,7 +17,6 @@ class RoomService:
     def __init__(self) -> None:
         self.repo = RoomRepository()
         self.membership_service = RoomMembershipService()
-        self.settings_repo = RoomSettingsRepository()
 
     async def _require_room_permission(
         self,
@@ -96,11 +94,6 @@ class RoomService:
             room_id=room.id,
             user_id=user.id,
             role=RoomRole.OWNER.value,
-        )
-
-        await self.settings_repo.create_settings(
-            db,
-            room_id=room.id,
         )
 
         await db.commit()

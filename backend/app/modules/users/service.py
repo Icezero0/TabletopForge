@@ -3,11 +3,13 @@ from math import ceil
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_reasons import ErrorReason
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import ConflictError, ForbiddenError, NotFoundError
 from app.core.security import hash_password
 from app.core.validators import normalize_email
 from app.modules.rooms.constants import RoomRole
 from app.modules.rooms.room.repository import RoomRepository
+from app.modules.site.constants import SitePermission, SiteRole
+from app.modules.site.permissions import require_site_permission
 from app.modules.users.models import User
 from app.modules.users.repository import UserRepository
 from app.modules.users.schemas import UserCreate, UserPatch
@@ -136,3 +138,29 @@ class UserService:
         user = await self.repo.save(db, user)
         await db.commit()
         return user
+
+    async def set_site_role(
+        self,
+        db: AsyncSession,
+        *,
+        target_user_id: int,
+        site_role: SiteRole,
+        actor: User,
+    ) -> User:
+        require_site_permission(
+            SiteRole(actor.site_role),
+            SitePermission.MANAGE_SITE_ROLES,
+        )
+
+        if actor.id == target_user_id:
+            raise ForbiddenError(
+                "You cannot change your own site role",
+                reason=ErrorReason.SITE_PERMISSION_DENIED,
+                details={"user_id": target_user_id},
+            )
+
+        target = await self.get_user_by_id(db, target_user_id)
+        target.site_role = site_role.value
+        target = await self.repo.save(db, target)
+        await db.commit()
+        return target

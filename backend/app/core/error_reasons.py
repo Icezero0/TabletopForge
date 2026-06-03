@@ -32,7 +32,6 @@ class ErrorReason(StrEnum):
     ROOM_NOT_ENTERED = "room_not_entered"
     ROOM_NOT_FOUND = "room_not_found"
     ROOM_PERMISSION_DENIED = "room_permission_denied"
-    ROOM_SETTINGS_NOT_FOUND = "room_settings_not_found"
     USER_ALREADY_ROOM_MEMBER = "user_already_room_member"
 
     PAGINATION_NOT_ALLOWED_WITH_ALL = "pagination_not_allowed_with_all"

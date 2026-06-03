@@ -12,6 +12,7 @@ from app.modules.site.permissions import (
 def test_site_admin_has_all_feedback_permissions():
     permissions = get_permissions_by_role(SiteRole.ADMIN)
 
+    assert SitePermission.MANAGE_SITE_ROLES in permissions
     assert SitePermission.CREATE_FEEDBACK in permissions
     assert SitePermission.VIEW_OWN_FEEDBACK in permissions
     assert SitePermission.VIEW_ALL_FEEDBACK in permissions
@@ -26,6 +27,7 @@ def test_site_user_only_has_self_service_feedback_permissions():
         SitePermission.CREATE_FEEDBACK,
         SitePermission.VIEW_OWN_FEEDBACK,
     }
+    assert not has_site_permission(SiteRole.USER, SitePermission.MANAGE_SITE_ROLES)
     assert not has_site_permission(SiteRole.USER, SitePermission.VIEW_ALL_FEEDBACK)
 
 

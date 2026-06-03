@@ -30,11 +30,6 @@ from app.modules.rooms.room.schemas import (
     RoomPatch,
     RoomResponse,
 )
-from app.modules.rooms.settings.schemas import (
-    RoomSettingsPatch,
-    RoomSettingsResponse,
-)
-from app.modules.rooms.settings.service import RoomSettingsService
 from app.modules.rooms.room.service import RoomService
 from app.modules.rooms.permissions import has_room_permission
 from app.modules.users.models import User
@@ -49,7 +44,6 @@ router = APIRouter(prefix="/rooms", tags=["rooms"])
 room_service = RoomService()
 membership_service = RoomMembershipService()
 join_request_service = RoomJoinRequestService()
-settings_service = RoomSettingsService()
 
 
 @router.post("", response_model=RoomResponse, status_code=status.HTTP_201_CREATED)
@@ -119,38 +113,6 @@ async def patch_room(
     )
     await publisher.publish_room_info(room_id=room_id)
     return RoomResponse.model_validate(room)
-
-
-@router.get("/{room_id}/settings", response_model=RoomSettingsResponse)
-async def get_room_settings(
-    room_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> RoomSettingsResponse:
-    settings = await settings_service.get_accessible_room_settings_by_room_id(
-        db,
-        room_id=room_id,
-        user=current_user,
-    )
-    return RoomSettingsResponse.model_validate(settings)
-
-
-@router.patch("/{room_id}/settings", response_model=RoomSettingsResponse)
-async def patch_room_settings(
-    room_id: int,
-    payload: RoomSettingsPatch,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    publisher: RealtimePublisher = Depends(get_realtime_publisher),
-) -> RoomSettingsResponse:
-    settings = await settings_service.patch_room_settings(
-        db,
-        room_id=room_id,
-        user=current_user,
-        payload=payload,
-    )
-    await publisher.publish_room_settings(room_id=room_id)
-    return RoomSettingsResponse.model_validate(settings)
 
 
 @router.delete("/{room_id}", status_code=status.HTTP_204_NO_CONTENT)

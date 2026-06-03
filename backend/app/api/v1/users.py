@@ -14,6 +14,8 @@ from app.modules.users.schemas import (
     UserMeResponse,
     UserPatch,
     UserResponse,
+    UserSiteRolePatch,
+    UserSiteRoleResponse,
 )
 from app.modules.users.service import UserService
 
@@ -130,6 +132,22 @@ async def get_users(
         page_size=data["page_size"],
         total_pages=data["total_pages"],
     )
+
+
+@router.patch("/{user_id}/site-role", response_model=UserSiteRoleResponse)
+async def patch_user_site_role(
+    user_id: int,
+    payload: UserSiteRolePatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserSiteRoleResponse:
+    user = await user_service.set_site_role(
+        db,
+        target_user_id=user_id,
+        site_role=payload.site_role,
+        actor=current_user,
+    )
+    return UserSiteRoleResponse.model_validate(user)
 
 
 @router.get("/{user_id}", response_model=UserResponse)

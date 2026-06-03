@@ -5,6 +5,7 @@ from app.modules.site.constants import SitePermission, SiteRole
 
 ROLE_PERMISSIONS: dict[SiteRole, set[SitePermission]] = {
     SiteRole.ADMIN: {
+        SitePermission.MANAGE_SITE_ROLES,
         SitePermission.CREATE_FEEDBACK,
         SitePermission.VIEW_OWN_FEEDBACK,
         SitePermission.VIEW_ALL_FEEDBACK,

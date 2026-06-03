@@ -59,17 +59,6 @@ class RealtimePublisher:
             data=None,
         )
 
-    async def publish_room_settings(
-        self,
-        *,
-        room_id: int,
-    ) -> None:
-        await self._publish_event(
-            channel=room_channel(room_id),
-            event=WsEventType.ROOM_SETTINGS,
-            data=None,
-        )
-
     async def publish_room_members(
         self,
         *,

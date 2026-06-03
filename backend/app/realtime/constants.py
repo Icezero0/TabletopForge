@@ -25,7 +25,6 @@ class WsEventType(StrEnum):
     NOTIFICATION = "notification"
 
     ROOM_INFO = "room_info"
-    ROOM_SETTINGS = "room_settings"
     ROOM_MEMBERS = "room_members"
 
     ROOM_USER_PRESENCE = "room_user_presence"

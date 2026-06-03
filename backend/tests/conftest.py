@@ -39,7 +39,7 @@ from app.modules.rooms.constants import (
     RoomRole,
     RoomVisibility,
 )
-from app.modules.rooms.models import Room, RoomJoinRequest, RoomMember, RoomSettings
+from app.modules.rooms.models import Room, RoomJoinRequest, RoomMember
 from app.modules.users.models import User
 from app.modules.messages.models import Message
 from app.modules.site.constants import SiteRole
@@ -136,7 +136,6 @@ async def factories(db_session):
         visibility: RoomVisibility = RoomVisibility.PRIVATE,
         join_audit_mode: RoomJoinAuditMode = RoomJoinAuditMode.MANUAL_REVIEW,
         with_owner_member: bool = True,
-        with_settings: bool = True,
     ) -> Room:
         counters["room"] += 1
         room = Room(
@@ -154,13 +153,6 @@ async def factories(db_session):
                     room_id=room.id,
                     user_id=owner.id,
                     role=RoomRole.OWNER.value,
-                )
-            )
-
-        if with_settings:
-            db_session.add(
-                RoomSettings(
-                    room_id=room.id,
                 )
             )
 

@@ -30,11 +30,7 @@ class RoomRepository:
         return room
 
     async def get_room_by_id(self, db: AsyncSession, room_id: int) -> Room | None:
-        result = await db.execute(
-            select(Room)
-            .options(selectinload(Room.settings))
-            .where(Room.id == room_id)
-        )
+        result = await db.execute(select(Room).where(Room.id == room_id))
         return result.scalar_one_or_none()
 
     async def get_rooms(
@@ -71,7 +67,7 @@ class RoomRepository:
         total = count_result.scalar_one()
 
         stmt = (
-            base_stmt.options(selectinload(Room.settings), selectinload(Room.owner))
+            base_stmt.options(selectinload(Room.owner))
             .order_by(Room.id.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)

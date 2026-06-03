@@ -52,6 +52,10 @@ class UserPatch(BaseModel):
         return normalize_optional_non_empty_str(value, field_name="Password")
 
 
+class UserSiteRolePatch(BaseModel):
+    site_role: SiteRole
+
+
 class UserBriefResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -64,6 +68,10 @@ class UserResponse(UserBriefResponse):
     pass
 
 
+class UserSiteRoleResponse(UserResponse):
+    site_role: SiteRole
+
+
 class UserMeResponse(UserResponse):
     site_role: SiteRole
 
@@ -71,6 +79,7 @@ class UserMeResponse(UserResponse):
     @property
     def site_permissions(self) -> list[SitePermission]:
         return sorted(get_permissions_by_role(self.site_role), key=lambda item: item.value)
+
 
 class UserListResponse(BaseModel):
     items: list[UserResponse] = Field(default_factory=list)

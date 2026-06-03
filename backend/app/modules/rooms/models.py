@@ -56,42 +56,6 @@ class Room(Base):
         cascade="all, delete-orphan",
     )
 
-    settings: Mapped["RoomSettings | None"] = relationship(
-        "RoomSettings",
-        back_populates="room",
-        uselist=False,
-        cascade="all, delete-orphan",
-    )
-
-
-class RoomSettings(Base):
-    __tablename__ = "room_settings"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-
-    room_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("rooms.id", ondelete="CASCADE"),
-        nullable=False,
-        unique=True,
-        index=True,
-    )
-
-    created_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-    )
-    updated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        onupdate=func.now(),
-    )
-
-    room: Mapped["Room"] = relationship(
-        "Room",
-        back_populates="settings",
-    )
-
 
 class RoomMember(Base):
     __tablename__ = "room_members"

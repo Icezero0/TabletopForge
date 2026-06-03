@@ -12,15 +12,13 @@ from app.modules.rooms.constants import (
 )
 from app.modules.rooms.join_request.service import RoomJoinRequestService
 from app.modules.rooms.membership.service import RoomMembershipService
-from app.modules.rooms.models import RoomMember, RoomSettings
+from app.modules.rooms.models import RoomMember
 from app.modules.rooms.room.schemas import RoomCreate
 from app.modules.rooms.room.service import RoomService
-from app.modules.rooms.settings.schemas import RoomSettingsPatch
-from app.modules.rooms.settings.service import RoomSettingsService
 
 
-# 验证创建房间时会同时创建 owner 成员关系和默认设置。
-async def test_create_room_creates_owner_membership_and_settings(db_session, factories) -> None:
+# 验证创建房间时会同时创建 owner 成员关系。
+async def test_create_room_creates_owner_membership(db_session, factories) -> None:
     owner = await factories.create_user()
     await factories.commit()
 
@@ -31,12 +29,9 @@ async def test_create_room_creates_owner_membership_and_settings(db_session, fac
     )
 
     members = await factories.list_all(RoomMember)
-    settings_list = await factories.list_all(RoomSettings)
 
     assert room.name == "Watch Party"
     assert any(member.room_id == room.id and member.user_id == owner.id for member in members)
-    assert len(settings_list) == 1
-    assert settings_list[0].room_id == room.id
 
 
 # 验证非成员无法访问私有房间。
@@ -166,45 +161,6 @@ async def test_set_room_member_manager_status_updates_role(db_session, factories
         current_user=owner,
     )
     assert demoted.role == RoomRole.MEMBER
-
-
-# 验证读取公开房间设置时，缺失配置会被惰性创建。
-async def test_get_accessible_room_settings_creates_default_settings_for_public_room(
-    db_session,
-    factories,
-) -> None:
-    owner = await factories.create_user()
-    outsider = await factories.create_user()
-    room = await factories.create_room(
-        owner=owner,
-        visibility=RoomVisibility.PUBLIC,
-        with_settings=False,
-    )
-    await factories.commit()
-
-    settings = await RoomSettingsService().get_accessible_room_settings_by_room_id(
-        db_session,
-        room_id=room.id,
-        user=outsider,
-    )
-
-    assert settings.room_id == room.id
-
-
-# 验证更新房间设置接口会返回当前设置对象。
-async def test_patch_room_settings_returns_settings(db_session, factories) -> None:
-    owner = await factories.create_user()
-    room = await factories.create_room(owner=owner)
-    await factories.commit()
-
-    settings = await RoomSettingsService().patch_room_settings(
-        db_session,
-        room_id=room.id,
-        user=owner,
-        payload=RoomSettingsPatch(),
-    )
-
-    assert settings.room_id == room.id
 
 
 # 验证自动通过模式会直接把申请人加入房间而不创建申请记录。

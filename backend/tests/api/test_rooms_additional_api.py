@@ -65,31 +65,6 @@ async def test_get_rooms_filters_public_rooms_by_owner_identity(
     assert body["items"][0]["name"] == "Bob Public"
 
 
-# 验证更新房间设置接口会触发 realtime 的房间设置广播。
-async def test_patch_room_settings_publishes_realtime_event(
-    app,
-    api_client,
-    factories,
-    auth_headers,
-) -> None:
-    owner = await factories.create_user()
-    room = await factories.create_room(owner=owner)
-    await factories.commit()
-
-    app.state.realtime_publisher.publish_room_settings = AsyncMock()
-
-    response = await api_client.patch(
-        f"/api/v1/rooms/{room.id}/settings",
-        json={},
-        headers=auth_headers(owner),
-    )
-
-    assert response.status_code == 200
-    app.state.realtime_publisher.publish_room_settings.assert_awaited_once_with(
-        room_id=room.id
-    )
-
-
 # 验证自动通过的入房申请接口会直接广播房间成员列表。
 async def test_apply_join_request_auto_approve_publishes_room_members(
     app,
