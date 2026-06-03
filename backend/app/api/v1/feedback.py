@@ -1,5 +1,4 @@
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, Form, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -12,24 +11,15 @@ from app.modules.feedback.schemas import (
     FeedbackUpdateRequest,
 )
 from app.modules.feedback.service import FeedbackService
-from app.modules.media.storage import MediaStorageService
 from app.modules.users.models import User
 
 router = APIRouter(prefix="/feedback", tags=["feedback"])
 
 feedback_service = FeedbackService()
-media_storage = MediaStorageService()
 
 
 def _build_feedback_response(feedback: Feedback) -> FeedbackResponse:
-    screenshot_asset_ids = [item.asset_id for item in feedback.screenshots]
-
-    response = FeedbackResponse.model_validate(feedback)
-    response.screenshot_asset_ids = screenshot_asset_ids
-    response.screenshot_urls = [
-        f"/api/v1/feedback/assets/{asset_id}" for asset_id in screenshot_asset_ids
-    ]
-    return response
+    return FeedbackResponse.model_validate(feedback)
 
 
 @router.post("", response_model=FeedbackResponse)
@@ -38,7 +28,6 @@ async def create_feedback(
     page: FeedbackPage = Form(...),
     title: str = Form(...),
     description: str = Form(...),
-    screenshots: list[UploadFile] = File(default=[]),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> FeedbackResponse:
@@ -49,7 +38,6 @@ async def create_feedback(
         page=page,
         title=title,
         description=description,
-        screenshots=screenshots,
     )
     return _build_feedback_response(feedback)
 
@@ -139,20 +127,3 @@ async def update_feedback(
     )
     return _build_feedback_response(feedback)
 
-
-@router.get("/assets/{asset_id}")
-async def get_feedback_screenshot(
-    asset_id: int,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-) -> FileResponse:
-    asset = await feedback_service.get_feedback_screenshot_asset(
-        db,
-        asset_id=asset_id,
-        user=current_user,
-    )
-    path = media_storage.get_file_path(
-        asset_type=asset.asset_type,
-        storage_key=asset.storage_key,
-    )
-    return FileResponse(path, media_type=asset.mime_type)

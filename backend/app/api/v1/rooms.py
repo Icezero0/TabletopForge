@@ -5,7 +5,6 @@ from app.api.deps import (
     get_realtime_manager,
     get_realtime_publisher,
     get_realtime_room_presence_service,
-    get_realtime_room_video_runtime_service,
 )
 from app.core.database import get_db
 from app.modules.auth.deps import get_current_user
@@ -44,7 +43,6 @@ from app.realtime.manager import RealtimeManager
 from app.realtime.publisher import RealtimePublisher
 from app.realtime.rest_sync import close_room_sessions, close_room_user_session
 from app.realtime.room_presence import RoomPresenceService
-from app.realtime.room_video_runtime import RoomVideoRuntimeService
 
 router = APIRouter(prefix="/rooms", tags=["rooms"])
 
@@ -163,14 +161,12 @@ async def delete_room(
     manager: RealtimeManager = Depends(get_realtime_manager),
     publisher: RealtimePublisher = Depends(get_realtime_publisher),
     presence_service: RoomPresenceService = Depends(get_realtime_room_presence_service),
-    video_runtime_service: RoomVideoRuntimeService = Depends(get_realtime_room_video_runtime_service),
 ) -> Response:
     await room_service.delete_room(db, room_id=room_id, user=current_user)
     await close_room_sessions(
         manager=manager,
         publisher=publisher,
         presence_service=presence_service,
-        video_runtime_service=video_runtime_service,
         room_id=room_id,
         reason=SessionCloseReason.ROOM_DELETED,
     )
@@ -307,7 +303,6 @@ async def leave_room(
     manager: RealtimeManager = Depends(get_realtime_manager),
     publisher: RealtimePublisher = Depends(get_realtime_publisher),
     presence_service: RoomPresenceService = Depends(get_realtime_room_presence_service),
-    video_runtime_service: RoomVideoRuntimeService = Depends(get_realtime_room_video_runtime_service),
 ) -> Response:
     await membership_service.leave_room(
         db,
@@ -315,11 +310,9 @@ async def leave_room(
         user=current_user,
     )
     await close_room_user_session(
-        db=db,
         manager=manager,
         publisher=publisher,
         presence_service=presence_service,
-        video_runtime_service=video_runtime_service,
         room_id=room_id,
         user_id=current_user.id,
         reason=SessionCloseReason.LEFT_ROOM,
@@ -384,7 +377,6 @@ async def remove_room_member(
     manager: RealtimeManager = Depends(get_realtime_manager),
     publisher: RealtimePublisher = Depends(get_realtime_publisher),
     presence_service: RoomPresenceService = Depends(get_realtime_room_presence_service),
-    video_runtime_service: RoomVideoRuntimeService = Depends(get_realtime_room_video_runtime_service),
 ) -> Response:
     await membership_service.remove_room_member(
         db,
@@ -393,11 +385,9 @@ async def remove_room_member(
         current_user=current_user,
     )
     await close_room_user_session(
-        db=db,
         manager=manager,
         publisher=publisher,
         presence_service=presence_service,
-        video_runtime_service=video_runtime_service,
         room_id=room_id,
         user_id=target_user_id,
         reason=SessionCloseReason.REMOVED_FROM_ROOM,

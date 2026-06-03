@@ -2,7 +2,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.modules.feedback.models import Feedback, FeedbackScreenshot
+from app.modules.feedback.models import Feedback
 
 
 class FeedbackRepository:
@@ -10,7 +10,6 @@ class FeedbackRepository:
         return (
             selectinload(Feedback.creator),
             selectinload(Feedback.handled_by),
-            selectinload(Feedback.screenshots).selectinload(FeedbackScreenshot.asset),
         )
 
     async def create_feedback(
@@ -22,7 +21,6 @@ class FeedbackRepository:
         page: str,
         title: str,
         description: str,
-        screenshot_asset_ids: list[int] | None = None,
     ) -> Feedback:
         feedback = Feedback(
             creator_id=creator_id,
@@ -33,19 +31,6 @@ class FeedbackRepository:
         )
         db.add(feedback)
         await db.flush()
-
-        for index, asset_id in enumerate(screenshot_asset_ids or []):
-            db.add(
-                FeedbackScreenshot(
-                    feedback_id=feedback.id,
-                    asset_id=asset_id,
-                    sort_order=index,
-                )
-            )
-
-        if screenshot_asset_ids:
-            await db.flush()
-
         await db.refresh(feedback)
         return feedback
 
@@ -57,19 +42,6 @@ class FeedbackRepository:
         result = await db.execute(
             select(Feedback)
             .where(Feedback.id == feedback_id)
-            .options(*self._with_relations())
-        )
-        return result.unique().scalar_one_or_none()
-
-    async def find_feedback_by_screenshot_asset_id(
-        self,
-        db: AsyncSession,
-        asset_id: int,
-    ) -> Feedback | None:
-        result = await db.execute(
-            select(Feedback)
-            .outerjoin(FeedbackScreenshot)
-            .where(FeedbackScreenshot.asset_id == asset_id)
             .options(*self._with_relations())
         )
         return result.unique().scalar_one_or_none()

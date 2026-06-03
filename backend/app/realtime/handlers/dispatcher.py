@@ -14,7 +14,6 @@ from app.realtime.constants import WsCommandAction, WsErrorCode, WsMessageType
 from app.realtime.handlers.auth import AuthHandler
 from app.realtime.handlers.heartbeat import HeartbeatHandler
 from app.realtime.handlers.room import RoomCommandHandler
-from app.realtime.handlers.room_video import RoomVideoCommandHandler
 from app.realtime.manager import RealtimeManager, WsConnection
 from app.realtime.protocol import (
     WsCommandPayload,
@@ -24,7 +23,6 @@ from app.realtime.protocol import (
 )
 from app.realtime.publisher import RealtimePublisher
 from app.realtime.room_presence import RoomPresenceService
-from app.realtime.room_video_runtime import RoomVideoRuntimeService
 
 logger = logging.getLogger("app.realtime")
 
@@ -34,16 +32,11 @@ class RealtimeMessageHandler:
         self,
         *,
         presence_service: RoomPresenceService,
-        video_runtime_service: RoomVideoRuntimeService,
     ) -> None:
         self.auth_handler = AuthHandler()
         self.heartbeat_handler = HeartbeatHandler()
         self.room_handler = RoomCommandHandler(
             presence_service=presence_service,
-            video_runtime_service=video_runtime_service,
-        )
-        self.room_video_handler = RoomVideoCommandHandler(
-            video_runtime_service=video_runtime_service,
         )
 
     async def handle(
@@ -171,24 +164,8 @@ class RealtimeMessageHandler:
             WsCommandAction.ROOM_ENTER,
             WsCommandAction.ROOM_LEAVE,
             WsCommandAction.ROOM_PRESENCE_GET,
-            WsCommandAction.ROOM_VIDEO_RUNTIME_GET,
         }:
             return await self.room_handler.handle(
-                db=db,
-                manager=manager,
-                publisher=publisher,
-                connection=connection,
-                command=command,
-            )
-
-        if command.action in {
-            WsCommandAction.PLAYBACK_PAUSE,
-            WsCommandAction.PLAYBACK_PLAY,
-            WsCommandAction.PLAYBACK_SEEK,
-            WsCommandAction.ROOM_VIDEO_SOURCE_SET,
-            WsCommandAction.USER_RESOURCE_STATUS,
-        }:
-            return await self.room_video_handler.handle(
                 db=db,
                 manager=manager,
                 publisher=publisher,

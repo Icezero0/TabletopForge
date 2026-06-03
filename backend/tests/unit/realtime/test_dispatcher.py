@@ -5,7 +5,6 @@ from app.realtime.constants import WsCommandAction, WsErrorCode
 from app.realtime.handlers.dispatcher import RealtimeMessageHandler
 from app.realtime.manager import WsConnection
 from app.realtime.room_presence import RoomPresenceService
-from app.realtime.room_video_runtime import RoomVideoRuntimeService
 
 
 class FakeWebSocket:
@@ -21,7 +20,6 @@ async def test_dispatcher_routes_auth_message_to_auth_handler(monkeypatch) -> No
     websocket = FakeWebSocket()
     handler = RealtimeMessageHandler(
         presence_service=RoomPresenceService(),
-        video_runtime_service=RoomVideoRuntimeService(),
     )
     expected_connection = WsConnection(
         connection_id="conn-auth",
@@ -51,7 +49,6 @@ async def test_dispatcher_routes_heartbeat_message_to_heartbeat_handler(monkeypa
     websocket = FakeWebSocket()
     handler = RealtimeMessageHandler(
         presence_service=RoomPresenceService(),
-        video_runtime_service=RoomVideoRuntimeService(),
     )
     connection = WsConnection(connection_id="conn-heartbeat", user_id=2, websocket=websocket)
     called = {"value": False}
@@ -79,7 +76,6 @@ async def test_dispatcher_sends_ack_after_command_dispatch(monkeypatch) -> None:
     websocket = FakeWebSocket()
     handler = RealtimeMessageHandler(
         presence_service=RoomPresenceService(),
-        video_runtime_service=RoomVideoRuntimeService(),
     )
     connection = WsConnection(connection_id="conn-command", user_id=3, websocket=websocket)
 
@@ -117,7 +113,6 @@ async def test_dispatcher_rejects_command_before_authentication() -> None:
     websocket = FakeWebSocket()
     handler = RealtimeMessageHandler(
         presence_service=RoomPresenceService(),
-        video_runtime_service=RoomVideoRuntimeService(),
     )
 
     result = await handler.handle(
@@ -152,7 +147,6 @@ async def test_dispatcher_returns_invalid_payload_error_for_malformed_message() 
     websocket = FakeWebSocket()
     handler = RealtimeMessageHandler(
         presence_service=RoomPresenceService(),
-        video_runtime_service=RoomVideoRuntimeService(),
     )
     connection = WsConnection(connection_id="conn-invalid", user_id=4, websocket=websocket)
 
@@ -175,7 +169,6 @@ async def test_dispatcher_returns_invalid_payload_error_for_malformed_message() 
 async def test_dispatcher_routes_room_actions_to_room_handler(monkeypatch) -> None:
     handler = RealtimeMessageHandler(
         presence_service=RoomPresenceService(),
-        video_runtime_service=RoomVideoRuntimeService(),
     )
     called = {"value": False}
 
@@ -197,37 +190,10 @@ async def test_dispatcher_routes_room_actions_to_room_handler(monkeypatch) -> No
     assert called["value"] is True
 
 
-# _dispatch_command 会把播放相关命令路由给 RoomVideoCommandHandler
-async def test_dispatcher_routes_video_actions_to_room_video_handler(monkeypatch) -> None:
-    handler = RealtimeMessageHandler(
-        presence_service=RoomPresenceService(),
-        video_runtime_service=RoomVideoRuntimeService(),
-    )
-    called = {"value": False}
-
-    async def fake_room_video_handle(**kwargs):  # noqa: ANN001
-        called["value"] = True
-        return {"video": True}
-
-    monkeypatch.setattr(handler.room_video_handler, "handle", fake_room_video_handle)
-
-    result = await handler._dispatch_command(
-        db=object(),
-        manager=object(),
-        publisher=object(),
-        connection=SimpleNamespace(),
-        command=SimpleNamespace(action=WsCommandAction.PLAYBACK_PLAY),
-    )
-
-    assert result == {"video": True}
-    assert called["value"] is True
-
-
 # _dispatch_command 会拒绝未支持的命令动作
 async def test_dispatcher_rejects_unsupported_command_action() -> None:
     handler = RealtimeMessageHandler(
         presence_service=RoomPresenceService(),
-        video_runtime_service=RoomVideoRuntimeService(),
     )
 
     try:

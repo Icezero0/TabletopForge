@@ -53,9 +53,8 @@ async def test_patch_me_updates_selected_fields(db_session, factories) -> None:
     updated = await UserService().patch_me(
         db_session,
         user,
-        UserPatch(username="after", password="NewPassword123", auto_accept=True),
+        UserPatch(username="after", password="NewPassword123"),
     )
 
     assert updated.username == "after"
-    assert updated.auto_accept is True
     assert verify_password("NewPassword123", updated.hashed_password) is True

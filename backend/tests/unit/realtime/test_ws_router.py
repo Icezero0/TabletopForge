@@ -39,7 +39,6 @@ async def test_websocket_endpoint_closes_on_auth_timeout(monkeypatch) -> None:
             realtime_manager=SimpleNamespace(),
             realtime_publisher=SimpleNamespace(),
             realtime_room_presence_service=SimpleNamespace(),
-            realtime_room_video_runtime_service=SimpleNamespace(),
         )
     )
     ws = _FakeWebSocket(app=app)
@@ -69,8 +68,6 @@ async def test_websocket_endpoint_disconnect_cleanup_publishes_presence(monkeypa
     )
     presence = SimpleNamespace(room_id=42, present_user_ids={1, 2})
     publisher = SimpleNamespace(
-        publish_user_resource_states=AsyncMock(),
-        publish_playback_play=AsyncMock(),
         publish_room_user_presence=AsyncMock(),
     )
     manager = SimpleNamespace(disconnect=AsyncMock())
@@ -78,21 +75,11 @@ async def test_websocket_endpoint_disconnect_cleanup_publishes_presence(monkeypa
         handle_disconnect=AsyncMock(return_value=42),
         get_presence_state=AsyncMock(return_value=presence),
     )
-    session_exit_result = SimpleNamespace(
-        room_cleared=False,
-        user_resource_states={"states": []},
-        auto_action="pause",
-        auto_playback=None,
-    )
-    video_runtime_service = SimpleNamespace(
-        handle_room_session_exit=AsyncMock(return_value=session_exit_result),
-    )
     app = SimpleNamespace(
         state=SimpleNamespace(
             realtime_manager=manager,
             realtime_publisher=publisher,
             realtime_room_presence_service=presence_service,
-            realtime_room_video_runtime_service=video_runtime_service,
         )
     )
     ws = _FakeWebSocket(
@@ -109,21 +96,10 @@ async def test_websocket_endpoint_disconnect_cleanup_publishes_presence(monkeypa
 
     monkeypatch.setattr("app.realtime.ws_router.RealtimeMessageHandler", _FakeHandler)
     monkeypatch.setattr("app.realtime.ws_router.AsyncSessionLocal", lambda: _DummySessionContext())
-    monkeypatch.setattr(
-        "app.realtime.ws_router.RoomSettingsService",
-        lambda: SimpleNamespace(
-            find_room_settings_by_room_id=AsyncMock(
-                return_value=SimpleNamespace(sync_policy="auto_sync")
-            )
-        ),
-    )
 
     await websocket_endpoint(ws)
 
     ws.accept.assert_awaited_once()
     presence_service.handle_disconnect.assert_awaited_once_with(connection=connection)
     manager.disconnect.assert_awaited_once_with(connection.connection_id)
-    publisher.publish_user_resource_states.assert_awaited_once_with(
-        user_resource_states={"states": []}
-    )
     publisher.publish_room_user_presence.assert_awaited_once_with(presence=presence)

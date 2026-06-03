@@ -19,13 +19,6 @@ class WsCommandAction(StrEnum):
     ROOM_ENTER = "room_enter"
     ROOM_LEAVE = "room_leave"
     ROOM_PRESENCE_GET = "room_presence_get"
-    ROOM_VIDEO_RUNTIME_GET = "room_video_runtime_get"
-
-    PLAYBACK_PAUSE = "playback_pause"
-    PLAYBACK_PLAY = "playback_play"
-    PLAYBACK_SEEK = "playback_seek"
-    ROOM_VIDEO_SOURCE_SET = "room_video_source_set"
-    USER_RESOURCE_STATUS = "user_resource_status"
 
 
 class WsEventType(StrEnum):
@@ -39,12 +32,6 @@ class WsEventType(StrEnum):
     SESSION_CLOSED = "session_closed"
 
     MESSAGE = "message"
-
-    PLAYBACK_PAUSE = "playback_pause"
-    PLAYBACK_PLAY = "playback_play"
-    PLAYBACK_SEEK = "playback_seek"
-    ROOM_VIDEO_SOURCE_SET = "room_video_source_set"
-    USER_RESOURCE_STATES = "user_resource_states"
 
 
 class WsErrorCode(StrEnum):
@@ -68,23 +55,3 @@ class ChannelKind(StrEnum):
     ROOM = "room"
 
 
-class PlaybackStatusType(StrEnum):
-    PLAYING = "playing"
-    PAUSED = "paused"
-
-
-class PlaybackHoldReason(StrEnum):
-    NONE = "none"
-    MANUAL = "manual"
-    STALL = "stall"
-
-
-class ResourceHealthStatusType(StrEnum):
-    READY = "ready"
-    STALLING = "stalling"
-    ERROR = "error"
-
-
-class AutoPlaybackAction(StrEnum):
-    PLAY = "play"
-    PAUSE = "pause"

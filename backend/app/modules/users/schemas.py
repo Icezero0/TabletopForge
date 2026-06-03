@@ -7,7 +7,6 @@ from pydantic import (
     field_validator,
 )
 
-from app.core.config import get_settings
 from app.core.validators import (
     normalize_email,
     normalize_optional_non_empty_str,
@@ -15,8 +14,6 @@ from app.core.validators import (
 )
 from app.modules.site.constants import SitePermission, SiteRole
 from app.modules.site.permissions import get_permissions_by_role
-
-settings = get_settings()
 
 
 class UserCreate(BaseModel):
@@ -43,7 +40,6 @@ class UserCreate(BaseModel):
 class UserPatch(BaseModel):
     username: str | None = None
     password: str | None = None
-    auto_accept: bool | None = None
 
     @field_validator("username", mode="before")
     @classmethod
@@ -63,18 +59,9 @@ class UserBriefResponse(BaseModel):
     email: EmailStr
     username: str | None
 
-    avatar_key: str | None = Field(default=None, exclude=True)
-
-    @computed_field
-    @property
-    def avatar_url(self) -> str | None:
-        if not self.avatar_key:
-            return None
-        return f"{settings.avatar_public_prefix}/{self.avatar_key}"
-
 
 class UserResponse(UserBriefResponse):
-    auto_accept: bool
+    pass
 
 
 class UserMeResponse(UserResponse):
@@ -84,11 +71,6 @@ class UserMeResponse(UserResponse):
     @property
     def site_permissions(self) -> list[SitePermission]:
         return sorted(get_permissions_by_role(self.site_role), key=lambda item: item.value)
-
-
-class AvatarUploadResponse(BaseModel):
-    avatar_url: str | None
-
 
 class UserListResponse(BaseModel):
     items: list[UserResponse] = Field(default_factory=list)

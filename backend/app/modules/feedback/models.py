@@ -60,39 +60,3 @@ class Feedback(Base):
 
     creator = relationship("User", foreign_keys=[creator_id])
     handled_by = relationship("User", foreign_keys=[handled_by_id])
-    screenshots = relationship(
-        "FeedbackScreenshot",
-        back_populates="feedback",
-        cascade="all, delete-orphan",
-        order_by="FeedbackScreenshot.sort_order",
-    )
-
-
-class FeedbackScreenshot(Base):
-    __tablename__ = "feedback_screenshots"
-    __table_args__ = (
-        Index("idx_feedback_screenshots_feedback_order", "feedback_id", "sort_order"),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    feedback_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("feedbacks.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    asset_id: Mapped[int] = mapped_column(
-        Integer,
-        ForeignKey("media_assets.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        nullable=False,
-        server_default=func.now(),
-    )
-
-    feedback = relationship("Feedback", back_populates="screenshots")
-    asset = relationship("MediaAsset", foreign_keys=[asset_id])

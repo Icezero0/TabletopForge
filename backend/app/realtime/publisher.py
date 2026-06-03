@@ -5,12 +5,7 @@ from app.realtime.channels import ChannelKey, room_channel, user_channel
 from app.realtime.constants import SessionCloseReason, WsEventType
 from app.realtime.manager import RealtimeManager
 from app.realtime.protocol import build_event_message
-from app.realtime.state import (
-    PlaybackState,
-    PresenceState,
-    RoomVideoSourceState,
-    UserResourceStatesState,
-)
+from app.realtime.state import PresenceState
 
 
 class RealtimePublisher:
@@ -133,57 +128,3 @@ class RealtimePublisher:
             ),
         )
 
-    async def publish_room_video_source_set(
-        self,
-        *,
-        room_video_source: RoomVideoSourceState,
-    ) -> None:
-        await self._publish_event(
-            channel=room_channel(room_video_source.room_id),
-            event=WsEventType.ROOM_VIDEO_SOURCE_SET,
-            data=room_video_source.model_dump(mode="json"),
-        )
-
-    async def publish_playback_play(
-        self,
-        *,
-        playback: PlaybackState,
-    ) -> None:
-        await self._publish_event(
-            channel=room_channel(playback.room_id),
-            event=WsEventType.PLAYBACK_PLAY,
-            data=playback.model_dump(mode="json"),
-        )
-
-    async def publish_playback_pause(
-        self,
-        *,
-        playback: PlaybackState,
-    ) -> None:
-        await self._publish_event(
-            channel=room_channel(playback.room_id),
-            event=WsEventType.PLAYBACK_PAUSE,
-            data=playback.model_dump(mode="json"),
-        )
-
-    async def publish_playback_seek(
-        self,
-        *,
-        playback: PlaybackState,
-    ) -> None:
-        await self._publish_event(
-            channel=room_channel(playback.room_id),
-            event=WsEventType.PLAYBACK_SEEK,
-            data=playback.model_dump(mode="json"),
-        )
-
-    async def publish_user_resource_states(
-        self,
-        *,
-        user_resource_states: UserResourceStatesState,
-    ) -> None:
-        await self._publish_event(
-            channel=room_channel(user_resource_states.room_id),
-            event=WsEventType.USER_RESOURCE_STATES,
-            data=user_resource_states.model_dump(mode="json"),
-        )

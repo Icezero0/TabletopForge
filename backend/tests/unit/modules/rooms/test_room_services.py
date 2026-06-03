@@ -8,7 +8,6 @@ from app.modules.rooms.constants import (
     RoomJoinRequestSource,
     RoomJoinRequestStatus,
     RoomRole,
-    RoomSyncPolicy,
     RoomVisibility,
 )
 from app.modules.rooms.join_request.service import RoomJoinRequestService
@@ -38,7 +37,6 @@ async def test_create_room_creates_owner_membership_and_settings(db_session, fac
     assert any(member.room_id == room.id and member.user_id == owner.id for member in members)
     assert len(settings_list) == 1
     assert settings_list[0].room_id == room.id
-    assert settings_list[0].sync_policy == RoomSyncPolicy.AUTO_SYNC
 
 
 # 验证非成员无法访问私有房间。
@@ -191,11 +189,10 @@ async def test_get_accessible_room_settings_creates_default_settings_for_public_
     )
 
     assert settings.room_id == room.id
-    assert settings.sync_policy == RoomSyncPolicy.AUTO_SYNC
 
 
-# 验证更新房间设置时会持久化传入的配置变更。
-async def test_patch_room_settings_updates_selected_fields(db_session, factories) -> None:
+# 验证更新房间设置接口会返回当前设置对象。
+async def test_patch_room_settings_returns_settings(db_session, factories) -> None:
     owner = await factories.create_user()
     room = await factories.create_room(owner=owner)
     await factories.commit()
@@ -204,10 +201,10 @@ async def test_patch_room_settings_updates_selected_fields(db_session, factories
         db_session,
         room_id=room.id,
         user=owner,
-        payload=RoomSettingsPatch(sync_policy=RoomSyncPolicy.DISABLED),
+        payload=RoomSettingsPatch(),
     )
 
-    assert settings.sync_policy == RoomSyncPolicy.DISABLED
+    assert settings.room_id == room.id
 
 
 # 验证自动通过模式会直接把申请人加入房间而不创建申请记录。

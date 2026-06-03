@@ -7,13 +7,10 @@ from app.db.base import Base
 from app.modules.users.models import User
 
 from app.modules.rooms.constants import (
-    RoomActiveSyncPermission,
     RoomJoinAuditMode,
     RoomJoinRequestAction,
     RoomJoinRequestSource,
     RoomJoinRequestStatus,
-    RoomVideoSourceType,
-    RoomSyncPolicy,
     RoomVisibility,
 )
 
@@ -78,25 +75,6 @@ class RoomSettings(Base):
         nullable=False,
         unique=True,
         index=True,
-    )
-
-    selected_room_video_source_type: Mapped[RoomVideoSourceType] = mapped_column(
-        String(32),
-        nullable=False,
-        default=RoomVideoSourceType.EXTERNAL_URL,
-        server_default=RoomVideoSourceType.EXTERNAL_URL.value,
-    )
-    sync_policy: Mapped[RoomSyncPolicy] = mapped_column(
-        String(32),
-        nullable=False,
-        default=RoomSyncPolicy.AUTO_SYNC,
-        server_default=RoomSyncPolicy.AUTO_SYNC.value,
-    )
-    active_sync_permission: Mapped[RoomActiveSyncPermission] = mapped_column(
-        String(32),
-        nullable=False,
-        default=RoomActiveSyncPermission.OWNER_AND_MANAGER,
-        server_default=RoomActiveSyncPermission.OWNER_AND_MANAGER.value,
     )
 
     created_at: Mapped[datetime | None] = mapped_column(

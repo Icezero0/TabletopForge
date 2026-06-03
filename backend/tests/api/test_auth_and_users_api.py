@@ -50,13 +50,12 @@ async def test_patch_me_updates_user_profile(api_client, factories, auth_headers
 
     response = await api_client.patch(
         "/api/v1/users/me",
-        json={"username": "after", "auto_accept": True},
+        json={"username": "after"},
         headers=auth_headers(user),
     )
 
     assert response.status_code == 200
     assert response.json()["username"] == "after"
-    assert response.json()["auto_accept"] is True
 
 
 # 验证我的房间接口会返回我创建和加入的房间，并支持角色过滤。

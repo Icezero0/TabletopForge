@@ -31,22 +31,6 @@ class RoomJoinAuditMode(StrEnum):
     AUTO_REJECT = "auto_reject"
 
 
-class RoomVideoSourceType(StrEnum):
-    EXTERNAL_URL = "external_url"
-    LOCAL_FILE = "local_file"
-
-
-class RoomSyncPolicy(StrEnum):
-    AUTO_SYNC = "auto_sync"
-    DISABLED = "disabled"
-
-
-class RoomActiveSyncPermission(StrEnum):
-    OWNER_ONLY = "owner_only"
-    OWNER_AND_MANAGER = "owner_and_manager"
-    ALL_MEMBERS = "all_members"
-
-
 class RoomJoinRequestSource(StrEnum):
     APPLY = "apply"
     INVITE = "invite"

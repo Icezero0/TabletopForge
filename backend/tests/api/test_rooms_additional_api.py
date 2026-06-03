@@ -80,7 +80,7 @@ async def test_patch_room_settings_publishes_realtime_event(
 
     response = await api_client.patch(
         f"/api/v1/rooms/{room.id}/settings",
-        json={"sync_policy": "disabled"},
+        json={},
         headers=auth_headers(owner),
     )
 

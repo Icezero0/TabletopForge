@@ -1,15 +1,9 @@
 from datetime import UTC, datetime
 
 from app.modules.messages.schemas import MessageContentOut, MessageResponse, TextSegmentOut
-from app.modules.rooms.constants import RoomVideoSourceType
-from app.realtime.constants import PlaybackStatusType, WsEventType
+from app.realtime.constants import WsEventType
 from app.realtime.publisher import RealtimePublisher
-from app.realtime.state import (
-    PlaybackState,
-    PresenceState,
-    RoomVideoSourceState,
-    UserResourceStatesState,
-)
+from app.realtime.state import PresenceState
 
 
 class RecordingManager:
@@ -82,55 +76,3 @@ async def test_publish_message_broadcasts_message_event() -> None:
     assert call["message"].payload["event"] == WsEventType.MESSAGE
     assert call["message"].payload["data"]["id"] == 1
 
-
-# publish_playback_pause 会广播暂停事件和播放状态数据
-async def test_publish_playback_pause_broadcasts_pause_event() -> None:
-    manager = RecordingManager()
-    publisher = RealtimePublisher(manager)
-    playback = PlaybackState(
-        room_id=11,
-        status=PlaybackStatusType.PAUSED,
-        position_seconds=12.0,
-        anchor_ts_ms=1000,
-        playback_rate=1.0,
-    )
-
-    await publisher.publish_playback_pause(playback=playback)
-
-    assert len(manager.publish_calls) == 1
-    call = manager.publish_calls[0]
-    assert call["message"].payload["event"] == WsEventType.PLAYBACK_PAUSE
-    assert call["message"].payload["data"]["status"] == PlaybackStatusType.PAUSED
-
-
-# publish_room_video_source_set 会广播房间视频源变更事件
-async def test_publish_room_video_source_set_broadcasts_source_change_event() -> None:
-    manager = RecordingManager()
-    publisher = RealtimePublisher(manager)
-    source = RoomVideoSourceState(
-        room_id=12,
-        source_type=RoomVideoSourceType.EXTERNAL_URL,
-        external_url="https://example.com/video.mp4",
-        file_hash=None,
-    )
-
-    await publisher.publish_room_video_source_set(room_video_source=source)
-
-    assert len(manager.publish_calls) == 1
-    call = manager.publish_calls[0]
-    assert call["message"].payload["event"] == WsEventType.ROOM_VIDEO_SOURCE_SET
-    assert call["message"].payload["data"]["external_url"] == "https://example.com/video.mp4"
-
-
-# publish_user_resource_states 会广播用户资源健康聚合状态
-async def test_publish_user_resource_states_broadcasts_resource_state_event() -> None:
-    manager = RecordingManager()
-    publisher = RealtimePublisher(manager)
-    state = UserResourceStatesState(room_id=13, user_resource_states=[])
-
-    await publisher.publish_user_resource_states(user_resource_states=state)
-
-    assert len(manager.publish_calls) == 1
-    call = manager.publish_calls[0]
-    assert call["message"].payload["event"] == WsEventType.USER_RESOURCE_STATES
-    assert call["message"].payload["data"] == {"room_id": 13, "user_resource_states": []}

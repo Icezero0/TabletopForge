@@ -35,8 +35,6 @@ class FeedbackResponse(BaseModel):
 
     creator: UserBriefResponse | None = None
     handled_by: UserBriefResponse | None = None
-    screenshot_asset_ids: list[int] = Field(default_factory=list)
-    screenshot_urls: list[str] = Field(default_factory=list)
 
 
 class FeedbackListResponse(BaseModel):

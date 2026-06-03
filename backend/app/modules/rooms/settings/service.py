@@ -4,7 +4,6 @@ from app.core.error_reasons import ErrorReason
 from app.core.exceptions import ForbiddenError, NotFoundError
 from app.modules.rooms.constants import (
     RoomPermission,
-    RoomVideoSourceType,
     RoomVisibility,
 )
 from app.modules.rooms.membership.service import RoomMembershipService
@@ -121,23 +120,6 @@ class RoomSettingsService:
         await db.refresh(settings)
         return settings
 
-    async def set_selected_room_video_source_type(
-        self,
-        db: AsyncSession,
-        *,
-        room_id: int,
-        source_type: RoomVideoSourceType,
-    ) -> RoomSettings:
-        settings = await self.find_room_settings_by_room_id(db, room_id=room_id)
-        if not settings:
-            settings = await self.create_default_settings_in_tx(db, room_id=room_id)
-
-        settings.selected_room_video_source_type = source_type
-        settings = await self.repo.save_settings(db, settings)
-        await db.commit()
-        await db.refresh(settings)
-        return settings
-
     async def patch_room_settings(
         self,
         db: AsyncSession,
@@ -158,19 +140,6 @@ class RoomSettingsService:
         settings = await self.find_room_settings_by_room_id(db, room_id=room_id)
         if not settings:
             settings = await self.create_default_settings_in_tx(db, room_id=room_id)
-
-        updates = payload.model_dump(exclude_unset=True)
-
-        if "selected_room_video_source_type" in updates:
-            settings.selected_room_video_source_type = updates[
-                "selected_room_video_source_type"
-            ]
-
-        if "sync_policy" in updates:
-            settings.sync_policy = updates["sync_policy"]
-
-        if "active_sync_permission" in updates:
-            settings.active_sync_permission = updates["active_sync_permission"]
 
         settings = await self.repo.save_settings(db, settings)
         await db.commit()

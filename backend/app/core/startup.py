@@ -16,13 +16,6 @@ logger = logging.getLogger("app.startup")
 
 async def ensure_runtime_paths() -> None:
     settings.data_dir_path.mkdir(parents=True, exist_ok=True)
-    settings.upload_dir_path.mkdir(parents=True, exist_ok=True)
-
-    settings.avatar_dir_path.mkdir(parents=True, exist_ok=True)
-    settings.image_dir_path.mkdir(parents=True, exist_ok=True)
-    settings.sticker_dir_path.mkdir(parents=True, exist_ok=True)
-    settings.video_dir_path.mkdir(parents=True, exist_ok=True)
-    settings.feedback_image_dir_path.mkdir(parents=True, exist_ok=True)
 
 
 def _build_alembic_config() -> Config:
