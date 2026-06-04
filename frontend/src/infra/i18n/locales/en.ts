@@ -14,6 +14,7 @@ export default {
     notifications: "Notifications",
     contact: "Contact & Feedback",
     feedbackAdmin: "Feedback Admin",
+    siteAdmin: "Site Admin",
     profile: "Profile",
     joinRequests: "Approvals",
   },
@@ -200,6 +201,34 @@ export default {
       hint: "User feedback will appear here.",
     },
   },
+  siteAdmin: {
+    title: "Site Admin",
+    searchLabel: "User",
+    searchPlaceholder: "Search username or email",
+    search: "Search",
+    adminList: "Admin list",
+    add: "Add",
+    addAdmin: "Add admin",
+    addDialogTitle: "Add site admin",
+    addSearchPlaceholder: "Search username or email",
+    addSearchEmpty: "No regular users found.",
+    addSearchFailed: "Failed to search users.",
+    loadFailed: "Failed to load users.",
+    saveFailed: "Failed to save site role.",
+    saved: "Site role updated.",
+    roles: {
+      user: "User",
+      admin: "Admin",
+    },
+    actions: {
+      setAdmin: "Set admin",
+      setUser: "Set user",
+    },
+    empty: {
+      title: "No admins",
+      hint: "Use the button in the top right to add a site admin.",
+    },
+  },
   home: {
     headline: "Welcome back, {name}",
     subline:
@@ -314,6 +343,7 @@ export default {
       chat: "Chat",
       members: "Members",
       requests: "Requests",
+      settings: "Settings",
     },
     chat: {
       send: "Send",
@@ -321,6 +351,19 @@ export default {
     requests: {
       applyNote: "Requested to join this room",
       inviteNote: "Invited into this room",
+    },
+    settings: {
+      nameLabel: "Room name",
+      namePlaceholder: "Enter a room name",
+      visibilityLabel: "Room visibility",
+      visibilityHint: "Public rooms appear in the lobby. Private rooms are visible only to members.",
+      joinAuditLabel: "Join approval",
+      joinAuditHint: "How to handle users who request access to this room.",
+      joinAuditManual: "Manual review",
+      joinAuditAutoApprove: "Auto approve",
+      joinAuditAutoReject: "Auto reject",
+      saved: "Room settings saved.",
+      saveFailed: "Failed to save room settings.",
     },
     realtime: {
       sessionClosed: {

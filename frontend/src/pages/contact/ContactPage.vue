@@ -145,7 +145,7 @@ async function submitFeedback() {
 </script>
 
 <template>
-  <AppPageShell :title="t('contact.title')" :show-back="false" :max-width="860">
+  <AppPageShell :title="t('contact.title')" :max-width="860">
     <div class="contactPage">
       <section class="contactSection">
         <h2 class="sectionTitle">{{ t("contact.sections.contact") }}</h2>

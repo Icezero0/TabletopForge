@@ -63,6 +63,7 @@ class UserBriefResponse(BaseModel):
     email: EmailStr
     username: str | None
     avatar_asset_id: int | None = None
+    site_role: SiteRole
 
     @computed_field
     @property
