@@ -10,6 +10,8 @@ from app.modules.rooms.room.schemas import (
 )
 from app.modules.users.models import User
 from app.modules.users.schemas import (
+    UserAvatarHistoryListResponse,
+    UserAvatarHistoryResponse,
     UserListResponse,
     UserMeResponse,
     UserPatch,
@@ -51,6 +53,31 @@ async def update_my_avatar(
 ) -> UserMeResponse:
     updated = await user_service.update_my_avatar(db, user=current_user, file=file)
     return UserMeResponse.model_validate(updated)
+
+
+@router.get("/me/avatar-history", response_model=UserAvatarHistoryListResponse)
+async def get_my_avatar_history(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserAvatarHistoryListResponse:
+    data = await user_service.get_my_avatar_history(
+        db,
+        user=current_user,
+        page=page,
+        page_size=page_size,
+    )
+    return UserAvatarHistoryListResponse(
+        items=[
+            UserAvatarHistoryResponse.model_validate(item)
+            for item in data["items"]
+        ],
+        total=data["total"],
+        page=data["page"],
+        page_size=data["page_size"],
+        total_pages=data["total_pages"],
+    )
 
 
 @router.get("/me/rooms", response_model=UserRoomSummaryListResponse)

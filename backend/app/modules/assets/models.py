@@ -12,6 +12,7 @@ class Asset(Base):
     __table_args__ = (
         Index("idx_assets_owner_type_created_at", "owner_id", "asset_type", "created_at"),
         Index("idx_assets_feedback_id", "feedback_id"),
+        Index("idx_assets_type_hash_size_content_type", "asset_type", "content_hash", "size_bytes", "content_type"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -32,6 +33,8 @@ class Asset(Base):
     storage_path: Mapped[str] = mapped_column(String(512), nullable=False)
     content_type: Mapped[str] = mapped_column(String(128), nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    ref_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -48,3 +51,7 @@ class Asset(Base):
     @property
     def is_feedback_image(self) -> bool:
         return self.asset_type == AssetType.FEEDBACK_IMAGE
+
+    @property
+    def is_user_library_asset(self) -> bool:
+        return self.asset_type in {AssetType.IMAGE, AssetType.AUDIO}

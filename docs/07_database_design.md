@@ -36,7 +36,26 @@ created_at
 - `site_role` 取值为 `user` 或 `admin`。
 - `avatar_asset_id` 指向当前头像 asset 的 id，但不建立数据库外键，避免 users 与 assets 形成双向建表依赖。
 
-## 2.2 feedbacks
+## 2.2 user_avatar_history
+
+用途：记录用户历史头像，作为用户侧对 avatar asset 的引用。
+
+核心字段：
+
+```text
+id
+user_id
+asset_id
+created_at
+```
+
+说明：
+
+- `users.avatar_asset_id` 表示当前头像。
+- `user_avatar_history.asset_id` 记录用户上传过的头像 asset。
+- 切换当前头像不释放旧头像；删除历史头像记录时，才应释放对应 asset 的一次引用。
+
+## 2.3 feedbacks
 
 用途：存储用户反馈。
 
@@ -450,6 +469,8 @@ original_filename
 storage_path
 content_type
 size_bytes
+content_hash
+ref_count
 created_at
 ```
 
@@ -459,13 +480,17 @@ created_at
 avatar
 feedback_image
 map_background    # Step 4：房间地图底图；同房间成员可读 content
+image
+audio
 ```
 
 说明：
 
 - 文件二进制存储在 `DATA_DIR/assets` 下。
 - 数据库只存储相对路径和元信息。
-- 长期用户资源库中的业务 `image` 后续再扩展，不在当前地基中实现。
+- `content_hash` 为上传内容的 SHA-256，用于同类型、同大小、同 MIME 的文件去重。
+- `ref_count` 记录当前有多少业务对象引用该底层文件；归零后才删除数据库记录和物理文件。
+- 当前地基已支持用户资源库中的底层 `image` / `audio` asset；地图、Token 等游戏语义层模型后续再扩展。
 
 ---
 

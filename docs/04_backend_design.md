@@ -216,8 +216,10 @@ get_characters
 
 - 用户头像 `avatar`
 - 反馈图片 `feedback_image`
+- 用户资源库图片 `image`
+- 用户资源库音频 `audio`
 
-长期用户资源库中的业务 `image`、地图素材和 Token 图片后续再扩展。
+地图素材和 Token 图片等游戏语义层模型后续再扩展。
 
 ## 10.4 characters
 

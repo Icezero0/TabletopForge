@@ -156,10 +156,38 @@ class UserService:
             asset_type=AssetType.AVATAR,
             owner_id=user.id,
         )
+        await self.repo.create_avatar_history(
+            db,
+            user_id=user.id,
+            asset_id=avatar.id,
+        )
         user.avatar_asset_id = avatar.id
         user = await self.repo.save(db, user)
         await db.commit()
         return user
+
+    async def get_my_avatar_history(
+        self,
+        db: AsyncSession,
+        *,
+        user: User,
+        page: int,
+        page_size: int,
+    ) -> dict:
+        items, total = await self.repo.get_avatar_history(
+            db,
+            user_id=user.id,
+            page=page,
+            page_size=page_size,
+        )
+
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": ceil(total / page_size) if total else 0,
+        }
 
     async def set_site_role(
         self,

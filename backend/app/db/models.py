@@ -1,5 +1,5 @@
 # noqa: F401
-from app.modules.users.models import User
+from app.modules.users.models import User, UserAvatarHistory
 from app.modules.assets.models import Asset
 from app.modules.rooms.models import (
     Room,

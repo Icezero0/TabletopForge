@@ -100,7 +100,7 @@ Backend Application
 - tokens
 - assets
 
-当前已实现的 assets 只承载头像与反馈图片。业务资源库中的 image、地图背景、Token 素材后续在 Tabletop Domain 落地。
+当前已实现的 assets 承载头像、反馈图片、用户资源库底层 image/audio。地图背景、Token 素材等游戏语义层模型后续在 Tabletop Domain 落地。
 
 ## 4.6 Rule Domain
 
