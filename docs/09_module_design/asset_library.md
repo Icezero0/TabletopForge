@@ -20,7 +20,12 @@
 - `avatar`：用户头像。
 - `feedback_image`：反馈图片。
 
-后续业务资源库可在 `image` 类型下继续细分用途，例如 map、token、handout、portrait、scene 等，但这些不应在基础 assets 阶段提前落表。
+跑团桌面 MVP 拟增加业务用途，例如：
+
+- `map_background`：地图底图
+- `token_image`：角色 / 怪物 Token 图（由创建者上传，挂在角色定义上）
+
+未上传 Token 图时，前端使用角色**名称首字**渲染，不强制落库 asset。
 
 ---
 
