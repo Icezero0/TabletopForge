@@ -4,6 +4,7 @@ export default {
     save: "Save",
     loading: "Loading…",
     backHome: "Back to Home",
+    backToRoom: "Back to room",
   },
   chat: {
     newMessagesBelow: "{count} new message(s)",

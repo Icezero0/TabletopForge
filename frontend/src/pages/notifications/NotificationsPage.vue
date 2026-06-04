@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { usePageReturnTo } from "@/composables/useNavigationReturn";
 import { ChevronDownIcon, EnvelopeOpenIcon } from "@heroicons/vue/24/outline";
 import type { Notification } from "@/infra/api/notifications.api";
 import { useNotificationsStore } from "@/stores/notifications.store";
 import { formatLocalDateTime } from "@/utils/datetime";
 
 const { t } = useI18n();
+const { backTo, backText } = usePageReturnTo();
 const notifications = useNotificationsStore();
 
 const filter = ref<"all" | "unread" | "read">("unread");
@@ -150,7 +152,8 @@ onBeforeUnmount(() => {
 <template>
   <AppPageShell
     :title="t('notifications.title')"
-    :back-text="t('common.backHome')"
+    :back-to="backTo"
+    :back-text="backText"
     :max-width="980"
   >
     <template #toolbar>

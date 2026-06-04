@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
+import { useNavigationReturn } from "@/composables/useNavigationReturn";
 import {
   BellIcon,
   BuildingLibraryIcon,
@@ -18,6 +19,7 @@ defineProps<{ open: boolean; mobile?: boolean }>();
 
 const { t } = useI18n();
 const auth = useAuthStore();
+const { linkTarget } = useNavigationReturn();
 const notifications = useNotificationsStore();
 
 const badgeText = computed(() => {
@@ -29,17 +31,17 @@ const badgeText = computed(() => {
 const items = computed(() => [
   { to: "/", label: t("sidebar.home"), icon: HomeIcon },
   {
-    to: "/public-rooms",
+    to: linkTarget("/public-rooms"),
     label: t("sidebar.publicRooms"),
     icon: BuildingLibraryIcon,
   },
   {
-    to: "/join-requests",
+    to: linkTarget("/join-requests"),
     label: t("sidebar.joinRequests"),
     icon: ClipboardDocumentCheckIcon,
   },
   {
-    to: "/notifications",
+    to: linkTarget("/notifications"),
     label: t("sidebar.notifications"),
     icon: BellIcon,
     badge: badgeText.value,
@@ -76,7 +78,7 @@ const items = computed(() => [
       <nav class="nav">
         <RouterLink
           v-for="item in items"
-          :key="item.to"
+          :key="typeof item.to === 'string' ? item.to : item.to.path"
           class="navLink"
           :to="item.to"
           exact-active-class="router-link-exact-active"

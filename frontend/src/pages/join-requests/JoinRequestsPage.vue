@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { usePageReturnTo } from "@/composables/useNavigationReturn";
 import {
   CheckCircleIcon,
   ChevronDownIcon,
@@ -25,6 +26,7 @@ import { formatLocalDateTime } from "@/utils/datetime";
 import { resolveMediaUrl } from "@/infra/media";
 
 const { t } = useI18n();
+const { backTo, backText } = usePageReturnTo();
 const auth = useAuthStore();
 const rooms = useRoomsStore();
 const entities = useEntitiesStore();
@@ -189,7 +191,8 @@ watch([scope, status], fetchItems);
 <template>
   <AppPageShell
     :title="t('joinRequests.title')"
-    :back-text="t('common.backHome')"
+    :back-to="backTo"
+    :back-text="backText"
     :max-width="980"
   >
     <template #toolbar>

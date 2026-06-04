@@ -5,6 +5,7 @@ export default {
     save: "保存",
     loading: "加载中…",
     backHome: "返回首页",
+    backToRoom: "返回房间",
   },
   chat: {
     newMessagesBelow: "{count} 条新消息",

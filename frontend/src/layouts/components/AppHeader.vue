@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
 import { useI18n } from "vue-i18n";
-import { useRouter } from "vue-router";
+import { useNavigationReturn } from "@/composables/useNavigationReturn";
 import { useAuthStore } from "@/stores/auth.store";
 import { useNotificationsStore } from "@/stores/notifications.store";
 import { resolveMediaUrl } from "@/infra/media";
@@ -20,8 +20,8 @@ const props = defineProps<{ sidebarOpen: boolean }>();
 const emit = defineEmits<{ (e: "update:sidebarOpen", v: boolean): void }>();
 
 const { t } = useI18n();
-const router = useRouter();
 const auth = useAuthStore();
+const { navigateFromAppChrome } = useNavigationReturn();
 const notifications = useNotificationsStore();
 
 const userEmail = computed(() => auth.me?.email || "null@example.com");
@@ -34,11 +34,11 @@ function toggleSidebar() {
 }
 
 function goNotifications() {
-  router.push("/notifications");
+  navigateFromAppChrome("/notifications");
 }
 
 function goJoinRequests() {
-  router.push("/join-requests");
+  navigateFromAppChrome("/join-requests");
 }
 
 const badgeText = computed(() => {
