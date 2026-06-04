@@ -6,6 +6,7 @@ export type UserResponse = {
   username: string | null
   avatar_asset_id: number | null
   avatar_url: string | null
+  site_role: SiteRole
 }
 
 export type SiteRole = 'user' | 'admin'
@@ -76,5 +77,12 @@ export async function patchMyAvatar(file: File) {
     },
   )
 
+  return data
+}
+
+export async function patchUserSiteRole(userId: number, siteRole: SiteRole) {
+  const { data } = await http.patch<UserResponse>(`/users/${userId}/site-role`, {
+    site_role: siteRole,
+  })
   return data
 }

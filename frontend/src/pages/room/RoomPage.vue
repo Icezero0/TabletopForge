@@ -5,19 +5,23 @@ import { useI18n } from "vue-i18n";
 import {
   ChatBubbleLeftRightIcon,
   ClipboardDocumentCheckIcon,
+  Cog6ToothIcon,
   Squares2X2Icon,
   UserGroupIcon,
 } from "@heroicons/vue/24/outline";
 import {
   getRoomById,
   getRoomMembers,
+  patchRoom,
   type Room,
+  type RoomPatchPayload,
 } from "@/infra/api/rooms.api";
 import BasePill from "@/ui/base/BasePill.vue";
 import AppTabs from "@/ui/layout/AppTabs.vue";
 import RoomChatTab from "@/features/room/components/workspace/RoomChatTab.vue";
 import RoomMembersTab from "@/features/room/components/workspace/RoomMembersTab.vue";
 import RoomRequestsTab from "@/features/room/components/workspace/RoomRequestsTab.vue";
+import RoomSettingsTab from "@/features/room/components/workspace/RoomSettingsTab.vue";
 import type { MemberStatus, RoomPanelKey, RoomRole } from "@/features/room/types";
 import type { ChatSegment } from "@/features/chat/types";
 import { useRoomWorkspaceLayout } from "@/features/room/composables/useRoomWorkspaceLayout";
@@ -46,6 +50,7 @@ const isLoading = ref(false);
 const error = ref("");
 const membersLoading = ref(false);
 const membersError = ref("");
+const settingsSaving = ref(false);
 const currentUserRole = ref<RoomRoleState>("unknown");
 const activePanel = ref<RoomPanelKey>("chat");
 
@@ -56,6 +61,8 @@ const roomId = computed(() => {
 });
 
 const canManageRoomRequests = computed(() =>
+  currentUserRole.value === "owner" || currentUserRole.value === "manager");
+const canManageRoomSettings = computed(() =>
   currentUserRole.value === "owner" || currentUserRole.value === "manager");
 const currentUserIsOwner = computed(() => currentUserRole.value === "owner");
 const currentUserCanRemoveMembers = computed(() =>
@@ -71,15 +78,20 @@ const allPanelOptions = computed<{ key: RoomPanelKey; label: string; badge?: str
     badge: roomJoinRequests.value.length > 0 ? String(roomJoinRequests.value.length) : undefined,
     icon: ClipboardDocumentCheckIcon,
   },
+  { key: "settings", label: t("room.tabs.settings"), icon: Cog6ToothIcon },
 ]);
 
 const panelOptions = computed(() => {
-  if (!canManageRoomRequests.value) {
+  if (!canManageRoomRequests.value && !canManageRoomSettings.value) {
     return allPanelOptions.value.filter((panel) =>
       panel.key === "chat" || panel.key === "members");
   }
 
-  return allPanelOptions.value;
+  return allPanelOptions.value.filter((panel) => {
+    if (panel.key === "requests") return canManageRoomRequests.value;
+    if (panel.key === "settings") return canManageRoomSettings.value;
+    return true;
+  });
 });
 
 const roomMessagesState = computed(() => messagesStore.getRoomState(roomId.value));
@@ -279,6 +291,29 @@ async function handleSend(segments: ChatSegment[]) {
   }
 }
 
+async function handleSaveRoomSettings(payload: RoomPatchPayload) {
+  if (!roomId.value || settingsSaving.value) return;
+
+  settingsSaving.value = true;
+
+  try {
+    const updatedRoom = await patchRoom(roomId.value, payload);
+    room.value = updatedRoom;
+    entitiesStore.upsertRoom(updatedRoom);
+    toasts.push({
+      message: t("room.settings.saved"),
+      tone: "success",
+    });
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error) || t("room.settings.saveFailed"),
+      tone: "danger",
+    });
+  } finally {
+    settingsSaving.value = false;
+  }
+}
+
 function handleRealtimeSessionClosed(payload: RoomRealtimeSessionClosed) {
   toasts.push({
     message: t(`room.realtime.sessionClosed.${payload.reason}`),
@@ -426,6 +461,14 @@ watch(activePanel, (panel) => {
                 :is-request-action-loading="isRequestActionLoading"
                 @approve="approveRequest"
                 @reject="rejectRequest"
+              />
+
+              <RoomSettingsTab
+                v-if="canManageRoomSettings"
+                v-show="activePanel === 'settings'"
+                :room="room"
+                :saving="settingsSaving"
+                @save="handleSaveRoomSettings"
               />
             </BaseCard>
           </aside>

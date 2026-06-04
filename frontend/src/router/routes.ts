@@ -65,6 +65,11 @@ export default [
         component: () =>
           import("@/pages/feedback-admin/FeedbackAdminPage.vue"),
       },
+      {
+        path: "site-admin",
+        name: "site-admin",
+        component: () => import("@/pages/site-admin/SiteAdminPage.vue"),
+      },
     ],
   },
 ];

@@ -15,6 +15,7 @@ export default {
     notifications: "通知",
     contact: "联系与反馈",
     feedbackAdmin: "反馈管理",
+    siteAdmin: "站点管理",
     profile: "个人资料",
     joinRequests: "请求",
   },
@@ -200,6 +201,34 @@ export default {
       hint: "用户提交的反馈会显示在这里。",
     },
   },
+  siteAdmin: {
+    title: "站点管理",
+    searchLabel: "用户",
+    searchPlaceholder: "搜索用户名或邮箱",
+    search: "搜索",
+    adminList: "管理员列表",
+    add: "添加",
+    addAdmin: "添加管理员",
+    addDialogTitle: "添加站点管理员",
+    addSearchPlaceholder: "输入用户名或邮箱搜索",
+    addSearchEmpty: "没有找到可添加的普通用户。",
+    addSearchFailed: "搜索用户失败。",
+    loadFailed: "加载用户失败。",
+    saveFailed: "保存站点角色失败。",
+    saved: "站点角色已更新。",
+    roles: {
+      user: "普通用户",
+      admin: "管理员",
+    },
+    actions: {
+      setAdmin: "设为管理员",
+      setUser: "设为普通用户",
+    },
+    empty: {
+      title: "暂无管理员",
+      hint: "可以通过右上角按钮添加站点管理员。",
+    },
+  },
   home: {
     headline: "{name}，欢迎回来",
     subline:
@@ -314,6 +343,7 @@ export default {
       chat: "聊天",
       members: "成员",
       requests: "请求",
+      settings: "设置",
     },
     chat: {
       send: "发送",
@@ -321,6 +351,19 @@ export default {
     requests: {
       applyNote: "申请加入当前房间",
       inviteNote: "被邀请加入当前房间",
+    },
+    settings: {
+      nameLabel: "房间名称",
+      namePlaceholder: "输入房间名称",
+      visibilityLabel: "房间可见性",
+      visibilityHint: "公开房间会出现在大厅中，私有房间只对成员可见。",
+      joinAuditLabel: "入房审批",
+      joinAuditHint: "用户申请加入这个房间时的处理方式。",
+      joinAuditManual: "人工审批",
+      joinAuditAutoApprove: "自动通过",
+      joinAuditAutoReject: "自动拒绝",
+      saved: "房间设置已保存。",
+      saveFailed: "保存房间设置失败。",
     },
     realtime: {
       sessionClosed: {

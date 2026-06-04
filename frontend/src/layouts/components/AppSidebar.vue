@@ -3,11 +3,12 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   BellIcon,
+  BuildingLibraryIcon,
   ClipboardDocumentCheckIcon,
   InboxStackIcon,
   HomeIcon,
   InformationCircleIcon,
-  PlayCircleIcon,
+  ShieldCheckIcon,
 } from "@heroicons/vue/24/outline";
 import AppIcon from "@/ui/base/AppIcon.vue";
 import { useAuthStore } from "@/stores/auth.store";
@@ -30,7 +31,7 @@ const items = computed(() => [
   {
     to: "/public-rooms",
     label: t("sidebar.publicRooms"),
-    icon: PlayCircleIcon,
+    icon: BuildingLibraryIcon,
   },
   {
     to: "/join-requests",
@@ -49,6 +50,15 @@ const items = computed(() => [
           to: "/feedback-admin",
           label: t("sidebar.feedbackAdmin"),
           icon: InboxStackIcon,
+        },
+      ]
+    : []),
+  ...(auth.canManageSiteRoles
+    ? [
+        {
+          to: "/site-admin",
+          label: t("sidebar.siteAdmin"),
+          icon: ShieldCheckIcon,
         },
       ]
     : []),

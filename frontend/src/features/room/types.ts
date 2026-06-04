@@ -1,3 +1,3 @@
-export type RoomPanelKey = "chat" | "members" | "requests";
+export type RoomPanelKey = "chat" | "members" | "requests" | "settings";
 export type RoomRole = "owner" | "manager" | "member";
 export type MemberStatus = "idle" | "offline";
