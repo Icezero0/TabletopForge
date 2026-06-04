@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_reasons import ErrorReason
 from app.core.exceptions import ForbiddenError, NotFoundError
-from app.modules.rooms.constants import RoomPermission, RoomRole, RoomVisibility
+from app.modules.rooms.constants import GameRole, RoomPermission, RoomRole, RoomVisibility
 from app.modules.rooms.membership.service import RoomMembershipService
 from app.modules.rooms.models import Room
 from app.modules.rooms.permissions import require_room_permission
@@ -94,6 +94,7 @@ class RoomService:
             room_id=room.id,
             user_id=user.id,
             role=RoomRole.OWNER.value,
+            game_role=payload.creator_game_role.value,
         )
 
         await db.commit()

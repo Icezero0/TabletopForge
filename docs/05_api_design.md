@@ -82,11 +82,30 @@ POST   /join-requests/{request_id}/approve
 POST   /join-requests/{request_id}/reject
 
 GET    /rooms/{room_id}/members
+PATCH  /rooms/{room_id}/members/{target_user_id}/game-role
 PUT    /rooms/{room_id}/members/{target_user_id}/manager
 DELETE /rooms/{room_id}/members/{target_user_id}/manager
 DELETE /rooms/{room_id}/members/{target_user_id}
 DELETE /rooms/{room_id}/members/me
 ```
+
+成员响应字段（`room_members`）：
+
+```json
+{
+  "room_id": 1,
+  "user_id": 2,
+  "room_role": "member",
+  "game_role": "PL",
+  "joined_at": "...",
+  "user": { }
+}
+```
+
+- `room_role`：治理身份（DB 列 `role`）。
+- `game_role`：跑团身份，与 `room_role` 正交。
+- `POST /rooms` 请求体可选 `creator_game_role`（默认 `GM`）；入房落成员默认 `game_role=PL`。
+- `PATCH .../game-role` 请求体 `{ "game_role": "GM" }`，需 `MANAGE_MEMBERS`。
 
 可能触发事件：
 

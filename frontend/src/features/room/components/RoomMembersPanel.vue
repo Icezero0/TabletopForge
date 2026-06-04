@@ -11,16 +11,19 @@ import { useI18n } from "vue-i18n";
 import RoomMemberAvatar from "@/features/room/components/RoomMemberAvatar.vue";
 import { getUsers, type UserResponse } from "@/infra/api/users.api";
 import { resolveMediaUrl } from "@/infra/media";
-import type { MemberStatus, RoomRole } from "@/features/room/types";
+import type { GameRole, MemberStatus, RoomRole } from "@/features/room/types";
 
 type RoomMemberPanelItem = {
   id: number;
   name: string;
   email?: string | null;
   avatarUrl?: string | null;
-  role: RoomRole;
+  room_role: RoomRole;
+  game_role: GameRole;
   status: MemberStatus;
 };
+
+const gameRoleOptions: GameRole[] = ["GM", "PL", "OB"];
 
 type PendingJoinRequestState = {
   userId: number;
@@ -35,11 +38,13 @@ const props = defineProps<{
   disbandRoomLabel: string;
   isOwner?: boolean;
   canRemoveMembers?: boolean;
+  canManageGameRole?: boolean;
   actionDisabled?: boolean;
   leaving?: boolean;
   disbanding?: boolean;
   pendingJoinRequests?: PendingJoinRequestState[];
   settingManagerUserIds?: number[];
+  settingGameRoleUserIds?: number[];
   removingMemberUserIds?: number[];
   loading?: boolean;
   loadingLabel?: string;
@@ -52,8 +57,17 @@ const emit = defineEmits<{
   disbandRoom: [];
   setManager: [userId: number];
   unsetManager: [userId: number];
+  setGameRole: [userId: number, gameRole: GameRole];
   removeMember: [userId: number];
 }>();
+
+function roomRoleLabel(role: RoomRole) {
+  return t(`room.members.roomRoles.${role}`);
+}
+
+function gameRoleLabel(role: GameRole) {
+  return t(`room.members.gameRoles.${role}`);
+}
 
 const { t } = useI18n();
 const memberKeyword = ref("");
@@ -95,8 +109,10 @@ const disbandConfirmText = computed(() =>
   disbandCountdown.value > 0
     ? t("room.members.disbandConfirmWait", { seconds: disbandCountdown.value })
     : props.disbandRoomLabel);
-const selectedMemberIsOwner = computed(() => selectedMember.value?.role === "owner");
-const selectedMemberIsManager = computed(() => selectedMember.value?.role === "manager");
+const selectedMemberIsOwner = computed(() => selectedMember.value?.room_role === "owner");
+const selectedMemberIsManager = computed(() => selectedMember.value?.room_role === "manager");
+const showGameRoleEditor = computed(() =>
+  !!selectedMember.value && !!props.canManageGameRole);
 const showSetSelectedMemberManager = computed(() =>
   !!selectedMember.value &&
   props.isOwner &&
@@ -107,16 +123,26 @@ const canSetSelectedMemberManager = computed(() =>
 const canRemoveSelectedMember = computed(() =>
   !!selectedMember.value &&
   props.canRemoveMembers &&
-  (props.isOwner || selectedMember.value.role !== "manager") &&
+  (props.isOwner || selectedMember.value.room_role !== "manager") &&
   !selectedMemberIsOwner.value);
 const showProfileActions = computed(() =>
-  showSetSelectedMemberManager.value || canRemoveSelectedMember.value);
+  showSetSelectedMemberManager.value ||
+  canRemoveSelectedMember.value ||
+  showGameRoleEditor.value);
+const selectedMemberSettingGameRole = computed(() =>
+  !!selectedMember.value &&
+  !!props.settingGameRoleUserIds?.includes(selectedMember.value.id));
 const selectedMemberSettingManager = computed(() =>
   !!selectedMember.value &&
   !!props.settingManagerUserIds?.includes(selectedMember.value.id));
 const selectedMemberRemoving = computed(() =>
   !!selectedMember.value &&
   !!props.removingMemberUserIds?.includes(selectedMember.value.id));
+function handleSelectedMemberGameRoleChange(gameRole: GameRole) {
+  if (!selectedMember.value || selectedMember.value.game_role === gameRole) return;
+  emit("setGameRole", selectedMember.value.id, gameRole);
+}
+
 const profileActionCount = computed(() =>
   Number(showSetSelectedMemberManager.value) + Number(canRemoveSelectedMember.value));
 
@@ -316,12 +342,16 @@ onBeforeUnmount(() => {
             <RoomMemberAvatar
               :name="member.name"
               :src="member.avatarUrl"
-              :role="member.role"
+              :role="member.room_role"
               :status="member.status"
             />
           </button>
           <div class="memberMeta">
             <div class="memberName">{{ member.name }}</div>
+            <div class="memberIdentityBadges">
+              <span class="identityBadge governance">{{ roomRoleLabel(member.room_role) }}</span>
+              <span class="identityBadge game">{{ gameRoleLabel(member.game_role) }}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -438,6 +468,26 @@ onBeforeUnmount(() => {
           <div class="memberProfileEmail">
             {{ selectedMember.email || t("room.members.profileNoEmail") }}
           </div>
+          <div class="memberProfileIdentity">
+            <span class="identityBadge governance">{{ roomRoleLabel(selectedMember.room_role) }}</span>
+            <span class="identityBadge game">{{ gameRoleLabel(selectedMember.game_role) }}</span>
+          </div>
+        </div>
+        <div v-if="showGameRoleEditor" class="gameRoleSection">
+          <div class="gameRoleSectionLabel">{{ t("room.members.gameRoleLabel") }}</div>
+          <span class="segmentedControl gameRoleControl" role="radiogroup" :aria-label="t('room.members.gameRoleLabel')">
+            <button
+              v-for="option in gameRoleOptions"
+              :key="option"
+              type="button"
+              class="segment"
+              :data-active="String(selectedMember.game_role === option)"
+              :disabled="selectedMemberSettingGameRole"
+              @click="handleSelectedMemberGameRoleChange(option)"
+            >
+              {{ gameRoleLabel(option) }}
+            </button>
+          </span>
         </div>
         <div
           v-if="showProfileActions"
@@ -595,6 +645,74 @@ onBeforeUnmount(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.memberIdentityBadges,
+.memberProfileIdentity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.identityBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.identityBadge.governance {
+  background: color-mix(in srgb, var(--c-primary) 12%, var(--c-surface));
+  color: var(--c-text);
+}
+
+.identityBadge.game {
+  background: color-mix(in srgb, var(--c-primary) 8%, var(--c-surface));
+  color: var(--c-text-muted);
+}
+
+.gameRoleSection {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.gameRoleSectionLabel {
+  font-size: 12px;
+  color: var(--c-text-muted);
+}
+
+.gameRoleControl {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid var(--c-border);
+  background: color-mix(in srgb, var(--c-surface) 88%, var(--c-bg));
+  width: 100%;
+}
+
+.gameRoleControl .segment {
+  flex: 1 1 auto;
+  min-width: 52px;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--c-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.gameRoleControl .segment[data-active="true"] {
+  background: color-mix(in srgb, var(--c-primary) 16%, var(--c-surface));
+  color: var(--c-text);
 }
 
 .membersFooter {

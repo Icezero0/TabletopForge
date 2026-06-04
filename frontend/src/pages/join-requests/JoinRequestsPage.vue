@@ -52,7 +52,7 @@ const statusOptions = computed(() => [
 
 const myRoomRoles = computed(() => {
   return new Map(
-    rooms.myRooms.map((room) => [room.id, room.my_role ?? null] as const),
+    rooms.myRooms.map((room) => [room.id, room.my_room_role ?? null] as const),
   );
 });
 

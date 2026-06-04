@@ -143,7 +143,7 @@ export const useMessagesStore = defineStore("messages", {
           return mapMessageToChatMessage(
             message,
             auth.me?.id,
-            roomMember?.role ?? "member",
+            roomMember?.room_role ?? "member",
             avatarUrl,
           );
         });

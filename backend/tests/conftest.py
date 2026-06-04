@@ -32,6 +32,7 @@ from app.modules.feedback.constants import FeedbackPage, FeedbackStatus, Feedbac
 from app.modules.notifications.constants import NotificationType
 from app.modules.notifications.models import Notification
 from app.modules.rooms.constants import (
+    GameRole,
     RoomJoinAuditMode,
     RoomJoinRequestAction,
     RoomJoinRequestSource,
@@ -153,6 +154,7 @@ async def factories(db_session):
                     room_id=room.id,
                     user_id=owner.id,
                     role=RoomRole.OWNER.value,
+                    game_role=GameRole.GM.value,
                 )
             )
 
@@ -164,8 +166,14 @@ async def factories(db_session):
         room: Room,
         user: User,
         role: RoomRole = RoomRole.MEMBER,
+        game_role: GameRole = GameRole.PL,
     ) -> RoomMember:
-        member = RoomMember(room_id=room.id, user_id=user.id, role=role.value)
+        member = RoomMember(
+            room_id=room.id,
+            user_id=user.id,
+            role=role.value,
+            game_role=game_role.value,
+        )
         db_session.add(member)
         await db_session.flush()
         return member

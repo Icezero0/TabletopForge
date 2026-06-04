@@ -3,6 +3,7 @@ import pytest
 from app.core.exceptions import ConflictError, ForbiddenError
 from app.modules.notifications.models import Notification
 from app.modules.rooms.constants import (
+    GameRole,
     RoomJoinAuditMode,
     RoomJoinRequestAction,
     RoomJoinRequestSource,
@@ -31,7 +32,11 @@ async def test_create_room_creates_owner_membership(db_session, factories) -> No
     members = await factories.list_all(RoomMember)
 
     assert room.name == "Watch Party"
-    assert any(member.room_id == room.id and member.user_id == owner.id for member in members)
+    owner_member = next(
+        member for member in members if member.room_id == room.id and member.user_id == owner.id
+    )
+    assert owner_member.role == RoomRole.OWNER
+    assert owner_member.game_role == GameRole.GM
 
 
 # 验证非成员无法访问私有房间。

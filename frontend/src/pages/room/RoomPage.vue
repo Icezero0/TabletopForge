@@ -22,7 +22,7 @@ import RoomChatTab from "@/features/room/components/workspace/RoomChatTab.vue";
 import RoomMembersTab from "@/features/room/components/workspace/RoomMembersTab.vue";
 import RoomRequestsTab from "@/features/room/components/workspace/RoomRequestsTab.vue";
 import RoomSettingsTab from "@/features/room/components/workspace/RoomSettingsTab.vue";
-import type { MemberStatus, RoomPanelKey, RoomRole } from "@/features/room/types";
+import type { GameRole, MemberStatus, RoomPanelKey, RoomRole } from "@/features/room/types";
 import type { ChatSegment } from "@/features/chat/types";
 import { useRoomWorkspaceLayout } from "@/features/room/composables/useRoomWorkspaceLayout";
 import { useRoomJoinRequests } from "@/features/room/composables/useRoomJoinRequests";
@@ -51,7 +51,8 @@ const error = ref("");
 const membersLoading = ref(false);
 const membersError = ref("");
 const settingsSaving = ref(false);
-const currentUserRole = ref<RoomRoleState>("unknown");
+const currentUserRoomRole = ref<RoomRoleState>("unknown");
+const currentUserGameRole = ref<GameRole | "unknown">("unknown");
 const activePanel = ref<RoomPanelKey>("chat");
 
 const roomId = computed(() => {
@@ -61,13 +62,13 @@ const roomId = computed(() => {
 });
 
 const canManageRoomRequests = computed(() =>
-  currentUserRole.value === "owner" || currentUserRole.value === "manager");
+  currentUserRoomRole.value === "owner" || currentUserRoomRole.value === "manager");
 const canManageRoomSettings = computed(() =>
-  currentUserRole.value === "owner" || currentUserRole.value === "manager");
-const currentUserIsOwner = computed(() => currentUserRole.value === "owner");
+  currentUserRoomRole.value === "owner" || currentUserRoomRole.value === "manager");
+const currentUserIsOwner = computed(() => currentUserRoomRole.value === "owner");
 const currentUserCanRemoveMembers = computed(() =>
-  currentUserRole.value === "owner" || currentUserRole.value === "manager");
-const memberDangerActionDisabled = computed(() => currentUserRole.value === "unknown");
+  currentUserRoomRole.value === "owner" || currentUserRoomRole.value === "manager");
+const memberDangerActionDisabled = computed(() => currentUserRoomRole.value === "unknown");
 
 const allPanelOptions = computed<{ key: RoomPanelKey; label: string; badge?: string; icon?: Component }[]>(() => [
   { key: "chat", label: t("room.tabs.chat"), icon: ChatBubbleLeftRightIcon },
@@ -103,7 +104,7 @@ const memberActions = useRoomMemberActions({
   roomId,
   router,
   t,
-  syncCurrentUserRole,
+  syncCurrentUserRoles,
   fetchRoomRequests: (options) => fetchRoomRequests(options),
 });
 const {
@@ -117,7 +118,9 @@ const {
   handleInviteUser,
   handleSetMemberManager,
   handleUnsetMemberManager,
+  handleSetMemberGameRole,
   handleRemoveRoomMember,
+  settingGameRoleUserIds,
   resetMemberActionState,
 } = memberActions;
 
@@ -171,7 +174,8 @@ const roomMemberItems = computed(() => entityRoomMembers.value.map((member) => {
       `User #${member.user_id}`,
     email: user?.email ?? null,
     avatarUrl: user?.avatar_url ?? null,
-    role: member.role,
+    room_role: member.room_role,
+    game_role: member.game_role,
     status: memberStatus,
   };
 }));
@@ -181,27 +185,33 @@ const roomMemberStatusByUserId = computed<Map<number, MemberStatus>>(() =>
 const roomVisibilityLabel = computed(() =>
   room.value?.visibility === "public" ? "Public" : "Private");
 const roomRoleLabel = computed(() =>
-  currentUserRole.value === "unknown" ? "Unknown" : currentUserRole.value);
+  currentUserRoomRole.value === "unknown" ? "Unknown" : currentUserRoomRole.value);
+const gameRoleLabel = computed(() =>
+  currentUserGameRole.value === "unknown" ? "—" : currentUserGameRole.value);
 
-function syncCurrentUserRole() {
+function syncCurrentUserRoles() {
   const meId = auth.me?.id;
   if (!meId) {
-    currentUserRole.value = "unknown";
-    return;
-  }
-
-  if (room.value?.owner_id === meId) {
-    currentUserRole.value = "owner";
+    currentUserRoomRole.value = "unknown";
+    currentUserGameRole.value = "unknown";
     return;
   }
 
   const selfMember = entityRoomMembers.value.find((member) => member.user_id === meId);
   if (selfMember) {
-    currentUserRole.value = selfMember.role;
+    currentUserRoomRole.value = selfMember.room_role;
+    currentUserGameRole.value = selfMember.game_role;
     return;
   }
 
-  currentUserRole.value = "unknown";
+  if (room.value?.owner_id === meId) {
+    currentUserRoomRole.value = "owner";
+    currentUserGameRole.value = "unknown";
+    return;
+  }
+
+  currentUserRoomRole.value = "unknown";
+  currentUserGameRole.value = "unknown";
 }
 
 async function fetchRoom(options?: { silent?: boolean }) {
@@ -219,7 +229,7 @@ async function fetchRoom(options?: { silent?: boolean }) {
   try {
     room.value = await getRoomById(roomId.value);
     entitiesStore.upsertRoom(room.value);
-    syncCurrentUserRole();
+    syncCurrentUserRoles();
   } catch (e: any) {
     if (!options?.silent) {
       room.value = null;
@@ -246,7 +256,7 @@ async function fetchRoomMembers() {
   try {
     const response = await getRoomMembers(roomId.value);
     entitiesStore.upsertRoomMembers(response.items);
-    syncCurrentUserRole();
+    syncCurrentUserRoles();
     await fetchRoomRequests({ force: true });
   } catch (e: any) {
     membersError.value =
@@ -332,7 +342,8 @@ onMounted(() => {
 });
 
 watch(roomId, () => {
-  currentUserRole.value = "unknown";
+  currentUserRoomRole.value = "unknown";
+  currentUserGameRole.value = "unknown";
   resetRoomRequestsState();
   resetMemberActionState();
   void fetchRoom();
@@ -345,9 +356,9 @@ watch(panelOptions, (nextPanels) => {
   }
 });
 watch(() => auth.me?.id, () => {
-  syncCurrentUserRole();
+  syncCurrentUserRoles();
 });
-watch([roomId, currentUserRole], () => {
+watch([roomId, currentUserRoomRole], () => {
   void fetchRoomRequests();
 });
 watch(activePanel, (panel) => {
@@ -372,7 +383,8 @@ watch(activePanel, (panel) => {
 
           <div class="statusBar">
             <BasePill tone="default">{{ roomVisibilityLabel }}</BasePill>
-            <BasePill tone="default">{{ roomRoleLabel }}</BasePill>
+            <BasePill tone="default">{{ t("room.members.roomRoleBadge", { role: roomRoleLabel }) }}</BasePill>
+            <BasePill tone="default">{{ t("room.members.gameRoleBadge", { role: gameRoleLabel }) }}</BasePill>
           </div>
         </BaseCard>
 
@@ -435,6 +447,8 @@ watch(activePanel, (panel) => {
                 :disband-room-label="t('room.members.disbandRoom')"
                 :is-owner="currentUserIsOwner"
                 :can-remove-members="currentUserCanRemoveMembers"
+                :can-manage-game-role="currentUserCanRemoveMembers"
+                :setting-game-role-user-ids="settingGameRoleUserIds"
                 :action-disabled="memberDangerActionDisabled"
                 :leaving="isLeavingRoom"
                 :disbanding="isDisbandingRoom"
@@ -449,6 +463,7 @@ watch(activePanel, (panel) => {
                 @invite-user="handleInviteUser"
                 @set-manager="handleSetMemberManager"
                 @unset-manager="handleUnsetMemberManager"
+                @set-game-role="(userId, gameRole) => handleSetMemberGameRole(userId, gameRole)"
                 @remove-member="handleRemoveRoomMember"
               />
 

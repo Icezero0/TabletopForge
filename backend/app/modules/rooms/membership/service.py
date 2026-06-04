@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_reasons import ErrorReason
 from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
-from app.modules.rooms.constants import RoomPermission, RoomRole
+from app.modules.rooms.constants import GameRole, RoomPermission, RoomRole
 from app.modules.rooms.models import RoomMember
 from app.modules.rooms.membership.repository import RoomMembershipRepository
 from app.modules.rooms.permissions import require_room_permission, has_room_permission
@@ -61,6 +61,22 @@ class RoomMembershipService:
             "total": len(items),
         }
 
+    async def find_game_role(
+        self,
+        db: AsyncSession,
+        *,
+        room_id: int,
+        user_id: int,
+    ) -> GameRole | None:
+        member = await self.find_room_member(db, room_id=room_id, user_id=user_id)
+        if member is None:
+            return None
+
+        try:
+            return GameRole(member.game_role)
+        except ValueError:
+            return None
+
     async def add_room_member_in_tx(
         self,
         db: AsyncSession,
@@ -68,13 +84,15 @@ class RoomMembershipService:
         room_id: int,
         user_id: int,
         role: RoomRole = RoomRole.MEMBER,
+        game_role: GameRole = GameRole.PL,
     ) -> RoomMember:
         # This helper participates in the caller's transaction and does not commit.
         return await self.repo.create_member(
             db,
             room_id=room_id,
             user_id=user_id,
-            role=role,
+            role=role.value,
+            game_role=game_role.value,
         )
     
     async def get_room_user_ids_by_permission(
@@ -299,6 +317,69 @@ class RoomMembershipService:
             room_id=room_id,
             user_id=target_user_id,
             role=next_role.value,
+        )
+        if updated_member is None:
+            raise NotFoundError(
+                "Room member not found",
+                reason=ErrorReason.ROOM_MEMBER_NOT_FOUND,
+                details={"room_id": room_id, "user_id": target_user_id},
+            )
+
+        await db.commit()
+        return updated_member
+
+    async def set_room_member_game_role(
+        self,
+        db: AsyncSession,
+        *,
+        room_id: int,
+        target_user_id: int,
+        game_role: GameRole,
+        current_user: User,
+    ) -> RoomMember:
+        role = await self.find_room_role(db, room_id=room_id, user_id=current_user.id)
+        if role is None:
+            raise ForbiddenError(
+                "You do not have permission to perform this action",
+                reason=ErrorReason.ROOM_PERMISSION_DENIED,
+                details={"room_id": room_id, "permission": RoomPermission.MANAGE_MEMBERS},
+            )
+
+        require_room_permission(role, RoomPermission.MANAGE_MEMBERS)
+
+        target_member = await self.find_room_member(
+            db,
+            room_id=room_id,
+            user_id=target_user_id,
+        )
+        if target_member is None:
+            raise NotFoundError(
+                "Room member not found",
+                reason=ErrorReason.ROOM_MEMBER_NOT_FOUND,
+                details={"room_id": room_id, "user_id": target_user_id},
+            )
+
+        try:
+            current_game_role = GameRole(target_member.game_role)
+        except ValueError:
+            raise BadRequestError(
+                "Invalid target member game role",
+                reason=ErrorReason.INVALID_ROOM_MEMBER_ROLE,
+                details={
+                    "room_id": room_id,
+                    "user_id": target_user_id,
+                    "game_role": target_member.game_role,
+                },
+            )
+
+        if current_game_role == game_role:
+            return target_member
+
+        updated_member = await self.repo.update_member_game_role(
+            db,
+            room_id=room_id,
+            user_id=target_user_id,
+            game_role=game_role.value,
         )
         if updated_member is None:
             raise NotFoundError(

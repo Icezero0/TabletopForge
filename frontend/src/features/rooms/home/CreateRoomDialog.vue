@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { RoomJoinAuditMode } from "@/infra/api/rooms.api";
+import type { GameRole, RoomJoinAuditMode } from "@/infra/api/rooms.api";
 
 const props = withDefaults(
   defineProps<{
@@ -20,6 +20,10 @@ const props = withDefaults(
     joinAuditManualLabel: string;
     joinAuditAutoApproveLabel: string;
     joinAuditAutoRejectLabel: string;
+    creatorGameRoleLabel: string;
+    creatorGameRoleHint: string;
+    creatorGameRoleGmLabel: string;
+    creatorGameRolePlLabel: string;
     defaultName?: string;
   }>(),
   {
@@ -36,6 +40,7 @@ const emit = defineEmits<{
       name: string;
       visibility: "public" | "private";
       join_audit_mode: RoomJoinAuditMode;
+      creator_game_role: GameRole;
     },
   ): void;
 }>();
@@ -43,6 +48,7 @@ const emit = defineEmits<{
 const name = ref("");
 const visibility = ref<"public" | "private">("public");
 const joinAuditMode = ref<RoomJoinAuditMode>("manual_review");
+const creatorGameRole = ref<GameRole>("GM");
 
 watch(
   () => props.modelValue,
@@ -51,6 +57,7 @@ watch(
     name.value = props.defaultName || "";
     visibility.value = "public";
     joinAuditMode.value = "manual_review";
+    creatorGameRole.value = "GM";
   },
   { immediate: true },
 );
@@ -68,6 +75,7 @@ function submit() {
     name: name.value.trim(),
     visibility: visibility.value,
     join_audit_mode: joinAuditMode.value,
+    creator_game_role: creatorGameRole.value,
   });
 }
 </script>
@@ -145,6 +153,32 @@ function submit() {
               @click="joinAuditMode = 'auto_reject'"
             >
               {{ joinAuditAutoRejectLabel }}
+            </button>
+          </span>
+        </label>
+
+        <label class="toggleRow">
+          <span class="controlCopy">
+            <span class="label">{{ creatorGameRoleLabel }}</span>
+            <span class="hint">{{ creatorGameRoleHint }}</span>
+          </span>
+
+          <span class="segmentedControl" role="radiogroup" :aria-label="creatorGameRoleLabel">
+            <button
+              type="button"
+              class="segment"
+              :data-active="String(creatorGameRole === 'PL')"
+              @click="creatorGameRole = 'PL'"
+            >
+              {{ creatorGameRolePlLabel }}
+            </button>
+            <button
+              type="button"
+              class="segment"
+              :data-active="String(creatorGameRole === 'GM')"
+              @click="creatorGameRole = 'GM'"
+            >
+              {{ creatorGameRoleGmLabel }}
             </button>
           </span>
         </label>

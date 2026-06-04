@@ -4,9 +4,11 @@ import {
   deleteRoom,
   inviteRoomJoinRequest,
   leaveRoom,
+  patchRoomMemberGameRole,
   removeRoomMember,
   setRoomMemberManager,
   unsetRoomMemberManager,
+  type GameRole,
 } from "@/infra/api/rooms.api";
 import { useEntitiesStore } from "@/stores/entities.store";
 import { useToastsStore } from "@/stores/toasts.store";
@@ -16,7 +18,7 @@ type UseRoomMemberActionsOptions = {
   roomId: ComputedRef<number>;
   router: Router;
   t: (key: string) => string;
-  syncCurrentUserRole: () => void;
+  syncCurrentUserRoles: () => void;
   fetchRoomRequests: (options?: { force?: boolean }) => Promise<void>;
 };
 
@@ -38,6 +40,7 @@ export function useRoomMemberActions(options: UseRoomMemberActionsOptions) {
   const isDisbandingRoom = ref(false);
   const invitingMemberUserIds = ref<number[]>([]);
   const settingManagerUserIds = ref<number[]>([]);
+  const settingGameRoleUserIds = ref<number[]>([]);
   const removingMemberUserIds = ref<number[]>([]);
 
   async function handleLeaveRoom() {
@@ -114,7 +117,7 @@ export function useRoomMemberActions(options: UseRoomMemberActionsOptions) {
     try {
       const member = await setRoomMemberManager(options.roomId.value, userId);
       entitiesStore.upsertRoomMember(member);
-      options.syncCurrentUserRole();
+      options.syncCurrentUserRoles();
       toasts.push({
         message: options.t("room.members.setManagerSuccess"),
         tone: "success",
@@ -137,7 +140,7 @@ export function useRoomMemberActions(options: UseRoomMemberActionsOptions) {
     try {
       const member = await unsetRoomMemberManager(options.roomId.value, userId);
       entitiesStore.upsertRoomMember(member);
-      options.syncCurrentUserRole();
+      options.syncCurrentUserRoles();
       toasts.push({
         message: options.t("room.members.unsetManagerSuccess"),
         tone: "success",
@@ -152,6 +155,31 @@ export function useRoomMemberActions(options: UseRoomMemberActionsOptions) {
     }
   }
 
+  async function handleSetMemberGameRole(userId: number, gameRole: GameRole) {
+    if (!options.roomId.value || settingGameRoleUserIds.value.includes(userId)) return;
+
+    setMemberActionLoading(settingGameRoleUserIds, userId, true);
+
+    try {
+      const member = await patchRoomMemberGameRole(options.roomId.value, userId, {
+        game_role: gameRole,
+      });
+      entitiesStore.upsertRoomMember(member);
+      options.syncCurrentUserRoles();
+      toasts.push({
+        message: options.t("room.members.setGameRoleSuccess"),
+        tone: "success",
+      });
+    } catch (e: any) {
+      toasts.push({
+        message: extractErrorMessage(e, options.t("room.members.setGameRoleFailed")),
+        tone: "danger",
+      });
+    } finally {
+      setMemberActionLoading(settingGameRoleUserIds, userId, false);
+    }
+  }
+
   async function handleRemoveRoomMember(userId: number) {
     if (!options.roomId.value || removingMemberUserIds.value.includes(userId)) return;
 
@@ -160,7 +188,7 @@ export function useRoomMemberActions(options: UseRoomMemberActionsOptions) {
     try {
       await removeRoomMember(options.roomId.value, userId);
       entitiesStore.removeRoomMember(options.roomId.value, userId);
-      options.syncCurrentUserRole();
+      options.syncCurrentUserRoles();
       toasts.push({
         message: options.t("room.members.removeSuccess"),
         tone: "success",
@@ -178,6 +206,7 @@ export function useRoomMemberActions(options: UseRoomMemberActionsOptions) {
   function resetMemberActionState() {
     invitingMemberUserIds.value = [];
     settingManagerUserIds.value = [];
+    settingGameRoleUserIds.value = [];
     removingMemberUserIds.value = [];
   }
 
@@ -186,12 +215,14 @@ export function useRoomMemberActions(options: UseRoomMemberActionsOptions) {
     isDisbandingRoom,
     invitingMemberUserIds,
     settingManagerUserIds,
+    settingGameRoleUserIds,
     removingMemberUserIds,
     handleLeaveRoom,
     handleDisbandRoom,
     handleInviteUser,
     handleSetMemberManager,
     handleUnsetMemberManager,
+    handleSetMemberGameRole,
     handleRemoveRoomMember,
     resetMemberActionState,
   };

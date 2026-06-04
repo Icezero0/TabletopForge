@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import RoomMembersPanel from "@/features/room/components/RoomMembersPanel.vue";
-import type { MemberStatus, RoomRole } from "@/features/room/types";
+import type { GameRole, MemberStatus, RoomRole } from "@/features/room/types";
 
 defineProps<{
   members: Array<{
@@ -8,7 +8,8 @@ defineProps<{
     name: string;
     email?: string | null;
     avatarUrl?: string | null;
-    role: RoomRole;
+    room_role: RoomRole;
+    game_role: GameRole;
     status: MemberStatus;
   }>;
   searchPlaceholder: string;
@@ -17,6 +18,7 @@ defineProps<{
   disbandRoomLabel: string;
   isOwner?: boolean;
   canRemoveMembers?: boolean;
+  canManageGameRole?: boolean;
   actionDisabled?: boolean;
   leaving?: boolean;
   disbanding?: boolean;
@@ -25,6 +27,7 @@ defineProps<{
     source: "apply" | "invite" | "member_invite";
   }>;
   settingManagerUserIds?: number[];
+  settingGameRoleUserIds?: number[];
   removingMemberUserIds?: number[];
   loading?: boolean;
   loadingLabel: string;
@@ -37,6 +40,7 @@ const emit = defineEmits<{
   disbandRoom: [];
   setManager: [userId: number];
   unsetManager: [userId: number];
+  setGameRole: [userId: number, gameRole: GameRole];
   removeMember: [userId: number];
 }>();
 </script>
@@ -51,11 +55,13 @@ const emit = defineEmits<{
       :disband-room-label="disbandRoomLabel"
       :is-owner="isOwner"
       :can-remove-members="canRemoveMembers"
+      :can-manage-game-role="canManageGameRole"
       :action-disabled="actionDisabled"
       :leaving="leaving"
       :disbanding="disbanding"
       :pending-join-requests="pendingJoinRequests"
       :setting-manager-user-ids="settingManagerUserIds"
+      :setting-game-role-user-ids="settingGameRoleUserIds"
       :removing-member-user-ids="removingMemberUserIds"
       :loading="loading"
       :loading-label="loadingLabel"
@@ -65,6 +71,7 @@ const emit = defineEmits<{
       @disband-room="emit('disbandRoom')"
       @set-manager="emit('setManager', $event)"
       @unset-manager="emit('unsetManager', $event)"
+      @set-game-role="(userId, gameRole) => emit('setGameRole', userId, gameRole)"
       @remove-member="emit('removeMember', $event)"
     />
   </div>

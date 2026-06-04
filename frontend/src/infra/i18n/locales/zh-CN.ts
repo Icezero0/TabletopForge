@@ -262,6 +262,10 @@ export default {
       joinAuditManualLabel: "人工审批",
       joinAuditAutoApproveLabel: "自动通过",
       joinAuditAutoRejectLabel: "自动拒绝",
+      creatorGameRoleLabel: "我的游戏身份",
+      creatorGameRoleHint: "与房间治理独立；默认 GM（主持），也可选 PL 当玩家",
+      creatorGameRoleGmLabel: "GM",
+      creatorGameRolePlLabel: "PL",
       defaultSuffix: "的房间",
     },
     feedback: {
@@ -374,6 +378,22 @@ export default {
       },
     },
     members: {
+      roomRoleBadge: "治理：{role}",
+      gameRoleBadge: "游戏：{role}",
+      roomRoleLabel: "房间治理",
+      gameRoleLabel: "游戏身份",
+      roomRoles: {
+        owner: "房主",
+        manager: "管理员",
+        member: "成员",
+      },
+      gameRoles: {
+        GM: "GM",
+        PL: "PL",
+        OB: "旁观",
+      },
+      setGameRoleSuccess: "游戏身份已更新。",
+      setGameRoleFailed: "更新游戏身份失败。",
       searchPlaceholder: "搜索成员",
       invite: "邀请",
       leaveRoom: "退出房间",

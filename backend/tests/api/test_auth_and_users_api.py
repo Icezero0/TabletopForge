@@ -80,8 +80,10 @@ async def test_get_my_rooms_returns_owned_and_joined_rooms(
     body = response.json()
     assert body["total"] == 2
     assert [item["name"] for item in body["items"]] == ["Joined Room", "Owned Room"]
-    assert body["items"][0]["my_role"] == "member"
-    assert body["items"][1]["my_role"] == "owner"
+    assert body["items"][0]["my_room_role"] == "member"
+    assert body["items"][0]["my_game_role"] == "PL"
+    assert body["items"][1]["my_room_role"] == "owner"
+    assert body["items"][1]["my_game_role"] == "PL"
     assert body["items"][1]["owner"]["username"] == "me"
 
     owner_only_response = await api_client.get(
@@ -117,4 +119,5 @@ async def test_get_my_owned_rooms_returns_only_owned_rooms(
     body = response.json()
     assert body["total"] == 1
     assert body["items"][0]["name"] == "Owned Room"
-    assert body["items"][0]["my_role"] == "owner"
+    assert body["items"][0]["my_room_role"] == "owner"
+    assert body["items"][0]["my_game_role"] == "PL"

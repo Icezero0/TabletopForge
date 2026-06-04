@@ -12,7 +12,8 @@ export type Room = {
   owner_name?: string | null;
   owner_avatar_url?: string | null;
   visibility: RoomVisibility;
-  my_role?: RoomRole | null;
+  my_room_role?: RoomRole | null;
+  my_game_role?: GameRole | null;
   join_audit_mode?: RoomJoinAuditMode | null;
 };
 
@@ -24,10 +25,13 @@ export type RoomListResponse = {
   total_pages: number;
 };
 
+export type GameRole = "GM" | "PL" | "OB";
+
 export type RoomCreatePayload = {
   name: string;
   visibility?: RoomVisibility;
   join_audit_mode?: RoomJoinAuditMode;
+  creator_game_role?: GameRole;
 };
 
 export type RoomPatchPayload = {
@@ -50,7 +54,8 @@ export type RoomMember = {
   room_id: number;
   user_id: number;
   joined_at: string | null;
-  role: RoomRole;
+  room_role: RoomRole;
+  game_role: GameRole;
   user: RoomUserBrief | null;
 };
 
@@ -113,7 +118,8 @@ type UserRoomSummaryResponse = {
   name: string;
   owner_id: number;
   owner: RoomUserBrief;
-  my_role: RoomRole;
+  my_room_role: RoomRole;
+  my_game_role: GameRole | null;
   is_public: boolean;
 };
 
@@ -143,7 +149,8 @@ function mapUserRoomSummary(room: UserRoomSummaryResponse): Room {
     owner_name: room.owner?.username || room.owner?.email || null,
     owner_avatar_url: room.owner?.avatar_url || null,
     visibility: room.is_public ? "public" : "private",
-    my_role: room.my_role,
+    my_room_role: room.my_room_role,
+    my_game_role: room.my_game_role,
   };
 }
 
@@ -269,6 +276,18 @@ export async function setRoomMemberManager(roomId: number, targetUserId: number)
 export async function unsetRoomMemberManager(roomId: number, targetUserId: number) {
   const { data } = await http.delete<RoomMember>(
     `/rooms/${roomId}/members/${targetUserId}/manager`,
+  );
+  return data;
+}
+
+export async function patchRoomMemberGameRole(
+  roomId: number,
+  targetUserId: number,
+  payload: { game_role: GameRole },
+) {
+  const { data } = await http.patch<RoomMember>(
+    `/rooms/${roomId}/members/${targetUserId}/game-role`,
+    payload,
   );
   return data;
 }

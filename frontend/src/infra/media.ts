@@ -1,4 +1,13 @@
-const API_ORIGIN = import.meta.env.VITE_API_ORIGIN ?? window.location.origin ?? "http://localhost:8000";
+function resolveApiOrigin() {
+  const configured = import.meta.env.VITE_API_ORIGIN?.trim();
+  if (configured) return configured.replace(/\/$/, "");
+  if (import.meta.env.DEV && typeof window !== "undefined") {
+    return window.location.origin;
+  }
+  return "http://localhost:8000";
+}
+
+const API_ORIGIN = resolveApiOrigin();
 
 export function resolveMediaUrl(path?: string | null) {
   if (!path) return "";

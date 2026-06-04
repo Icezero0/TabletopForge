@@ -2,6 +2,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validat
 
 from app.core.validators import normalize_optional_non_empty_str, normalize_required_str
 from app.modules.rooms.constants import (
+    GameRole,
     RoomJoinAuditMode,
     RoomRole,
     RoomVisibility,
@@ -13,6 +14,7 @@ class RoomCreate(BaseModel):
     name: str
     visibility: RoomVisibility = RoomVisibility.PRIVATE
     join_audit_mode: RoomJoinAuditMode = RoomJoinAuditMode.MANUAL_REVIEW
+    creator_game_role: GameRole = GameRole.GM
 
     @field_validator("name", mode="before")
     @classmethod
@@ -63,7 +65,8 @@ class UserRoomSummaryResponse(BaseModel):
     name: str
     owner_id: int
     owner: UserBriefResponse
-    my_role: RoomRole
+    my_room_role: RoomRole
+    my_game_role: GameRole | None = None
     visibility: RoomVisibility = Field(exclude=True)
 
     @computed_field

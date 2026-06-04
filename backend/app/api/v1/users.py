@@ -75,10 +75,11 @@ async def get_my_rooms(
                 name=room.name,
                 owner_id=room.owner_id,
                 owner=room.owner,
-                my_role=my_role,
+                my_room_role=my_room_role,
+                my_game_role=my_game_role,
                 visibility=room.visibility,
             )
-            for room, my_role in data["items"]
+            for room, my_room_role, my_game_role in data["items"]
         ],
         total=data["total"],
         page=data["page"],
@@ -107,10 +108,11 @@ async def get_my_owned_rooms(
                 name=room.name,
                 owner_id=room.owner_id,
                 owner=room.owner,
-                my_role=my_role,
+                my_room_role=my_room_role,
+                my_game_role=my_game_role,
                 visibility=room.visibility,
             )
-            for room, my_role in data["items"]
+            for room, my_room_role, my_game_role in data["items"]
         ],
         total=data["total"],
         page=data["page"],

@@ -36,8 +36,12 @@ class Settings(BaseSettings):
         10, alias="WS_AUTH_TIMEOUT_SECONDS", ge=1
     )
 
-    # CORS
-    cors_origins: list[str] = ["*"]
+    # CORS（JWT 走 Authorization 头，无需 cookie；credentials 与 origins=* 在浏览器中互斥）
+    cors_origins: list[str] = Field(
+        default_factory=lambda: ["*"],
+        alias="CORS_ORIGINS",
+    )
+    cors_allow_credentials: bool = Field(False, alias="CORS_ALLOW_CREDENTIALS")
 
     model_config = SettingsConfigDict(
         env_file=".env",

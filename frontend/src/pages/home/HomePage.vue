@@ -32,6 +32,7 @@ async function handleCreateRoom(payload: {
   name: string;
   visibility: "public" | "private";
   join_audit_mode: "auto_approve" | "manual_review" | "auto_reject";
+  creator_game_role: "GM" | "PL" | "OB";
 }) {
   feedback.value = "";
 
@@ -79,6 +80,10 @@ function enterRoom(roomId: number) {
       :join-audit-manual-label="t('home.create.joinAuditManualLabel')"
       :join-audit-auto-approve-label="t('home.create.joinAuditAutoApproveLabel')"
       :join-audit-auto-reject-label="t('home.create.joinAuditAutoRejectLabel')"
+      :creator-game-role-label="t('home.create.creatorGameRoleLabel')"
+      :creator-game-role-hint="t('home.create.creatorGameRoleHint')"
+      :creator-game-role-gm-label="t('home.create.creatorGameRoleGmLabel')"
+      :creator-game-role-pl-label="t('home.create.creatorGameRolePlLabel')"
       :default-name="defaultRoomName"
       @submit="handleCreateRoom"
     />

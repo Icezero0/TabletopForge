@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm import selectinload
 
-from app.modules.rooms.constants import RoomJoinAuditMode, RoomRole, RoomVisibility
+from app.modules.rooms.constants import GameRole, RoomJoinAuditMode, RoomRole, RoomVisibility
 from app.modules.rooms.models import Room, RoomMember
 from app.modules.users.models import User
 
@@ -85,11 +85,15 @@ class RoomRepository:
         page: int,
         page_size: int,
         role: RoomRole | None = None,
-    ) -> tuple[list[tuple[Room, RoomRole]], int]:
+    ) -> tuple[list[tuple[Room, RoomRole, GameRole | None]], int]:
         membership = aliased(RoomMember)
 
         base_stmt = (
-            select(Room, membership.role.label("member_role"))
+            select(
+                Room,
+                membership.role.label("member_role"),
+                membership.game_role.label("member_game_role"),
+            )
             .outerjoin(
                 membership,
                 and_(
@@ -123,10 +127,18 @@ class RoomRepository:
         )
 
         result = await db.execute(stmt)
-        items: list[tuple[Room, RoomRole]] = []
-        for room, member_role in result.all():
-            resolved_role = RoomRole.OWNER if room.owner_id == user_id else RoomRole(member_role)
-            items.append((room, resolved_role))
+        items: list[tuple[Room, RoomRole, GameRole | None]] = []
+        for room, member_role, member_game_role in result.all():
+            resolved_role = (
+                RoomRole.OWNER if room.owner_id == user_id else RoomRole(member_role)
+            )
+            resolved_game_role = None
+            if member_game_role is not None:
+                try:
+                    resolved_game_role = GameRole(member_game_role)
+                except ValueError:
+                    resolved_game_role = None
+            items.append((room, resolved_role, resolved_game_role))
 
         return items, total
 

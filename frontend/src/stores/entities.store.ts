@@ -24,7 +24,8 @@ type EntityRoom = {
   owner_name?: string | null;
   owner_avatar_url?: string | null;
   visibility?: Room["visibility"];
-  my_role?: Room["my_role"];
+  my_room_role?: Room["my_room_role"];
+  my_game_role?: Room["my_game_role"];
   join_audit_mode?: Room["join_audit_mode"];
 };
 
@@ -32,7 +33,8 @@ type EntityRoomMember = {
   room_id: number;
   user_id: number;
   joined_at?: string | null;
-  role: RoomMember["role"];
+  room_role: RoomMember["room_role"];
+  game_role: RoomMember["game_role"];
 };
 
 type State = {
@@ -86,7 +88,8 @@ function normalizeRoom(room: RoomSummaryInput): EntityRoom {
     visibility: room.visibility,
     owner_name: "owner_name" in room ? room.owner_name : undefined,
     owner_avatar_url: "owner_avatar_url" in room ? room.owner_avatar_url : undefined,
-    my_role: "my_role" in room ? room.my_role : undefined,
+    my_room_role: "my_room_role" in room ? room.my_room_role : undefined,
+    my_game_role: "my_game_role" in room ? room.my_game_role : undefined,
     join_audit_mode:
       "join_audit_mode" in room ? room.join_audit_mode : undefined,
   };
@@ -97,7 +100,8 @@ function normalizeRoomMember(member: RoomMember): EntityRoomMember {
     room_id: member.room_id,
     user_id: member.user_id,
     joined_at: member.joined_at,
-    role: member.role,
+    room_role: member.room_role,
+    game_role: member.game_role,
   };
 }
 

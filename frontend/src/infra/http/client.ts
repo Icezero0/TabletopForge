@@ -1,10 +1,18 @@
 import axios, { AxiosError } from 'axios'
 import type { InternalAxiosRequestConfig } from 'axios'
 
-const API_ORIGIN = import.meta.env.VITE_API_ORIGIN ?? 'http://localhost:8000'
+/** 开发环境默认走 Vite 同源代理，避免跨域；生产或直连后端时配置 VITE_API_ORIGIN */
+function resolveApiOrigin() {
+  const configured = import.meta.env.VITE_API_ORIGIN?.trim()
+  if (configured) return configured.replace(/\/$/, '')
+  if (import.meta.env.DEV) return ''
+  return 'http://localhost:8000'
+}
+
+const API_ORIGIN = resolveApiOrigin()
 const API_PREFIX = import.meta.env.VITE_API_PREFIX ?? '/api/v1'
 
-const baseURL = API_ORIGIN + API_PREFIX
+const baseURL = API_ORIGIN ? `${API_ORIGIN}${API_PREFIX}` : API_PREFIX
 
 export const http = axios.create({
   baseURL,

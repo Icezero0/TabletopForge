@@ -13,11 +13,13 @@ class RoomMembershipRepository:
         room_id: int,
         user_id: int,
         role: str,
+        game_role: str,
     ) -> RoomMember:
         member = RoomMember(
             room_id=room_id,
             user_id=user_id,
             role=role,
+            game_role=game_role,
         )
         db.add(member)
         await db.flush()
@@ -96,6 +98,25 @@ class RoomMembershipRepository:
                 RoomMember.user_id == user_id,
             )
             .values(role=role)
+        )
+        await db.flush()
+        return await self.get_member(db, room_id=room_id, user_id=user_id)
+
+    async def update_member_game_role(
+        self,
+        db: AsyncSession,
+        *,
+        room_id: int,
+        user_id: int,
+        game_role: str,
+    ) -> RoomMember | None:
+        await db.execute(
+            update(RoomMember)
+            .where(
+                RoomMember.room_id == room_id,
+                RoomMember.user_id == user_id,
+            )
+            .values(game_role=game_role)
         )
         await db.flush()
         return await self.get_member(db, room_id=room_id, user_id=user_id)

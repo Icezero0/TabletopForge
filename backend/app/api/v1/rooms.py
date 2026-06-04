@@ -20,6 +20,7 @@ from app.modules.rooms.join_request.schemas import (
 )
 from app.modules.rooms.join_request.service import RoomJoinRequestService
 from app.modules.rooms.membership.schemas import (
+    RoomMemberGameRolePatch,
     RoomMemberListResponse,
     RoomMemberResponse,
 )
@@ -321,6 +322,29 @@ async def unset_room_member_manager(
         room_id=room_id,
         target_user_id=target_user_id,
         is_manager=False,
+        current_user=current_user,
+    )
+    await publisher.publish_room_members(room_id=room_id)
+    return RoomMemberResponse.model_validate(member)
+
+
+@router.patch(
+    "/{room_id}/members/{target_user_id}/game-role",
+    response_model=RoomMemberResponse,
+)
+async def patch_room_member_game_role(
+    room_id: int,
+    target_user_id: int,
+    payload: RoomMemberGameRolePatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> RoomMemberResponse:
+    member = await membership_service.set_room_member_game_role(
+        db,
+        room_id=room_id,
+        target_user_id=target_user_id,
+        game_role=payload.game_role,
         current_user=current_user,
     )
     await publisher.publish_room_members(room_id=room_id)

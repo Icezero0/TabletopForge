@@ -7,6 +7,33 @@ class RoomRole(StrEnum):
     MEMBER = "member"
 
 
+class GameRole(StrEnum):
+    GM = "GM"
+    PL = "PL"
+    OB = "OB"
+
+
+class GamePermission(StrEnum):
+    UPLOAD_MAP = "upload_map"
+    DELETE_MAP = "delete_map"
+    LOCK_MAP = "lock_map"
+    MOVE_UNLOCKED_MAP = "move_unlocked_map"
+    MANAGE_DRAWINGS = "manage_drawings"
+    ERASE_DRAWINGS = "erase_drawings"
+    MANAGE_ANY_TOKEN = "manage_any_token"
+    MOVE_ANY_TOKEN = "move_any_token"
+    MOVE_OWN_CHARACTER_TOKEN = "move_own_character_token"
+    VIEW_MONSTER_EXACT_HP = "view_monster_exact_hp"
+    VIEW_MONSTER_DAMAGE_LOG = "view_monster_damage_log"
+    EDIT_ANY_CHARACTER = "edit_any_character"
+    EDIT_OWN_CHARACTER = "edit_own_character"
+    EDIT_ANY_CHARACTER_STATE = "edit_any_character_state"
+    EDIT_OWN_CHARACTER_STATE = "edit_own_character_state"
+    CREATE_CHARACTER_DEFINITION = "create_character_definition"
+    REUSE_CHARACTER_DEFINITION = "reuse_character_definition"
+    PAN_ZOOM_TABLE = "pan_zoom_table"
+
+
 class RoomPermission(StrEnum):
     VIEW_ROOM = "view_room"
     UPDATE_ROOM = "update_room"

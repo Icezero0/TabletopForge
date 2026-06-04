@@ -87,7 +87,8 @@ created_at
 ```text
 room_id
 user_id
-role
+role          # 文档称 room_role；API 对外字段名 room_role
+game_role     # GM | PL | OB，默认 PL
 joined_at
 ```
 
@@ -97,9 +98,7 @@ joined_at
 unique(room_id, user_id)
 ```
 
-当前后端地基：`role` = `owner` | `manager` | `member`（`room_role`）。
-
-跑团 MVP 目标：同表增加 `game_role`（`GM` | `PL` | `OB`），与 `role` 独立。见 `08_permission_design.md` §5。
+`role`（`room_role`）与 `game_role` **独立**，不做隐式绑定。见 `08_permission_design.md` §5。
 
 ## 3.3 room_join_requests
 

@@ -7,6 +7,7 @@ from app.db.base import Base
 from app.modules.users.models import User
 
 from app.modules.rooms.constants import (
+    GameRole,
     RoomJoinAuditMode,
     RoomJoinRequestAction,
     RoomJoinRequestSource,
@@ -75,6 +76,12 @@ class RoomMember(Base):
         server_default=func.now(),
     )
     role: Mapped[str] = mapped_column(String(16), nullable=False)
+    game_role: Mapped[str] = mapped_column(
+        String(8),
+        nullable=False,
+        default=GameRole.PL.value,
+        server_default=GameRole.PL.value,
+    )
 
     room: Mapped["Room"] = relationship("Room", back_populates="members")
     user: Mapped["User"] = relationship("User")

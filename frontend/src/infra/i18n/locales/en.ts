@@ -262,6 +262,10 @@ export default {
       joinAuditManualLabel: "Manual review",
       joinAuditAutoApproveLabel: "Auto approve",
       joinAuditAutoRejectLabel: "Auto reject",
+      creatorGameRoleLabel: "My game role",
+      creatorGameRoleHint: "Separate from governance; default GM (DM), or pick PL to play",
+      creatorGameRoleGmLabel: "GM",
+      creatorGameRolePlLabel: "PL",
       defaultSuffix: "'s room",
     },
     feedback: {
@@ -374,6 +378,22 @@ export default {
       },
     },
     members: {
+      roomRoleBadge: "Governance: {role}",
+      gameRoleBadge: "Game: {role}",
+      roomRoleLabel: "Room governance",
+      gameRoleLabel: "Game role",
+      roomRoles: {
+        owner: "Owner",
+        manager: "Manager",
+        member: "Member",
+      },
+      gameRoles: {
+        GM: "GM",
+        PL: "PL",
+        OB: "Observer",
+      },
+      setGameRoleSuccess: "Game role updated.",
+      setGameRoleFailed: "Failed to update game role.",
       searchPlaceholder: "Search members",
       invite: "Invite",
       leaveRoom: "Leave room",

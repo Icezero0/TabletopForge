@@ -108,7 +108,8 @@ export const useRoomsStore = defineStore("rooms", {
           ...created,
           owner_name: auth.me?.username || auth.me?.email || created.owner_name || null,
           owner_avatar_url: auth.me?.avatar_url || created.owner_avatar_url || null,
-          my_role: "owner",
+          my_room_role: "owner",
+          my_game_role: payload.creator_game_role ?? "GM",
         };
         this.myRooms = [
           hydratedCreated,

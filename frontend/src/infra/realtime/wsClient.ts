@@ -115,7 +115,13 @@ function deriveApiOriginFromLocation() {
 }
 
 function deriveWSOrigin() {
-  const apiOrigin = import.meta.env.VITE_API_ORIGIN ?? deriveApiOriginFromLocation();
+  const configured = import.meta.env.VITE_API_ORIGIN?.trim();
+  if (!configured && import.meta.env.DEV && typeof window !== "undefined") {
+    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${protocol}//${window.location.host}`;
+  }
+
+  const apiOrigin = configured || deriveApiOriginFromLocation();
 
   if (apiOrigin.startsWith("https://")) {
     return apiOrigin.replace("https://", "wss://");
