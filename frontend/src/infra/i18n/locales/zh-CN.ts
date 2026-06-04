@@ -369,6 +369,13 @@ export default {
       infoEmpty: "选中地图或 Token 后，可在此查看详情（后续步骤接入）。",
       memoTitle: "个人备忘录",
       memoPlaceholder: "仅自己可见的跑团笔记…",
+      memoSaving: "保存中…",
+      memoSaved: "已保存",
+    },
+    characterList: {
+      title: "场上角色",
+      hint: "已上场或待上场的角色，与左侧「房间成员」列表不同。",
+      empty: "暂无上场角色；角色库与上场功能将在后续步骤接入。",
     },
     assets: {
       barTitle: "素材",

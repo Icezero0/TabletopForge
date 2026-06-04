@@ -87,6 +87,21 @@ PUT    /rooms/{room_id}/members/{target_user_id}/manager
 DELETE /rooms/{room_id}/members/{target_user_id}/manager
 DELETE /rooms/{room_id}/members/{target_user_id}
 DELETE /rooms/{room_id}/members/me
+
+GET    /rooms/{room_id}/personal-memo
+PUT    /rooms/{room_id}/personal-memo
+```
+
+**个人备忘录**（`room_personal_memos`）：仅当前登录用户读写本人在该房间的记录；须为房间成员，否则 `403`。不通过 WebSocket 同步。
+
+请求/响应示例：
+
+```json
+{ "content": "session notes…" }
+```
+
+```json
+{ "content": "session notes…", "updated_at": "2026-06-04T12:00:00Z" }
 ```
 
 成员响应字段（`room_members`）：

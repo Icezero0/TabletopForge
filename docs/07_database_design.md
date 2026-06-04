@@ -120,7 +120,27 @@ created_at
 updated_at
 ```
 
-## 3.4 role_change_requests
+## 3.4 room_personal_memos
+
+用途：跑团主界面 **个人备忘录**（按房间、按用户隔离，仅本人可见）。
+
+核心字段：
+
+```text
+id
+user_id
+room_id
+content       # Text，默认空串
+updated_at
+```
+
+索引建议：
+
+```text
+unique(user_id, room_id)
+```
+
+## 3.5 role_change_requests
 
 用途：存储 room_role 或 game_role 变更申请。
 

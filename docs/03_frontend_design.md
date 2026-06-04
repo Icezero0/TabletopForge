@@ -90,28 +90,27 @@ src/
 
 ```text
 RoomPage
-├── TopToolBar                 # 顶栏工具（模式互斥）
-├── TableLayout
-│   ├── TopLeftDock
-│   │   ├── InGameCharacterList   # 场上角色列表
-│   │   └── ChatFloatingPanel     # 聊天悬浮（列表下方）
-│   ├── MapViewport               # 核心地图视窗
-│   ├── RightInspector
-│   │   ├── InfoPanel             # 当前查看信息（单槽，新替旧）
-│   │   └── PersonalMemo          # 个人备忘录（可收起）
-│   └── BottomAssetBar            # 素材：添加地图 / 添加角色
-└── RoomChrome                    # 房间名、治理入口等（轻量顶栏）
+├── TableStage（MapViewport 全屏底层）
+├── TopToolBar（顶中悬浮）
+├── 左上 leftStack
+│   ├── GovernanceDock（成员 / 入房请求 / 设置）
+│   └── InGameCharacterList（场上角色，Step 3 空态）
+├── ChatFloatingPanel（左下）
+├── BottomAssetBar（底中）
+└── RightInspector（右侧）
+    ├── InfoPanel（单槽）
+    └── PersonalMemo（HTTP 按房间持久化）
 ```
 
 ```text
 ┌────────────────────────────────────────────────────────────┐
-│ RoomChrome + TopToolBar                                     │
+│ TopToolBar（顶中）                                            │
 ├──────────┬──────────────────────────────────┬──────────────┤
 │ 左上      │                                  │ RightInspector│
-│ 角色列表  │        MapViewport               │ InfoPanel     │
-│ 悬浮聊天  │        网格常显                  │ PersonalMemo  │
+│ 治理+角色 │        MapViewport               │ InfoPanel     │
+│          │        网格常显                  │ PersonalMemo  │
 ├──────────┴──────────────────────────────────┴──────────────┤
-│ BottomAssetBar                                              │
+│ Chat（左下）                    BottomAssetBar（底中）         │
 └────────────────────────────────────────────────────────────┘
 ```
 
@@ -161,8 +160,8 @@ RoomPage
 
 **ChatFloatingPanel**：
 
-- 锚定在角色列表 **下方**，悬浮于地图之上，可折叠。
-- 普通聊天（已实现能力迁入此面板）。
+- MVP 锚定 **左下**（见 §4.2.8），悬浮于地图之上，可折叠。
+- 普通聊天（已迁入此面板）。
 
 ### 4.2.5 BottomAssetBar
 

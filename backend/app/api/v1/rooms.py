@@ -25,6 +25,11 @@ from app.modules.rooms.membership.schemas import (
     RoomMemberResponse,
 )
 from app.modules.rooms.membership.service import RoomMembershipService
+from app.modules.rooms.personal_memo.schemas import (
+    RoomPersonalMemoPut,
+    RoomPersonalMemoResponse,
+)
+from app.modules.rooms.personal_memo.service import RoomPersonalMemoService
 from app.modules.rooms.room.schemas import (
     RoomCreate,
     RoomListResponse,
@@ -45,6 +50,7 @@ router = APIRouter(prefix="/rooms", tags=["rooms"])
 room_service = RoomService()
 membership_service = RoomMembershipService()
 join_request_service = RoomJoinRequestService()
+personal_memo_service = RoomPersonalMemoService()
 
 
 @router.post("", response_model=RoomResponse, status_code=status.HTTP_201_CREATED)
@@ -153,6 +159,36 @@ async def get_room_members(
         items=[RoomMemberResponse.model_validate(member) for member in data["items"]],
         total=data["total"],
     )
+
+
+@router.get("/{room_id}/personal-memo", response_model=RoomPersonalMemoResponse)
+async def get_room_personal_memo(
+    room_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RoomPersonalMemoResponse:
+    memo = await personal_memo_service.get_personal_memo(
+        db,
+        room_id=room_id,
+        user=current_user,
+    )
+    return RoomPersonalMemoResponse.model_validate(memo)
+
+
+@router.put("/{room_id}/personal-memo", response_model=RoomPersonalMemoResponse)
+async def put_room_personal_memo(
+    room_id: int,
+    payload: RoomPersonalMemoPut,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RoomPersonalMemoResponse:
+    memo = await personal_memo_service.put_personal_memo(
+        db,
+        room_id=room_id,
+        user=current_user,
+        content=payload.content,
+    )
+    return RoomPersonalMemoResponse.model_validate(memo)
 
 
 @router.get("/{room_id}/join-requests", response_model=RoomJoinRequestListResponse)

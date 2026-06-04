@@ -369,6 +369,13 @@ export default {
       infoEmpty: "Details for the selected map or token will appear here in a later step.",
       memoTitle: "Personal memo",
       memoPlaceholder: "Private notes for this session…",
+      memoSaving: "Saving…",
+      memoSaved: "Saved",
+    },
+    characterList: {
+      title: "On the table",
+      hint: "Characters in play or ready to deploy—not the room member list.",
+      empty: "No characters on the table yet. Character library and deploy come in a later step.",
     },
     assets: {
       barTitle: "Assets",

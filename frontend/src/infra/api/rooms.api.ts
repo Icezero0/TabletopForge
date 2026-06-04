@@ -291,3 +291,26 @@ export async function patchRoomMemberGameRole(
   );
   return data;
 }
+
+export type RoomPersonalMemo = {
+  content: string;
+  updated_at: string | null;
+};
+
+export async function getRoomPersonalMemo(roomId: number) {
+  const { data } = await http.get<RoomPersonalMemo>(
+    `/rooms/${roomId}/personal-memo`,
+  );
+  return data;
+}
+
+export async function putRoomPersonalMemo(
+  roomId: number,
+  payload: { content: string },
+) {
+  const { data } = await http.put<RoomPersonalMemo>(
+    `/rooms/${roomId}/personal-memo`,
+    payload,
+  );
+  return data;
+}

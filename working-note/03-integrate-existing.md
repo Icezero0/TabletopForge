@@ -4,7 +4,7 @@
 
 **依据**：`docs/10` §4.1、`docs/01` §5.10。
 
-> **说明**：Step 2 实现时已迁入聊天、成员治理、入房请求与房间设置。本步侧重 **验收对齐、备忘录持久化、场上角色列表占位**，以及文档/细节收尾。
+> **说明**：Step 2 实现时已迁入聊天、成员治理、入房请求与房间设置。本步完成 **验收对齐、备忘录 HTTP 持久化、场上角色列表占位**，以及文档收尾。
 
 ---
 
@@ -12,22 +12,22 @@
 
 | 能力 | 原位置 | 迁入目标 | 状态 |
 |---|---|---|---|
-| 普通聊天 | `RoomChatTab` | 左下 `FloatingPanel` | Step 2 已接入 |
-| 房间成员 | `RoomMembersTab` | `GovernanceDock` 成员 Tab | Step 2 已接入 |
-| 入房请求 | `RoomRequestsTab` | 治理面板请求 Tab | Step 2 已接入 |
-| 房间设置 | `RoomSettingsTab` | 治理面板设置 Tab | Step 2 已接入 |
-| 实时会话 | `useRoomRealtimeSession` | 房间级 bootstrap | Step 2 已接入 |
-| 个人备忘录 | — | 按房间 HTTP 持久化 | 待本步 |
-| 场上角色列表 | — | 与成员列表区分展示 | 待本步（Step 5 业务数据） |
+| 普通聊天 | `RoomChatTab` | 左下 `FloatingPanel` | ✓ Step 2 |
+| 房间成员 | `RoomMembersTab` | `GovernanceDock` 成员 Tab | ✓ Step 2 |
+| 入房请求 | `RoomRequestsTab` | 治理面板请求 Tab | ✓ Step 2 |
+| 房间设置 | `RoomSettingsTab` | 治理面板设置 Tab | ✓ Step 2 |
+| 实时会话 | `useRoomRealtimeSession` | 房间级 bootstrap | ✓ Step 2 |
+| 个人备忘录 | — | `GET/PUT /rooms/{id}/personal-memo` | ✓ Step 3 |
+| 场上角色列表 | — | 左上 `InGameCharacterList` 空态 | ✓ Step 3（Step 5 业务数据） |
 
 ---
 
 ## 本步做
 
 - 对照 Step 3 验收清单做回归（聊天 WS、审批、改 `game_role`、设置保存）。
-- 个人备忘录：按 PRD **按房间、仅自己可见** 接 API（若后端未就绪可继续本地态并文档标注）。
-- 左上治理区 UI 文案区分 **房间成员** vs **场上角色**（后者可先空态）。
-- 同步更新 `docs/10` 与 `03` §4.2 示意图（可选）。
+- 个人备忘录：按 PRD **按房间、仅自己可见** 接 HTTP API（`room_personal_memos`）。
+- 左上治理区与 **场上角色** 面板区分展示（后者空态）。
+- 同步更新 `docs/10`、`docs/03` §4.2 示意图。
 
 ---
 
@@ -46,7 +46,7 @@
 - [x] 审批入房、成员列表、改 game_role 在新布局下可用 — Step 2 已具备，本步复核。
 - [x] 房间设置保存生效 — Step 2 已具备，本步复核。
 - [x] 中央仍为网格占位，无回归旧版全屏 Tab 布局。
-- [ ] 个人备忘录按房间持久化（若纳入本步）。
+- [x] 个人备忘录按房间 HTTP 持久化（用户隔离）。
 
 ---
 
@@ -54,3 +54,5 @@
 
 - **Step 1** 完成。
 - **Step 2** 完成。
+
+**Step 3 状态：已完成**（2026-06-04）。

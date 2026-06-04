@@ -22,6 +22,7 @@ import FloatingPanel from "@/features/table/components/FloatingPanel.vue";
 import GovernanceDock from "@/features/table/components/GovernanceDock.vue";
 import InfoPanel from "@/features/table/components/InfoPanel.vue";
 import MapViewport from "@/features/table/components/MapViewport.vue";
+import InGameCharacterList from "@/features/table/components/InGameCharacterList.vue";
 import PersonalMemo from "@/features/table/components/PersonalMemo.vue";
 import TableStage from "@/features/table/components/TableStage.vue";
 import TopToolBar from "@/features/table/components/TopToolBar.vue";
@@ -354,6 +355,7 @@ watch([roomId, currentUserRoomRole], () => {
         </template>
 
         <template #overlays>
+          <div class="leftStack">
           <GovernanceDock
             :room-id="roomId"
             :room="room"
@@ -389,6 +391,18 @@ watch([roomId, currentUserRoomRole], () => {
             @save-settings="handleSaveRoomSettings"
             @open-requests="fetchRoomRequests({ force: true })"
           />
+
+          <FloatingPanel
+            :title="t('table.characterList.title')"
+            inline
+            anchor="top-left"
+            collapse-to="top-left"
+            variant="character_list"
+            :storage-key="`room-${roomId}-characters`"
+          >
+            <InGameCharacterList />
+          </FloatingPanel>
+          </div>
 
           <FloatingPanel
             :title="t('table.chat.title')"
@@ -533,6 +547,32 @@ watch([roomId, currentUserRoomRole], () => {
 
 .rightStack > .memoPanel {
   margin-top: auto;
+}
+
+.leftStack {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  max-height: calc(100% - 24px);
+  pointer-events: none;
+}
+
+.leftStack > * {
+  pointer-events: auto;
+  flex-shrink: 0;
+}
+
+.leftStack :deep(.floatingPanel.governance) {
+  position: relative;
+  top: auto;
+  left: auto;
+  width: min(320px, calc(100vw - 24px));
+  max-height: min(52vh, 420px);
 }
 
 @media (max-width: 720px) {
