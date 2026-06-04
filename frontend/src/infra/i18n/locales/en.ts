@@ -264,7 +264,7 @@ export default {
       joinAuditAutoApproveLabel: "Auto approve",
       joinAuditAutoRejectLabel: "Auto reject",
       creatorGameRoleLabel: "My game role",
-      creatorGameRoleHint: "Separate from governance; default GM (DM), or pick PL to play",
+      creatorGameRoleHint: "Separate from room management; default GM (DM), or pick PL to play",
       creatorGameRoleGmLabel: "GM",
       creatorGameRolePlLabel: "PL",
       defaultSuffix: "'s room",
@@ -334,7 +334,7 @@ export default {
   },
   table: {
     governance: {
-      title: "Room governance",
+      title: "Room management",
     },
     chrome: {
       requests: "Join requests",
@@ -396,7 +396,7 @@ export default {
     loadFailed: "Failed to load the room.",
     chatEmpty: "No messages in this room yet.",
     chatSendFailed: "Failed to send message. Please try again later.",
-    membersEmpty: "No members in this room yet.",
+    membersEmpty: "No matching members.",
     membersLoadFailed: "Failed to load room members.",
     requestsEmpty: "No pending join requests for this room.",
     requestsLoadFailed: "Failed to load room requests.",
@@ -435,9 +435,9 @@ export default {
       },
     },
     members: {
-      roomRoleBadge: "Governance: {role}",
+      roomRoleBadge: "Management: {role}",
       gameRoleBadge: "Game: {role}",
-      roomRoleLabel: "Room governance",
+      roomRoleLabel: "Room management",
       gameRoleLabel: "Game role",
       roomRoles: {
         owner: "Owner",

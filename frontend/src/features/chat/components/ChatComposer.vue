@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { PaperAirplaneIcon } from "@heroicons/vue/24/outline";
 import AppIcon from "@/ui/base/AppIcon.vue";
 import type { ChatSegment } from "@/features/chat/types";
@@ -16,7 +16,22 @@ const emit = defineEmits<{
 
 const draft = ref("");
 const sendPending = ref(false);
+const inputRef = ref<HTMLTextAreaElement | null>(null);
 const canSend = computed(() => draft.value.trim().length > 0);
+
+function resizeInput() {
+  const input = inputRef.value;
+  if (!input) return;
+
+  input.style.height = "auto";
+  input.style.height = `${input.scrollHeight}px`;
+}
+
+async function refocusInput() {
+  await nextTick();
+  resizeInput();
+  inputRef.value?.focus();
+}
 
 async function sendMessage() {
   if (!canSend.value || props.sending || sendPending.value) return;
@@ -37,8 +52,10 @@ async function sendMessage() {
       emit("send", segments);
     }
     draft.value = "";
+    await refocusInput();
   } catch {
     // Keep the draft in place so the user can retry or edit it.
+    await refocusInput();
   } finally {
     sendPending.value = false;
   }
@@ -49,16 +66,24 @@ function handleKeydown(event: KeyboardEvent) {
   event.preventDefault();
   void sendMessage();
 }
+
+watch(draft, () => {
+  void nextTick(resizeInput);
+});
+
+onMounted(() => {
+  resizeInput();
+});
 </script>
 
 <template>
   <div class="composer">
     <textarea
+      ref="inputRef"
       v-model="draft"
       class="input"
       rows="2"
       placeholder="输入消息..."
-      :disabled="props.sending || sendPending"
       @keydown="handleKeydown"
     />
 
@@ -66,6 +91,7 @@ function handleKeydown(event: KeyboardEvent) {
       class="sendButton"
       :aria-label="props.sendLabel || 'Send'"
       :disabled="!canSend || props.sending || sendPending"
+      @mousedown.prevent
       @click="sendMessage"
     >
       <AppIcon :icon="PaperAirplaneIcon" :size="16" />
@@ -83,9 +109,9 @@ function handleKeydown(event: KeyboardEvent) {
 
 .input {
   width: 100%;
-  min-height: 42px;
-  max-height: 140px;
-  resize: vertical;
+  min-height: calc((13px * 1.45 * 2) + 20px);
+  max-height: calc((13px * 1.45 * 3) + 20px);
+  resize: none;
   box-sizing: border-box;
   padding: 9px 11px;
   border: 1px solid var(--c-border);
@@ -96,6 +122,12 @@ function handleKeydown(event: KeyboardEvent) {
   font-size: 13px;
   line-height: 1.45;
   outline: none;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.input::-webkit-scrollbar {
+  display: none;
 }
 
 .input:focus {

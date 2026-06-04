@@ -264,7 +264,7 @@ export default {
       joinAuditAutoApproveLabel: "自动通过",
       joinAuditAutoRejectLabel: "自动拒绝",
       creatorGameRoleLabel: "我的游戏身份",
-      creatorGameRoleHint: "与房间治理独立；默认 GM（主持），也可选 PL 当玩家",
+      creatorGameRoleHint: "与房间管理独立；默认 GM（主持），也可选 PL 当玩家",
       creatorGameRoleGmLabel: "GM",
       creatorGameRolePlLabel: "PL",
       defaultSuffix: "的房间",
@@ -334,7 +334,7 @@ export default {
   },
   table: {
     governance: {
-      title: "房间治理",
+      title: "房间管理",
     },
     chrome: {
       requests: "入房请求",
@@ -396,7 +396,7 @@ export default {
     loadFailed: "加载房间失败。",
     chatEmpty: "房间里还没有消息。",
     chatSendFailed: "消息发送失败，请稍后再试。",
-    membersEmpty: "房间里还没有成员。",
+    membersEmpty: "没有符合条件的成员。",
     membersLoadFailed: "加载房间成员失败。",
     requestsEmpty: "当前没有待处理的入房请求。",
     requestsLoadFailed: "加载房间请求失败。",
@@ -435,9 +435,9 @@ export default {
       },
     },
     members: {
-      roomRoleBadge: "治理：{role}",
+      roomRoleBadge: "管理：{role}",
       gameRoleBadge: "游戏：{role}",
-      roomRoleLabel: "房间治理",
+      roomRoleLabel: "房间管理",
       gameRoleLabel: "游戏身份",
       roomRoles: {
         owner: "房主",
