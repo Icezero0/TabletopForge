@@ -179,10 +179,11 @@ Client (Vue)
 与 [`01_product_requirements.md`](01_product_requirements.md) §4.2 一致：
 
 1. ~~迁移 `game_role`~~（已完成）→ ~~Table 布局（Step 2）~~（已完成）→ Step 3 治理 UI 收敛 → Tabletop 权限消费（Step 4）+ 业务 assets。
-2. Table 视口、网格常显、地图底图（上传、锁定、z=0）。
-3. Token 层（z=1）与角色 / 怪物数据模型。
-4. 绘制层（z=2）、橡皮擦与框选删除（测距 ○ 后续）。
+2. Table 视口、网格常显、地图底图（上传、锁定，band z=0）。
+3. Token 层（band z=100）与角色 / 怪物数据模型。
+4. 绘制层（band z=200）、橡皮擦与框选删除（测距 ○ 后续）。
 5. 每步更新 `05_api_design.md`、`07_database_design.md` 与本节实现对照表。
+6. **跑团桌面 MVP 完成后**：悬浮面板统一入口显隐 + 自由拖动（`01` §4.3、`03` §11）。
 
 ---
 

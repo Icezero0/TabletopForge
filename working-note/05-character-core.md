@@ -10,7 +10,7 @@
 
 - `characters`（稳定层）+ `character_states`（实时层），`created_by_user_id`。
 - 自定义 key/value（JSON 或附表）。
-- Token：绑定 `character_id`，位置/缩放/z-index/实例名。
+- Token：绑定 `character_id`，位置/缩放/**Token 类内** z-index（band 基准 100）/实例名。
 - 业务 asset：`token_image`；无图 → **名称首字**。
 - 怪物 HP：GM 看 CharacterState 全量；PL 看 **伤害记录** 接口字段过滤。
 
@@ -34,7 +34,7 @@
 
 ### 5.2 Token 与地图联动
 
-- z=1；拖拽、缩放；菜单：查看信息、删除（权限见 `08` §6.4）。
+- Token band（基准 z=100）；拖拽、缩放；菜单：查看信息、删除（权限见 `08` §6.4）；**图层**菜单只调 Token 类内顺序。
 - 同一 `character_id` 可多个 Token（复用）。
 - 地图 HP 预览读 CharacterState。
 

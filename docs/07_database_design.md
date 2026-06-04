@@ -355,6 +355,8 @@ created_at
 updated_at
 ```
 
+`z_index` 语义：Token **类内**叠放顺序；渲染时 **effective z = 100 + 类内值**（或持久化为 band 内绝对值 `[100, 199]`）。不得与地图（0）、绘制（200）band 混排。图层菜单只调同类，见 `tabletop_scene.md` §3.2。未来 `drawings` / 多地图实例字段沿用同类 band 规则。
+
 索引建议：
 
 ```text

@@ -122,7 +122,7 @@ RoomPage
 | 工具 | 作用 |
 |---|---|
 | **手型** | 平移 / 缩放视口 |
-| **绘制** | 笔刷、直线、方形、圆形、**文本框**（字号、颜色）；线条 **粗细、颜色**；橡皮擦；框选删除（z=2，全员可用） |
+| **绘制** | 笔刷、直线、方形、圆形、**文本框**（字号、颜色）；线条 **粗细、颜色**；橡皮擦；框选删除（绘制 band z=200，全员可用） |
 | **Pointer** | 常驻：同步他用户 **光标位置 + 用户名标签**；按住：**激光指向**（临时点/线，松手消失） |
 
 **测距**：**不在 MVP**（后续 Token 轨迹测距，见 `tabletop_scene.md` §3.5）。
@@ -133,7 +133,9 @@ RoomPage
 
 ### 4.2.3 MapViewport
 
-组件：`SceneCanvas`、`MapLayer`(z=0)、`GridLayer`（常显）、`TokenLayer`(z=1)、`DrawingLayer`(z=2)、`SelectionOverlay`、`MeasureOverlay`、`PointerOverlay`、`ContextMenu`。
+组件：`SceneCanvas`、`MapLayer`(基准 z=0)、`GridLayer`（常显，不占场景三档 band）、`TokenLayer`(基准 z=100)、`DrawingLayer`(基准 z=200)、`SelectionOverlay`、`MeasureOverlay`、`PointerOverlay`、`ContextMenu`。
+
+场景对象叠放见 `tabletop_scene.md` §3.2；**图层**菜单只调整 **同类内** 顺序。
 
 **选中模型（选择模式下）**：
 
@@ -143,7 +145,7 @@ RoomPage
 **地图底图（GM）**：
 
 - 直接：拖拽、缩放（未锁定）。
-- 菜单：**删除**、**锁定 / 解锁**、**图层**（层内 z-index）。
+- 菜单：**删除**、**锁定 / 解锁**、**图层**（地图类内 z-index，§3.2.3）。
 
 **Token（按权限）**：
 
@@ -188,8 +190,24 @@ RoomPage
 
 ### 4.2.7 治理与其它入口
 
-- 房间成员、入房审批、房间设置：顶栏 / 抽屉进入，**不占用**右侧 InfoPanel。
+- 房间成员、入房审批、房间设置：`GovernanceDock`（左上悬浮，成员 / 入房请求 / 设置 Tab）。
 - 骰子、RP、Logs 等：**不在**本版跑团主界面布局内（见 §6 说明）。
+
+### 4.2.8 MVP 悬浮面板布局（固定锚点）
+
+跑团桌面 **MVP** 内，下列面板通过 `FloatingPanel` / `GovernanceDock` 实现，**锚点与收起方向固定**；是否显示由布局写死（不可从统一入口关闭，**不可** 在视口上自由拖动）。MVP **完成后** 的可配置与拖动见 §11。
+
+| 面板 ID | 内容 | MVP 锚点 / 收起 |
+|---|---|---|
+| `governance` | 成员、入房请求、房间设置 | 左上 |
+| `chat` | 普通聊天 | 左下 |
+| `toolbar` | 手型 / 绘制 / Pointer、网格比例尺 | 顶中 → 向上收起 |
+| `asset_bar` | 添加地图 / 添加角色 | 底中 → 向下收起 |
+| `info` | InfoPanel 单槽 | 右 → 向右收起 |
+| `memo` | 个人备忘录 | 右栏叠放 → 向右收起 |
+| `character_list` | 场上角色列表、上场（Step 5） | 左上区（与治理分区，实现时定） |
+
+`MapViewport` 始终全屏底层；`game_role` 控制面板 **内容** 权限，非布局权限。
 
 ## 4.3 CharacterPage
 
@@ -218,9 +236,10 @@ RoomPage
 
 ## 5.2 图层
 
-- 地图底图 z=0（可锁定）
-- Token z=1（层内 z-index 可调）
-- 绘制 z=2（含文本框）
+- 地图底图基准 z=0（可锁定）；**地图类内** z-index 可调
+- Token 基准 z=100；**Token 类内** z-index 可调（effective z = 100 + 类内序号）
+- 绘制基准 z=200（含文本框）；**绘制类内** z-index 可调
+- **图层**菜单仅重排同类，不跨 band（见 `tabletop_scene.md` §3.2.3）
 - **网格常显**；底图导入后缩放适配网格
 
 ## 5.3 绘制与 Pointer
@@ -381,3 +400,25 @@ canRollSecretDice
 3. 组件负责交互展示，业务规则尽量下沉到 store / service。
 4. WebSocket 事件统一处理。
 5. 前端权限只控制体验，后端权限控制安全。
+
+---
+
+# 11 MVP 后：悬浮面板可配置与自由拖动
+
+**前提**：跑团桌面 MVP（§4.2、§5）交付完成后实施。产品条目见 `01_product_requirements.md` §4.3。
+
+## 11.1 目标
+
+1. **统一入口**：房间界面一处（如顶栏「布局」/「面板」，名称实现时定）勾选 §4.2.8 面板目录中要显示的面板。
+2. **自由拖动**：已启用面板可在 `MapViewport` 之上任意定位，不再绑定固定 `anchor`；收起可改为贴边条或最小化（实现时定）。
+3. **持久化**：布局偏好按 **用户 + 房间**（或用户全局）存本地 / HTTP；刷新恢复；**默认各用户布局互不同步**。
+
+## 11.2 约束
+
+- `MapViewport` 仍全屏底层；面板与场景对象 z-index band（§5.2）无关。
+- `game_role` 仍决定面板内操作权限（如 PL 无「添加地图」），不限制谁能拖动自己的布局。
+- 不改变 `governance` 内部 Tab 结构。
+
+## 11.3 实现提示（非 MVP）
+
+- 面板 registry 与 §4.2.8 ID 对齐；布局 state 可进 Pinia + `localStorage` 或 `room_member_ui_prefs`（API 执行时再定）。

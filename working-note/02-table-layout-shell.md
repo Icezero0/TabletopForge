@@ -45,6 +45,7 @@ MapViewport（全屏网格 + 比例尺）
 - 地图导入、Token、绘制、选中框、Context Menu（Step 4–5）。
 - Pointer 光标同步、激光（可留按钮，Step 4 后接 WS）。
 - 角色库真实数据、InfoPanel 真实字段。
+- **跑团桌面 MVP 完成后**：悬浮面板统一入口显隐、视口上自由拖动（非固定 `anchor`）；见 `docs/01_product_requirements.md` §4.3、`docs/03_frontend_design.md` §11。
 
 ---
 

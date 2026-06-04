@@ -7,7 +7,7 @@
 
 # 1 模块目标
 
-Token 模块用于维护地图桌面（z-index **1** 层）上的可操作对象，包括玩家角色 Token、怪物 Token 等。
+Token 模块用于维护地图桌面 **Token band（基准 z-index 100）** 上的可操作对象，包括玩家角色 Token、怪物 Token 等。叠放规则见 `tabletop_scene.md` §3.2。
 
 ---
 
@@ -21,7 +21,7 @@ Token 包含：
 - 名称
 - 类型（`character` | `monster` | 后续扩展）
 - 场景坐标、尺寸、旋转
-- 层内 z-index（相对同层其他 Token）
+- 类内 z-index（相对其它 Token；effective z = 100 + 类内序号，见 `tabletop_scene.md` §3.2.2）
 - 锁定状态（可选，与地图底图锁定区分）
 - 关联用户（玩家 Token 可选）
 
