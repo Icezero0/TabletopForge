@@ -331,6 +331,55 @@ export default {
       cancelled: "Cancelled",
     },
   },
+  table: {
+    governance: {
+      title: "Room governance",
+    },
+    chrome: {
+      requests: "Join requests",
+      settings: "Room settings",
+    },
+    dock: {
+      members: "Members",
+    },
+    chat: {
+      title: "Chat",
+    },
+    map: {
+      scale: "{ft} ft per cell",
+      scaleBar: "{ft} ft",
+      scaleCell: "{ft} ft per cell",
+    },
+    tools: {
+      toolbar: "Table tools",
+      select: "Select",
+      hand: "Hand",
+      draw: "Draw",
+      pointer: "Pointer",
+      measure: "Measure",
+      measureDisabledHint: "Measuring is not in the MVP scope",
+      gridScale: "Scale",
+      gridScaleValue: "{ft} ft/cell · {px}px",
+      gridScaleIncrease: "Zoom grid in",
+      gridScaleDecrease: "Zoom grid out",
+    },
+    inspector: {
+      infoTitle: "Info",
+      infoEmpty: "Details for the selected map or token will appear here in a later step.",
+      memoTitle: "Personal memo",
+      memoPlaceholder: "Private notes for this session…",
+    },
+    assets: {
+      barTitle: "Assets",
+      addMap: "Add map",
+      addCharacter: "Add character",
+      comingSoon: "This feature will be added in a later step.",
+    },
+    dialogs: {
+      requestsTitle: "Join requests",
+      settingsTitle: "Room settings",
+    },
+  },
   room: {
     title: "Room",
     placeholder:

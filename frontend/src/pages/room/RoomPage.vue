@@ -1,14 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch, type Component } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import {
-  ChatBubbleLeftRightIcon,
-  ClipboardDocumentCheckIcon,
-  Cog6ToothIcon,
-  Squares2X2Icon,
-  UserGroupIcon,
-} from "@heroicons/vue/24/outline";
 import {
   getRoomById,
   getRoomMembers,
@@ -16,19 +9,24 @@ import {
   type Room,
   type RoomPatchPayload,
 } from "@/infra/api/rooms.api";
-import BasePill from "@/ui/base/BasePill.vue";
-import AppTabs from "@/ui/layout/AppTabs.vue";
+import BaseLayout from "@/ui/layout/BaseLayout.vue";
 import RoomChatTab from "@/features/room/components/workspace/RoomChatTab.vue";
-import RoomMembersTab from "@/features/room/components/workspace/RoomMembersTab.vue";
-import RoomRequestsTab from "@/features/room/components/workspace/RoomRequestsTab.vue";
-import RoomSettingsTab from "@/features/room/components/workspace/RoomSettingsTab.vue";
-import type { GameRole, MemberStatus, RoomPanelKey, RoomRole } from "@/features/room/types";
+import type { GameRole, MemberStatus, RoomRole } from "@/features/room/types";
 import type { ChatSegment } from "@/features/chat/types";
-import { useRoomWorkspaceLayout } from "@/features/room/composables/useRoomWorkspaceLayout";
 import { useRoomJoinRequests } from "@/features/room/composables/useRoomJoinRequests";
 import { useRoomMemberActions } from "@/features/room/composables/useRoomMemberActions";
 import { useRoomRealtimeSession } from "@/features/room/composables/useRoomRealtimeSession";
 import type { RoomRealtimeSessionClosed } from "@/infra/realtime/roomRealtime";
+import BottomAssetBar from "@/features/table/components/BottomAssetBar.vue";
+import FloatingPanel from "@/features/table/components/FloatingPanel.vue";
+import GovernanceDock from "@/features/table/components/GovernanceDock.vue";
+import InfoPanel from "@/features/table/components/InfoPanel.vue";
+import MapViewport from "@/features/table/components/MapViewport.vue";
+import PersonalMemo from "@/features/table/components/PersonalMemo.vue";
+import TableStage from "@/features/table/components/TableStage.vue";
+import TopToolBar from "@/features/table/components/TopToolBar.vue";
+import { useGridScale } from "@/features/table/composables/useGridScale";
+import { useTableToolMode } from "@/features/table/composables/useTableToolMode";
 import { useMessagesStore } from "@/stores/messages.store";
 import { useEntitiesStore } from "@/stores/entities.store";
 import { useAuthStore } from "@/stores/auth.store";
@@ -53,7 +51,6 @@ const membersError = ref("");
 const settingsSaving = ref(false);
 const currentUserRoomRole = ref<RoomRoleState>("unknown");
 const currentUserGameRole = ref<GameRole | "unknown">("unknown");
-const activePanel = ref<RoomPanelKey>("chat");
 
 const roomId = computed(() => {
   const raw = route.params.id;
@@ -70,30 +67,20 @@ const currentUserCanRemoveMembers = computed(() =>
   currentUserRoomRole.value === "owner" || currentUserRoomRole.value === "manager");
 const memberDangerActionDisabled = computed(() => currentUserRoomRole.value === "unknown");
 
-const allPanelOptions = computed<{ key: RoomPanelKey; label: string; badge?: string; icon?: Component }[]>(() => [
-  { key: "chat", label: t("room.tabs.chat"), icon: ChatBubbleLeftRightIcon },
-  { key: "members", label: t("room.tabs.members"), icon: UserGroupIcon },
-  {
-    key: "requests",
-    label: t("room.tabs.requests"),
-    badge: roomJoinRequests.value.length > 0 ? String(roomJoinRequests.value.length) : undefined,
-    icon: ClipboardDocumentCheckIcon,
-  },
-  { key: "settings", label: t("room.tabs.settings"), icon: Cog6ToothIcon },
-]);
+const canAddMap = computed(() => currentUserGameRole.value === "GM");
+const canAddCharacter = computed(() =>
+  currentUserGameRole.value === "GM" || currentUserGameRole.value === "PL");
 
-const panelOptions = computed(() => {
-  if (!canManageRoomRequests.value && !canManageRoomSettings.value) {
-    return allPanelOptions.value.filter((panel) =>
-      panel.key === "chat" || panel.key === "members");
-  }
-
-  return allPanelOptions.value.filter((panel) => {
-    if (panel.key === "requests") return canManageRoomRequests.value;
-    if (panel.key === "settings") return canManageRoomSettings.value;
-    return true;
-  });
-});
+const { toolMode, disabledTools } = useTableToolMode(currentUserGameRole);
+const {
+  gridCellPx,
+  gridCellFt,
+  scaleBarCells,
+  canIncrease: canIncreaseGrid,
+  canDecrease: canDecreaseGrid,
+  increase: increaseGrid,
+  decrease: decreaseGrid,
+} = useGridScale(roomId);
 
 const roomMessagesState = computed(() => messagesStore.getRoomState(roomId.value));
 const roomChatMessages = computed(() => messagesStore.getRoomChatMessages(roomId.value));
@@ -142,14 +129,6 @@ const {
   t,
 });
 
-const layout = useRoomWorkspaceLayout({
-  activePanel,
-  roomId: computed(() => room.value?.id),
-  isLoading,
-});
-const mainGridStyle = computed(() => layout.mainGridStyle.value);
-const workspaceCardStyle = computed(() => layout.workspaceCardStyle.value);
-
 const realtime = useRoomRealtimeSession({
   roomId,
   refreshRoom: () => fetchRoom({ silent: true }),
@@ -181,13 +160,6 @@ const roomMemberItems = computed(() => entityRoomMembers.value.map((member) => {
 }));
 const roomMemberStatusByUserId = computed<Map<number, MemberStatus>>(() =>
   new Map(roomMemberItems.value.map((member) => [member.id, member.status])));
-
-const roomVisibilityLabel = computed(() =>
-  room.value?.visibility === "public" ? "Public" : "Private");
-const roomRoleLabel = computed(() =>
-  currentUserRoomRole.value === "unknown" ? "Unknown" : currentUserRoomRole.value);
-const gameRoleLabel = computed(() =>
-  currentUserGameRole.value === "unknown" ? "—" : currentUserGameRole.value);
 
 function syncCurrentUserRoles() {
   const meId = auth.me?.id;
@@ -335,6 +307,13 @@ function handleRealtimeSessionClosed(payload: RoomRealtimeSessionClosed) {
   }
 }
 
+function handleAssetPlaceholder() {
+  toasts.push({
+    message: t("table.assets.comingSoon"),
+    tone: "default",
+  });
+}
+
 onMounted(() => {
   void fetchRoom();
   void fetchRoomMessages();
@@ -350,159 +329,182 @@ watch(roomId, () => {
   void fetchRoomMessages();
   void fetchRoomMembers();
 });
-watch(panelOptions, (nextPanels) => {
-  if (!nextPanels.some((panel) => panel.key === activePanel.value)) {
-    activePanel.value = nextPanels[0]?.key ?? "chat";
-  }
-});
 watch(() => auth.me?.id, () => {
   syncCurrentUserRoles();
 });
 watch([roomId, currentUserRoomRole], () => {
   void fetchRoomRequests();
 });
-watch(activePanel, (panel) => {
-  if (panel === "requests") {
-    void fetchRoomRequests();
-  }
-});
 </script>
 
 <template>
-  <BaseLayout :max-width="1320">
+  <div class="roomPageWrap">
+  <BaseLayout :max-width="10000">
     <div class="roomShell">
       <div v-if="isLoading" class="state">{{ t("common.loading") }}</div>
 
       <div v-else-if="error" class="state error">{{ error }}</div>
 
-      <template v-else-if="room">
-        <BaseCard class="topStrip">
-          <div class="roomIntro">
-            <h2 class="roomName">{{ room.name }}</h2>
-          </div>
+      <TableStage v-else-if="room">
+        <template #map>
+          <MapViewport
+            :grid-cell-px="gridCellPx"
+            :scale-bar-cells="scaleBarCells"
+          />
+        </template>
 
-          <div class="statusBar">
-            <BasePill tone="default">{{ roomVisibilityLabel }}</BasePill>
-            <BasePill tone="default">{{ t("room.members.roomRoleBadge", { role: roomRoleLabel }) }}</BasePill>
-            <BasePill tone="default">{{ t("room.members.gameRoleBadge", { role: gameRoleLabel }) }}</BasePill>
-          </div>
-        </BaseCard>
+        <template #overlays>
+          <GovernanceDock
+            :room-id="roomId"
+            :room="room"
+            :members="roomMemberItems"
+            :members-loading="membersLoading"
+            :members-error="membersError"
+            :can-manage-requests="canManageRoomRequests"
+            :can-manage-settings="canManageRoomSettings"
+            :requests-badge="roomJoinRequests.length > 0 ? String(roomJoinRequests.length) : undefined"
+            :requests-loading="requestsLoading"
+            :requests-error="requestsError"
+            :request-items="roomRequestItems"
+            :is-request-action-loading="isRequestActionLoading"
+            :settings-saving="settingsSaving"
+            :is-owner="currentUserIsOwner"
+            :can-remove-members="currentUserCanRemoveMembers"
+            :action-disabled="memberDangerActionDisabled"
+            :leaving="isLeavingRoom"
+            :disbanding="isDisbandingRoom"
+            :pending-join-requests="pendingMemberInviteStates"
+            :setting-manager-user-ids="settingManagerUserIds"
+            :setting-game-role-user-ids="settingGameRoleUserIds"
+            :removing-member-user-ids="removingMemberUserIds"
+            @invite-user="handleInviteUser"
+            @leave-room="handleLeaveRoom"
+            @disband-room="handleDisbandRoom"
+            @set-manager="handleSetMemberManager"
+            @unset-manager="handleUnsetMemberManager"
+            @set-game-role="(userId, gameRole) => handleSetMemberGameRole(userId, gameRole)"
+            @remove-member="handleRemoveRoomMember"
+            @approve-request="approveRequest"
+            @reject-request="rejectRequest"
+            @save-settings="handleSaveRoomSettings"
+            @open-requests="fetchRoomRequests({ force: true })"
+          />
 
-        <div
-          class="mainGrid"
-          :style="mainGridStyle"
-        >
-          <section
-            :ref="(el) => { layout.setStageColumnEl(el as HTMLElement | null); }"
-            class="stageColumn"
+          <FloatingPanel
+            :title="t('table.chat.title')"
+            anchor="bottom-left"
+            collapse-to="bottom-left"
+            variant="chat"
+            :storage-key="`room-${roomId}-chat`"
           >
-            <BaseCard class="stageCard">
-              <div class="tabletopStage">
-                <Squares2X2Icon class="stageIcon" aria-hidden="true" />
-                <div class="stageCopy">
-                  <h3>Tabletop</h3>
-                  <p>地图、Token 和角色状态将在后续业务阶段接入。</p>
-                </div>
-              </div>
-            </BaseCard>
-          </section>
+            <RoomChatTab
+              :room-key="roomId"
+              :active="true"
+              :messages="roomChatMessages"
+              :member-status-by-user-id="roomMemberStatusByUserId"
+              :send-label="t('room.chat.send')"
+              :loading="roomMessagesState.isLoading"
+              :sending="roomMessagesState.isSending"
+              :loading-history="roomMessagesState.isLoadingHistory"
+              :has-older="hasOlderMessages"
+              :error="roomMessagesState.error"
+              :loading-label="t('common.loading')"
+              :empty-label="t('room.chatEmpty')"
+              :send-message="handleSend"
+              @load-older="loadOlderRoomMessages"
+            />
+          </FloatingPanel>
 
-          <aside
-            :ref="(el) => { layout.setWorkspaceColumnEl(el as HTMLElement | null); }"
-            class="workspaceColumn"
+          <FloatingPanel
+            :title="t('table.tools.toolbar')"
+            anchor="top-center"
+            collapse-to="top"
+            variant="tools"
+            :storage-key="`room-${roomId}-tools`"
           >
-            <BaseCard
-              class="workspaceCard"
-              :style="workspaceCardStyle"
+            <TopToolBar
+              v-model="toolMode"
+              :disabled-tools="disabledTools"
+              :grid-cell-px="gridCellPx"
+              :grid-cell-ft="gridCellFt"
+              :can-increase-grid="canIncreaseGrid"
+              :can-decrease-grid="canDecreaseGrid"
+              @increase-grid="increaseGrid"
+              @decrease-grid="decreaseGrid"
+            />
+          </FloatingPanel>
+
+          <FloatingPanel
+            :title="t('table.assets.barTitle')"
+            anchor="bottom-center"
+            collapse-to="bottom"
+            variant="assets"
+            :storage-key="`room-${roomId}-assets`"
+          >
+            <BottomAssetBar
+              :can-add-map="canAddMap"
+              :can-add-character="canAddCharacter"
+              @add-map="handleAssetPlaceholder"
+              @add-character="handleAssetPlaceholder"
+            />
+          </FloatingPanel>
+
+          <div class="rightStack">
+            <FloatingPanel
+              :title="t('table.inspector.infoTitle')"
+              inline
+              collapse-to="right"
+              variant="info"
+              :storage-key="`room-${roomId}-info`"
             >
-              <AppTabs
-                v-model="activePanel"
-                :items="panelOptions"
-              />
+              <InfoPanel />
+            </FloatingPanel>
 
-              <RoomChatTab
-                v-show="activePanel === 'chat'"
-                :room-key="roomId"
-                :active="activePanel === 'chat'"
-                :messages="roomChatMessages"
-                :member-status-by-user-id="roomMemberStatusByUserId"
-                :send-label="t('room.chat.send')"
-                :loading="roomMessagesState.isLoading"
-                :sending="roomMessagesState.isSending"
-                :loading-history="roomMessagesState.isLoadingHistory"
-                :has-older="hasOlderMessages"
-                :error="roomMessagesState.error"
-                :loading-label="t('common.loading')"
-                :empty-label="t('room.chatEmpty')"
-                :send-message="handleSend"
-                @load-older="loadOlderRoomMessages"
-              />
-
-              <RoomMembersTab
-                v-show="activePanel === 'members'"
-                :members="roomMemberItems"
-                :search-placeholder="t('room.members.searchPlaceholder')"
-                :invite-label="t('room.members.invite')"
-                :leave-room-label="t('room.members.leaveRoom')"
-                :disband-room-label="t('room.members.disbandRoom')"
-                :is-owner="currentUserIsOwner"
-                :can-remove-members="currentUserCanRemoveMembers"
-                :can-manage-game-role="currentUserCanRemoveMembers"
-                :setting-game-role-user-ids="settingGameRoleUserIds"
-                :action-disabled="memberDangerActionDisabled"
-                :leaving="isLeavingRoom"
-                :disbanding="isDisbandingRoom"
-                :pending-join-requests="pendingMemberInviteStates"
-                :setting-manager-user-ids="settingManagerUserIds"
-                :removing-member-user-ids="removingMemberUserIds"
-                :loading="membersLoading"
-                :loading-label="t('common.loading')"
-                :empty-label="membersError || t('room.membersEmpty')"
-                @leave-room="handleLeaveRoom"
-                @disband-room="handleDisbandRoom"
-                @invite-user="handleInviteUser"
-                @set-manager="handleSetMemberManager"
-                @unset-manager="handleUnsetMemberManager"
-                @set-game-role="(userId, gameRole) => handleSetMemberGameRole(userId, gameRole)"
-                @remove-member="handleRemoveRoomMember"
-              />
-
-              <RoomRequestsTab
-                v-show="activePanel === 'requests'"
-                :loading="requestsLoading"
-                :error="requestsError"
-                :empty-label="t('room.requestsEmpty')"
-                :items="roomRequestItems"
-                :is-request-action-loading="isRequestActionLoading"
-                @approve="approveRequest"
-                @reject="rejectRequest"
-              />
-
-              <RoomSettingsTab
-                v-if="canManageRoomSettings"
-                v-show="activePanel === 'settings'"
-                :room="room"
-                :saving="settingsSaving"
-                @save="handleSaveRoomSettings"
-              />
-            </BaseCard>
-          </aside>
-        </div>
-      </template>
+            <FloatingPanel
+              class="memoPanel"
+              :title="t('table.inspector.memoTitle')"
+              inline
+              collapse-to="right"
+              variant="memo"
+              :storage-key="`room-${roomId}-memo`"
+            >
+              <PersonalMemo :room-id="roomId" />
+            </FloatingPanel>
+          </div>
+        </template>
+      </TableStage>
     </div>
   </BaseLayout>
+  </div>
 </template>
 
 <style scoped>
-.roomShell {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 16px;
-  padding-top: 6px;
+.roomPageWrap {
+  height: calc(100dvh - 56px);
   min-height: 0;
 }
 
+.roomPageWrap :deep(.page) {
+  padding: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.roomPageWrap :deep(.container) {
+  max-width: 100% !important;
+  height: 100%;
+  margin: 0;
+}
+
+.roomShell {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .state {
+  padding: 16px;
   color: var(--c-text-muted);
   font-size: 14px;
 }
@@ -511,155 +513,35 @@ watch(activePanel, (panel) => {
   color: var(--c-danger);
 }
 
-.topStrip {
-  padding: 18px 20px;
+.rightStack {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  background:
-    radial-gradient(circle at top right, rgb(210 233 255 / 0.75), transparent 28%),
-    linear-gradient(180deg, color-mix(in srgb, var(--c-surface) 92%, white), color-mix(in srgb, var(--c-surface) 88%, var(--c-bg)));
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: none;
+  z-index: 2;
+  max-width: min(300px, calc(100vw - 24px));
 }
 
-.roomIntro {
-  min-width: 0;
+.rightStack > * {
+  pointer-events: auto;
 }
 
-.roomName {
-  margin: 0;
-  font-size: 24px;
-  color: var(--c-text);
-}
-
-.statusBar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.mainGrid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
-  gap: 16px;
-  align-items: start;
-}
-
-.stageColumn,
-.workspaceColumn {
-  min-width: 0;
-}
-
-.workspaceColumn {
-  align-self: start;
-  height: 100%;
-  max-height: 100%;
-  overflow: hidden;
-}
-
-.stageCard {
-  min-height: 420px;
-  padding: 16px;
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--c-surface) 92%, white), color-mix(in srgb, var(--c-surface) 86%, var(--c-bg)));
-  overflow: hidden;
-}
-
-.tabletopStage {
-  min-height: 388px;
-  display: grid;
-  place-items: center;
-  gap: 16px;
-  align-content: center;
-  border: 1px dashed color-mix(in srgb, var(--c-border) 80%, var(--c-primary));
-  border-radius: 14px;
-  background:
-    linear-gradient(color-mix(in srgb, var(--c-border) 24%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--c-border) 24%, transparent) 1px, transparent 1px),
-    color-mix(in srgb, var(--c-surface) 78%, var(--c-bg));
-  background-size: 32px 32px;
-  color: var(--c-text-muted);
-  text-align: center;
-  padding: 24px;
-}
-
-.stageIcon {
-  width: 48px;
-  height: 48px;
-  color: color-mix(in srgb, var(--c-primary) 68%, var(--c-text-muted));
-}
-
-.stageCopy {
-  display: grid;
-  gap: 6px;
-}
-
-.stageCopy h3 {
-  margin: 0;
-  color: var(--c-text);
-  font-size: 18px;
-}
-
-.stageCopy p {
-  margin: 0;
-  font-size: 13px;
-}
-
-.workspaceCard {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 0;
-  height: 100%;
-  overflow: hidden;
-  max-height: 100%;
-}
-
-:deep(.workspaceCard.card) {
-  padding: 0;
+.rightStack > .memoPanel {
+  margin-top: auto;
 }
 
 @media (max-width: 720px) {
-  :deep(.page) {
-    height: calc(100dvh - 56px);
-    padding: 8px;
-    overflow: hidden;
-    box-sizing: border-box;
-  }
-
-  :deep(.container) {
-    height: 100%;
-  }
-
   .roomShell {
-    height: 100%;
-    overflow: hidden;
+    height: calc(100dvh - 52px);
   }
 
-  .mainGrid {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto minmax(0, 1fr);
-    height: 100%;
-    min-height: 0;
-  }
-
-  .workspaceCard {
-    min-height: 0;
-  }
-
-  .workspaceColumn {
-    min-height: 0;
-    overflow: hidden;
-  }
-}
-
-@media (max-width: 640px) {
-  .topStrip,
-  .stageCard {
-    padding: 12px;
-  }
-
-  .roomName {
-    font-size: 20px;
+  .rightStack {
+    max-width: calc(100vw - 24px);
   }
 }
 </style>

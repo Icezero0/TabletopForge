@@ -331,6 +331,55 @@ export default {
       cancelled: "已取消",
     },
   },
+  table: {
+    governance: {
+      title: "房间治理",
+    },
+    chrome: {
+      requests: "入房请求",
+      settings: "房间设置",
+    },
+    dock: {
+      members: "成员",
+    },
+    chat: {
+      title: "聊天",
+    },
+    map: {
+      scale: "每格 {ft} ft",
+      scaleBar: "{ft} ft",
+      scaleCell: "每格 {ft} ft",
+    },
+    tools: {
+      toolbar: "桌面工具",
+      select: "选择",
+      hand: "手型",
+      draw: "绘制",
+      pointer: "Pointer",
+      measure: "测距",
+      measureDisabledHint: "测距不在 MVP 范围内",
+      gridScale: "比例尺",
+      gridScaleValue: "{ft} ft/格 · {px}px",
+      gridScaleIncrease: "放大网格",
+      gridScaleDecrease: "缩小网格",
+    },
+    inspector: {
+      infoTitle: "信息",
+      infoEmpty: "选中地图或 Token 后，可在此查看详情（后续步骤接入）。",
+      memoTitle: "个人备忘录",
+      memoPlaceholder: "仅自己可见的跑团笔记…",
+    },
+    assets: {
+      barTitle: "素材",
+      addMap: "添加地图",
+      addCharacter: "添加角色",
+      comingSoon: "该功能将在后续步骤接入。",
+    },
+    dialogs: {
+      requestsTitle: "入房请求",
+      settingsTitle: "房间设置",
+    },
+  },
   room: {
     title: "房间",
     placeholder:
