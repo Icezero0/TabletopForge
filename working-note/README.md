@@ -24,8 +24,8 @@ Step 1  基础身份与房间治理 ──► Step 2  主界面空壳布局
 | 步骤 | 文档 | 一句话 |
 |---|---|---|
 | 1 | [01-identity-and-room.md](./01-identity-and-room.md) | `game_role`、房间 CRUD、拉人/入房、身份配置 |
-| 2 | [02-table-layout-shell.md](./02-table-layout-shell.md) | 五区布局占位，工具栏槽位，不接业务 |
-| 3 | [03-integrate-existing.md](./03-integrate-existing.md) | 聊天、成员、审批、设置等迁入新壳 |
+| 2 | [02-table-layout-shell.md](./02-table-layout-shell.md) | 全屏地图、悬浮可收起面板、治理/聊天/比例尺 |
+| 3 | [03-integrate-existing.md](./03-integrate-existing.md) | 验收收尾、备忘录 API、场上角色占位 |
 | 4 | [04-map-core.md](./04-map-core.md) | 地图导入、网格、锁定、图层、绘制 |
 | 5 | [05-character-core.md](./05-character-core.md) | 角色库、稳定层/状态层、Token 上场 |
 

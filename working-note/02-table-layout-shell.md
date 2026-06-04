@@ -21,10 +21,10 @@ MapViewport（全屏网格 + 比例尺）
 
 | 区域 | 本步内容 |
 |---|---|
-| **中央 MapViewport** | 常显 **方格网格** + ft 尺度标注（静态配置即可）；无底图、无 Token |
-| **TopToolBar** | 手型、绘制、Pointer 按钮；**测距按钮可显示但 disabled** 或隐藏（PRD：MVP 不测距） |
-| **TopLeftDock** | 场上角色列表 **假数据/空态**；邀请/上场按钮 **仅 UI** |
-| **左下聊天** | 悬浮面板容器，可折叠，**不接消息**（Step 3 接入） |
+| **中央 MapViewport** | SVG **虚线网格**（可调像素尺度）；无底图、无 Token |
+| **TopToolBar** | 手型、绘制、Pointer；**比例尺 ±** 调节网格大小；测距 **disabled** |
+| **GovernanceDock** | 成员 / 入房请求 / 设置 Tab（owner/manager 见请求与设置） |
+| **左下聊天** | 悬浮面板，已接 `messages.store` 与 WS |
 | **BottomAssetBar** | 添加地图 / 添加角色 按钮（GM/PL 显隐用 `game_role` 占位逻辑） |
 | **RightInspector** | InfoPanel 单槽空态；PersonalMemo 输入框 UI（可不持久化） |
 
@@ -41,7 +41,7 @@ MapViewport（全屏网格 + 比例尺）
 
 ## 本步不做
 
-- WebSocket 地图事件、真实聊天、成员 API 绑定（Step 3）。
+- WebSocket 地图事件（Step 4+）；聊天与成员治理已在 Step 2 接入。
 - 地图导入、Token、绘制、选中框、Context Menu（Step 4–5）。
 - Pointer 光标同步、激光（可留按钮，Step 4 后接 WS）。
 - 角色库真实数据、InfoPanel 真实字段。
@@ -60,4 +60,6 @@ MapViewport（全屏网格 + 比例尺）
 
 ## 与 Step 3 的交接
 
-Step 3 将把 **ChatFloatingPanel、成员/审批/设置** 从旧 Tab **嵌入** 本壳，不推翻布局。
+Step 2 已提前完成 Step 3 中 **聊天、成员、入房请求、房间设置** 的迁入。Step 3 剩余：个人备忘录 API、场上角色列表与 Step 3 文档验收对齐，不推翻 `TableStage` / `FloatingPanel` 结构。
+
+**Step 2 状态：已完成**（2026-06-04）。
