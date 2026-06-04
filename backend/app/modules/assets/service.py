@@ -10,6 +10,7 @@ from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError, 
 from app.modules.assets.constants import ALLOWED_IMAGE_CONTENT_TYPES, AssetType
 from app.modules.assets.models import Asset
 from app.modules.assets.repository import AssetRepository
+from app.modules.rooms.tabletop.repository import RoomTabletopRepository
 from app.modules.site.constants import SitePermission, SiteRole
 from app.modules.site.permissions import require_site_permission
 from app.modules.users.models import User
@@ -18,6 +19,7 @@ from app.modules.users.models import User
 class AssetService:
     def __init__(self) -> None:
         self.repo = AssetRepository()
+        self.tabletop_repo = RoomTabletopRepository()
         self.settings = get_settings()
 
     def _site_role(self, user: User) -> SiteRole:
@@ -84,8 +86,13 @@ class AssetService:
             )
         return asset
 
-    def require_asset_access(self, asset: Asset, user: User | None) -> None:
-        if asset.asset_type == AssetType.AVATAR:
+    async def require_asset_access(
+        self,
+        db: AsyncSession,
+        asset: Asset,
+        user: User | None,
+    ) -> None:
+        if asset.asset_type == AssetType.AVATAR.value:
             return
 
         if user is None:
@@ -94,7 +101,15 @@ class AssetService:
                 reason=ErrorReason.MISSING_AUTHORIZATION_TOKEN,
             )
 
-        if asset.asset_type == AssetType.FEEDBACK_IMAGE:
+        if asset.asset_type == AssetType.MAP_BACKGROUND.value:
+            if await self.tabletop_repo.user_can_read_map_asset(
+                db,
+                asset_id=asset.id,
+                user_id=user.id,
+            ):
+                return
+
+        if asset.asset_type == AssetType.FEEDBACK_IMAGE.value:
             if asset.owner_id == user.id:
                 return
             try:

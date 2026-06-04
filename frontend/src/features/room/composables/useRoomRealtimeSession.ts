@@ -8,9 +8,20 @@ import {
   type RoomRealtimeSessionClosed,
   type RoomRealtimeSnapshot,
 } from "@/infra/realtime/roomRealtime";
+import type {
+  RoomDrawing,
+  RoomMap,
+  RoomTabletopSettings,
+} from "@/infra/api/rooms.api";
 import type { MessageResponse } from "@/infra/api/messages.api";
 import { useAuthStore } from "@/stores/auth.store";
 import { useMessagesStore } from "@/stores/messages.store";
+import { useTabletopStore } from "@/stores/tabletop.store";
+
+import type {
+  PointerLaserPayload,
+  PointerPresencePayload,
+} from "@/infra/realtime/tabletopRealtime";
 
 type UseRoomRealtimeSessionOptions = {
   roomId: Ref<number>;
@@ -18,6 +29,8 @@ type UseRoomRealtimeSessionOptions = {
   refreshRoomMembers: () => void | Promise<void>;
   refreshRoomRequests: () => void | Promise<void>;
   onSessionClosed?: (payload: RoomRealtimeSessionClosed) => void;
+  onPointerPresence?: (payload: PointerPresencePayload) => void;
+  onPointerLaser?: (payload: PointerLaserPayload) => void;
 };
 
 function payloadRoomId(payload: unknown) {
@@ -41,6 +54,7 @@ function normalizePresentUserIds(snapshot: RoomRealtimeSnapshot) {
 export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
   const auth = useAuthStore();
   const messagesStore = useMessagesStore();
+  const tabletopStore = useTabletopStore();
   const presentUserIds = ref<number[]>([]);
   const hasPresenceSnapshot = ref(false);
   const isRealtimeActive = ref(false);
@@ -164,6 +178,45 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
       wsClient.onEvent<RoomRealtimePresenceState>("room_user_presence", handlePresence),
       wsClient.onEvent<MessageResponse>("message", handleMessage),
       wsClient.onEvent<RoomRealtimeSessionClosed>("session_closed", handleSessionClosed),
+      wsClient.onEvent<{ room_id: number; settings: RoomTabletopSettings }>(
+        "tabletop_settings_updated",
+        (payload) => {
+          if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+          tabletopStore.applySettings(options.roomId.value, payload.settings);
+        },
+      ),
+      wsClient.onEvent<{ room_id: number; map: RoomMap }>("map_created", (payload) => {
+        if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+        tabletopStore.applyMapCreated(options.roomId.value, payload.map);
+      }),
+      wsClient.onEvent<{ room_id: number; map: RoomMap }>("map_updated", (payload) => {
+        if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+        tabletopStore.applyMapUpdated(options.roomId.value, payload.map);
+      }),
+      wsClient.onEvent<{ room_id: number; map_id: number }>("map_deleted", (payload) => {
+        if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+        tabletopStore.applyMapDeleted(options.roomId.value, payload.map_id);
+      }),
+      wsClient.onEvent<{ room_id: number; drawing: RoomDrawing }>("drawing_created", (payload) => {
+        if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+        tabletopStore.applyDrawingCreated(options.roomId.value, payload.drawing);
+      }),
+      wsClient.onEvent<{ room_id: number; drawing: RoomDrawing }>("drawing_updated", (payload) => {
+        if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+        tabletopStore.applyDrawingUpdated(options.roomId.value, payload.drawing);
+      }),
+      wsClient.onEvent<{ room_id: number; drawing_ids: number[] }>("drawing_deleted", (payload) => {
+        if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+        tabletopStore.applyDrawingsDeleted(options.roomId.value, payload.drawing_ids);
+      }),
+      wsClient.onEvent<PointerPresencePayload>("pointer_presence", (payload) => {
+        if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+        options.onPointerPresence?.(payload);
+      }),
+      wsClient.onEvent<PointerLaserPayload>("pointer_laser", (payload) => {
+        if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+        options.onPointerLaser?.(payload);
+      }),
     ];
   }
 

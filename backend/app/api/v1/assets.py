@@ -19,7 +19,7 @@ async def get_asset_content(
     current_user: User | None = Depends(get_optional_current_user),
 ) -> FileResponse:
     asset = await asset_service.get_asset_by_id(db, asset_id)
-    asset_service.require_asset_access(asset, current_user)
+    await asset_service.require_asset_access(db, asset, current_user)
     return FileResponse(
         asset_service.asset_file_path(asset),
         media_type=asset.content_type,

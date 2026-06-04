@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -189,3 +189,90 @@ class RoomPersonalMemo(Base):
 
     user: Mapped["User"] = relationship("User")
     room: Mapped["Room"] = relationship("Room")
+
+
+class RoomTabletopSettings(Base):
+    __tablename__ = "room_tabletop_settings"
+
+    room_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("rooms.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    grid_cell_ft: Mapped[float] = mapped_column(Float, nullable=False, default=5.0, server_default="5")
+    grid_cell_px: Mapped[int] = mapped_column(Integer, nullable=False, default=40, server_default="40")
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    room: Mapped["Room"] = relationship("Room")
+
+
+class RoomMap(Base):
+    __tablename__ = "room_maps"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    room_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("rooms.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    asset_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("assets.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    x: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
+    y: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
+    scale: Mapped[float] = mapped_column(Float, nullable=False, default=1.0, server_default="1")
+    locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    z_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    room: Mapped["Room"] = relationship("Room")
+
+
+class RoomDrawing(Base):
+    __tablename__ = "room_drawings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    room_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("rooms.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    geometry: Mapped[dict] = mapped_column(JSON, nullable=False)
+    style: Mapped[dict] = mapped_column(JSON, nullable=False)
+    z_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_by_user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    room: Mapped["Room"] = relationship("Room")
+    created_by: Mapped["User"] = relationship("User")

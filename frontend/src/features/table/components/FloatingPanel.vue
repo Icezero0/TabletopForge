@@ -14,7 +14,7 @@ const props = withDefaults(
     storageKey?: string;
     defaultCollapsed?: boolean;
     inline?: boolean;
-    variant?: "governance" | "chat" | "tools" | "assets" | "info" | "memo" | "character_list";
+    variant?: "governance" | "chat" | "tools" | "assets" | "info" | "memo";
   }>(),
   {
     anchor: "top-left",
@@ -231,13 +231,8 @@ watch(
 }
 
 .floatingPanel.info .panelBody,
-.floatingPanel.memo .panelBody,
-.floatingPanel.character_list .panelBody {
+.floatingPanel.memo .panelBody {
   padding: 0 12px 12px;
-}
-
-.floatingPanel.character_list .panelBody {
-  max-height: min(28vh, 200px);
 }
 
 @media (max-width: 720px) {

@@ -86,6 +86,143 @@ class RealtimePublisher:
             data=message.model_dump(mode="json"),
         )
 
+    async def publish_tabletop_settings_updated(
+        self,
+        *,
+        room_id: int,
+        settings: dict[str, Any],
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.TABLETOP_SETTINGS_UPDATED,
+            data={"room_id": room_id, "settings": settings},
+        )
+
+    async def publish_map_created(
+        self,
+        *,
+        room_id: int,
+        map_data: dict[str, Any],
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.MAP_CREATED,
+            data={"room_id": room_id, "map": map_data},
+        )
+
+    async def publish_map_updated(
+        self,
+        *,
+        room_id: int,
+        map_data: dict[str, Any],
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.MAP_UPDATED,
+            data={"room_id": room_id, "map": map_data},
+        )
+
+    async def publish_map_deleted(
+        self,
+        *,
+        room_id: int,
+        map_id: int,
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.MAP_DELETED,
+            data={"room_id": room_id, "map_id": map_id},
+        )
+
+    async def publish_drawing_created(
+        self,
+        *,
+        room_id: int,
+        drawing: dict[str, Any],
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.DRAWING_CREATED,
+            data={"room_id": room_id, "drawing": drawing},
+        )
+
+    async def publish_drawing_updated(
+        self,
+        *,
+        room_id: int,
+        drawing: dict[str, Any],
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.DRAWING_UPDATED,
+            data={"room_id": room_id, "drawing": drawing},
+        )
+
+    async def publish_drawing_deleted(
+        self,
+        *,
+        room_id: int,
+        drawing_ids: list[int],
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.DRAWING_DELETED,
+            data={"room_id": room_id, "drawing_ids": drawing_ids},
+        )
+
+    async def publish_pointer_presence(
+        self,
+        *,
+        room_id: int,
+        user_id: int,
+        display_name: str,
+        x: float,
+        y: float,
+        exclude_connection_ids: set[str] | None = None,
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.POINTER_PRESENCE,
+            data={
+                "room_id": room_id,
+                "user_id": user_id,
+                "display_name": display_name,
+                "x": x,
+                "y": y,
+            },
+            exclude_connection_ids=exclude_connection_ids,
+        )
+
+    async def publish_pointer_laser(
+        self,
+        *,
+        room_id: int,
+        user_id: int,
+        display_name: str,
+        active: bool,
+        x1: float,
+        y1: float,
+        x2: float | None = None,
+        y2: float | None = None,
+    ) -> None:
+        data: dict[str, Any] = {
+            "room_id": room_id,
+            "user_id": user_id,
+            "display_name": display_name,
+            "active": active,
+            "x1": x1,
+            "y1": y1,
+        }
+        if x2 is not None:
+            data["x2"] = x2
+        if y2 is not None:
+            data["y2"] = y2
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.POINTER_LASER,
+            data=data,
+        )
+
     async def publish_room_user_presence(
         self,
         *,

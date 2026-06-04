@@ -14,6 +14,7 @@ from app.realtime.constants import WsCommandAction, WsErrorCode, WsMessageType
 from app.realtime.handlers.auth import AuthHandler
 from app.realtime.handlers.heartbeat import HeartbeatHandler
 from app.realtime.handlers.room import RoomCommandHandler
+from app.realtime.handlers.tabletop import TabletopCommandHandler
 from app.realtime.manager import RealtimeManager, WsConnection
 from app.realtime.protocol import (
     WsCommandPayload,
@@ -38,6 +39,7 @@ class RealtimeMessageHandler:
         self.room_handler = RoomCommandHandler(
             presence_service=presence_service,
         )
+        self.tabletop_handler = TabletopCommandHandler()
 
     async def handle(
         self,
@@ -172,6 +174,19 @@ class RealtimeMessageHandler:
                 connection=connection,
                 command=command,
             )
+
+        if command.action in {
+            WsCommandAction.POINTER_PRESENCE,
+            WsCommandAction.POINTER_LASER,
+        }:
+            await self.tabletop_handler.handle(
+                db=db,
+                manager=manager,
+                publisher=publisher,
+                connection=connection,
+                command=command,
+            )
+            return None
 
         raise BadRequestError(
             f"Unsupported command action: {command.action}",

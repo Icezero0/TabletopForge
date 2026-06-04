@@ -144,7 +144,82 @@ CHARACTER_EFFECT_ADDED
 CHARACTER_EFFECT_REMOVED
 ```
 
-## 6.4 场景地图事件
+## 6.4 跑团桌面 Tabletop 事件（MVP）
+
+房间频道广播；payload 含 `room_id`，变更类事件含实体快照字段。
+
+```text
+tabletop_settings_updated
+map_created
+map_updated
+map_deleted
+drawing_created
+drawing_updated
+drawing_deleted
+pointer_presence
+pointer_laser
+```
+
+**Pointer COMMAND**（须已 `room_enter`；发送方 `game_role` 为 GM/PL；OB 仅接收）：
+
+```text
+pointer_presence   # data: { room_id, x, y } 场景坐标
+pointer_laser      # data: { room_id, active, x1, y1, x2?, y2? }；active=false 表示松手结束
+```
+
+**Pointer EVENT**（广播）：
+
+```json
+{
+  "event": "pointer_presence",
+  "data": {
+    "room_id": 1,
+    "user_id": 2,
+    "display_name": "Alice",
+    "x": 120.5,
+    "y": 340.0
+  }
+}
+```
+
+```json
+{
+  "event": "pointer_laser",
+  "data": {
+    "room_id": 1,
+    "user_id": 2,
+    "display_name": "Alice",
+    "active": true,
+    "x1": 10,
+    "y1": 20,
+    "x2": 80,
+    "y2": 60
+  }
+}
+```
+
+示例（`map_created`）：
+
+```json
+{
+  "type": "EVENT",
+  "event": "map_created",
+  "payload": {
+    "room_id": 1,
+    "map": {
+      "id": 10,
+      "asset_id": 42,
+      "x": 0,
+      "y": 0,
+      "scale": 1,
+      "locked": false,
+      "z_index": 0
+    }
+  }
+}
+```
+
+## 6.5 场景归档事件（后续，非 MVP）
 
 ```text
 SCENE_CREATED
@@ -153,7 +228,7 @@ SCENE_CHANGED
 MAP_UPDATED
 ```
 
-## 6.5 Token 事件
+## 6.6 Token 事件
 
 ```text
 TOKEN_CREATED
@@ -162,19 +237,19 @@ TOKEN_UPDATED
 TOKEN_DELETED
 ```
 
-## 6.6 骰子事件
+## 6.7 骰子事件
 
 ```text
 DICE_ROLLED
 ```
 
-## 6.7 日志事件
+## 6.8 日志事件
 
 ```text
 OPERATION_LOG_CREATED
 ```
 
-## 6.8 战斗事件
+## 6.9 战斗事件
 
 ```text
 COMBAT_STARTED

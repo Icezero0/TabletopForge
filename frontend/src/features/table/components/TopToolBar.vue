@@ -79,7 +79,7 @@ function selectTool(mode: TableToolMode) {
       >
         <MinusIcon class="toolIcon" aria-hidden="true" />
       </button>
-      <span class="scaleValue">{{ t("table.tools.gridScaleValue", { ft: gridCellFt ?? 5, px: gridCellPx }) }}</span>
+      <span class="scaleValue">{{ t("table.tools.gridScaleValue", { ft: gridCellFt, px: gridCellPx }) }}</span>
       <button
         type="button"
         class="toolBtn scaleBtn"

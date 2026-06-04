@@ -311,7 +311,53 @@ updated_at
 
 # 6 地图桌面
 
-## 6.1 scenes
+> **MVP（Step 4）**：扁平 room 表 `room_tabletop_settings`、`room_maps`、`room_drawings`（见 §6.0）。§6.1–6.2 的 `scenes` / `scene_maps` 为后续多场景归档预留。
+
+## 6.0 MVP：room tabletop（已实现中）
+
+### room_tabletop_settings
+
+用途：房间跑团桌面网格尺度（全员一致）。
+
+```text
+room_id          PK, FK rooms
+grid_cell_ft     float，默认 5
+grid_cell_px     int，默认 40
+updated_at
+```
+
+### room_maps
+
+用途：地图 band 底图（effective z = 0 + z_index）。每房间可多行，由 GM 管理。
+
+```text
+id
+room_id
+asset_id         FK assets（map_background）
+x, y, scale
+locked
+z_index          类内序号
+created_at, updated_at
+```
+
+### room_drawings
+
+用途：绘制 band（effective z = 200 + z_index）。
+
+```text
+id
+room_id
+kind             brush | line | rect | ellipse | text
+geometry         JSON，场景坐标
+style            JSON，颜色/线宽/字号等
+z_index
+created_by_user_id
+created_at, updated_at
+```
+
+---
+
+## 6.1 scenes（后续，非 MVP）
 
 用途：房间内场景。
 
@@ -412,6 +458,7 @@ created_at
 ```text
 avatar
 feedback_image
+map_background    # Step 4：房间地图底图；同房间成员可读 content
 ```
 
 说明：

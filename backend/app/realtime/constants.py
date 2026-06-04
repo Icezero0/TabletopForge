@@ -19,6 +19,8 @@ class WsCommandAction(StrEnum):
     ROOM_ENTER = "room_enter"
     ROOM_LEAVE = "room_leave"
     ROOM_PRESENCE_GET = "room_presence_get"
+    POINTER_PRESENCE = "pointer_presence"
+    POINTER_LASER = "pointer_laser"
 
 
 class WsEventType(StrEnum):
@@ -31,6 +33,16 @@ class WsEventType(StrEnum):
     SESSION_CLOSED = "session_closed"
 
     MESSAGE = "message"
+
+    TABLETOP_SETTINGS_UPDATED = "tabletop_settings_updated"
+    MAP_CREATED = "map_created"
+    MAP_UPDATED = "map_updated"
+    MAP_DELETED = "map_deleted"
+    DRAWING_CREATED = "drawing_created"
+    DRAWING_UPDATED = "drawing_updated"
+    DRAWING_DELETED = "drawing_deleted"
+    POINTER_PRESENCE = "pointer_presence"
+    POINTER_LASER = "pointer_laser"
 
 
 class WsErrorCode(StrEnum):

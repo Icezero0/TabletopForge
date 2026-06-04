@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -30,6 +30,18 @@ from app.modules.rooms.personal_memo.schemas import (
     RoomPersonalMemoResponse,
 )
 from app.modules.rooms.personal_memo.service import RoomPersonalMemoService
+from app.modules.rooms.tabletop.schemas import (
+    RoomDrawingCreate,
+    RoomDrawingPatch,
+    RoomDrawingResponse,
+    RoomDrawingsBulkDelete,
+    RoomMapPatch,
+    RoomMapResponse,
+    RoomTabletopSettingsPatch,
+    RoomTabletopSettingsResponse,
+    RoomTabletopSnapshotResponse,
+)
+from app.modules.rooms.tabletop.service import RoomTabletopService
 from app.modules.rooms.room.schemas import (
     RoomCreate,
     RoomListResponse,
@@ -51,6 +63,7 @@ room_service = RoomService()
 membership_service = RoomMembershipService()
 join_request_service = RoomJoinRequestService()
 personal_memo_service = RoomPersonalMemoService()
+tabletop_service = RoomTabletopService()
 
 
 @router.post("", response_model=RoomResponse, status_code=status.HTTP_201_CREATED)
@@ -189,6 +202,182 @@ async def put_room_personal_memo(
         content=payload.content,
     )
     return RoomPersonalMemoResponse.model_validate(memo)
+
+
+@router.get("/{room_id}/tabletop", response_model=RoomTabletopSnapshotResponse)
+async def get_room_tabletop(
+    room_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RoomTabletopSnapshotResponse:
+    return await tabletop_service.get_snapshot(
+        db,
+        room_id=room_id,
+        user=current_user,
+    )
+
+
+@router.patch(
+    "/{room_id}/tabletop/settings",
+    response_model=RoomTabletopSettingsResponse,
+)
+async def patch_room_tabletop_settings(
+    room_id: int,
+    payload: RoomTabletopSettingsPatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> RoomTabletopSettingsResponse:
+    settings = await tabletop_service.patch_settings(
+        db,
+        room_id=room_id,
+        user=current_user,
+        payload=payload,
+    )
+    await publisher.publish_tabletop_settings_updated(
+        room_id=room_id,
+        settings=settings.model_dump(mode="json"),
+    )
+    return settings
+
+
+@router.post(
+    "/{room_id}/maps",
+    response_model=RoomMapResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_room_map(
+    room_id: int,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> RoomMapResponse:
+    room_map = await tabletop_service.create_map(
+        db,
+        room_id=room_id,
+        user=current_user,
+        file=file,
+    )
+    await publisher.publish_map_created(
+        room_id=room_id,
+        map_data=room_map.model_dump(mode="json"),
+    )
+    return room_map
+
+
+@router.patch("/{room_id}/maps/{map_id}", response_model=RoomMapResponse)
+async def patch_room_map(
+    room_id: int,
+    map_id: int,
+    payload: RoomMapPatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> RoomMapResponse:
+    room_map = await tabletop_service.patch_map(
+        db,
+        room_id=room_id,
+        map_id=map_id,
+        user=current_user,
+        payload=payload,
+    )
+    await publisher.publish_map_updated(
+        room_id=room_id,
+        map_data=room_map.model_dump(mode="json"),
+    )
+    return room_map
+
+
+@router.delete("/{room_id}/maps/{map_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_room_map(
+    room_id: int,
+    map_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> Response:
+    await tabletop_service.delete_map(
+        db,
+        room_id=room_id,
+        map_id=map_id,
+        user=current_user,
+    )
+    await publisher.publish_map_deleted(room_id=room_id, map_id=map_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{room_id}/drawings",
+    response_model=RoomDrawingResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_room_drawing(
+    room_id: int,
+    payload: RoomDrawingCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> RoomDrawingResponse:
+    drawing = await tabletop_service.create_drawing(
+        db,
+        room_id=room_id,
+        user=current_user,
+        payload=payload,
+    )
+    await publisher.publish_drawing_created(
+        room_id=room_id,
+        drawing=drawing.model_dump(mode="json"),
+    )
+    return drawing
+
+
+@router.patch(
+    "/{room_id}/drawings/{drawing_id}",
+    response_model=RoomDrawingResponse,
+)
+async def patch_room_drawing(
+    room_id: int,
+    drawing_id: int,
+    payload: RoomDrawingPatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> RoomDrawingResponse:
+    drawing = await tabletop_service.patch_drawing(
+        db,
+        room_id=room_id,
+        drawing_id=drawing_id,
+        user=current_user,
+        payload=payload,
+    )
+    await publisher.publish_drawing_updated(
+        room_id=room_id,
+        drawing=drawing.model_dump(mode="json"),
+    )
+    return drawing
+
+
+@router.delete("/{room_id}/drawings", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_room_drawings(
+    room_id: int,
+    payload: RoomDrawingsBulkDelete,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> Response:
+    deleted_ids = await tabletop_service.delete_drawings(
+        db,
+        room_id=room_id,
+        user=current_user,
+        drawing_ids=payload.ids,
+    )
+    if deleted_ids:
+        await publisher.publish_drawing_deleted(
+            room_id=room_id,
+            drawing_ids=deleted_ids,
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/{room_id}/join-requests", response_model=RoomJoinRequestListResponse)

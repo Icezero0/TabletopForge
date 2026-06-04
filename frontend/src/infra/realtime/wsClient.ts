@@ -3,7 +3,9 @@ type WSMessageType = "auth" | "heartbeat" | "command" | "event" | "error" | "ack
 export type WSCommandAction =
   | "room_enter"
   | "room_leave"
-  | "room_presence_get";
+  | "room_presence_get"
+  | "pointer_presence"
+  | "pointer_laser";
 
 export type WSEventName =
   | "notification"
@@ -11,7 +13,16 @@ export type WSEventName =
   | "room_members"
   | "room_user_presence"
   | "session_closed"
-  | "message";
+  | "message"
+  | "tabletop_settings_updated"
+  | "map_created"
+  | "map_updated"
+  | "map_deleted"
+  | "drawing_created"
+  | "drawing_updated"
+  | "drawing_deleted"
+  | "pointer_presence"
+  | "pointer_laser";
 
 export type WSErrorCode =
   | "unauthorized"
@@ -300,6 +311,23 @@ class WSClient {
 
       this.sendEnvelope(envelope);
     });
+  }
+
+  /** Fire-and-forget command (no ack wait). Used for high-frequency pointer updates. */
+  sendCommand<TData = Record<string, unknown>>(action: WSCommandAction, data: TData) {
+    if (!this.ws || this.status !== "ready") return;
+
+    const envelope: WSCommandEnvelope<TData> = {
+      v: WS_PROTOCOL_VERSION,
+      type: "command",
+      payload: {
+        request_id: createRequestId(action),
+        action,
+        data,
+      },
+    };
+
+    this.sendEnvelope(envelope);
   }
 
   sendHeartbeat() {

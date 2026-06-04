@@ -314,3 +314,126 @@ export async function putRoomPersonalMemo(
   );
   return data;
 }
+
+export type DrawingKind = "brush" | "line" | "rect" | "ellipse" | "text";
+
+export type RoomTabletopSettings = {
+  grid_cell_ft: number;
+  grid_cell_px: number;
+  updated_at: string | null;
+};
+
+export type RoomMap = {
+  id: number;
+  room_id: number;
+  asset_id: number;
+  x: number;
+  y: number;
+  scale: number;
+  locked: boolean;
+  z_index: number;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type RoomDrawing = {
+  id: number;
+  room_id: number;
+  kind: DrawingKind;
+  geometry: Record<string, unknown>;
+  style: Record<string, unknown>;
+  z_index: number;
+  created_by_user_id: number;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type RoomTabletopSnapshot = {
+  settings: RoomTabletopSettings;
+  maps: RoomMap[];
+  drawings: RoomDrawing[];
+};
+
+export function assetContentUrl(assetId: number) {
+  return `/assets/${assetId}/content`;
+}
+
+export async function getRoomTabletop(roomId: number) {
+  const { data } = await http.get<RoomTabletopSnapshot>(`/rooms/${roomId}/tabletop`);
+  return data;
+}
+
+export async function patchRoomTabletopSettings(
+  roomId: number,
+  payload: { grid_cell_ft?: number; grid_cell_px?: number },
+) {
+  const { data } = await http.patch<RoomTabletopSettings>(
+    `/rooms/${roomId}/tabletop/settings`,
+    payload,
+  );
+  return data;
+}
+
+export async function postRoomMap(roomId: number, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const { data } = await http.post<RoomMap>(`/rooms/${roomId}/maps`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function patchRoomMap(
+  roomId: number,
+  mapId: number,
+  payload: {
+    x?: number;
+    y?: number;
+    scale?: number;
+    locked?: boolean;
+    z_index?: number;
+  },
+) {
+  const { data } = await http.patch<RoomMap>(
+    `/rooms/${roomId}/maps/${mapId}`,
+    payload,
+  );
+  return data;
+}
+
+export async function deleteRoomMap(roomId: number, mapId: number) {
+  await http.delete(`/rooms/${roomId}/maps/${mapId}`);
+}
+
+export async function postRoomDrawing(
+  roomId: number,
+  payload: {
+    kind: DrawingKind;
+    geometry: Record<string, unknown>;
+    style?: Record<string, unknown>;
+    z_index?: number;
+  },
+) {
+  const { data } = await http.post<RoomDrawing>(`/rooms/${roomId}/drawings`, payload);
+  return data;
+}
+
+export async function patchRoomDrawing(
+  roomId: number,
+  drawingId: number,
+  payload: {
+    geometry?: Record<string, unknown>;
+    style?: Record<string, unknown>;
+    z_index?: number;
+  },
+) {
+  const { data } = await http.patch<RoomDrawing>(
+    `/rooms/${roomId}/drawings/${drawingId}`,
+    payload,
+  );
+  return data;
+}
+
+export async function deleteRoomDrawings(roomId: number, ids: number[]) {
+  await http.delete(`/rooms/${roomId}/drawings`, { data: { ids } });
+}

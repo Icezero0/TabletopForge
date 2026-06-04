@@ -90,6 +90,15 @@ DELETE /rooms/{room_id}/members/me
 
 GET    /rooms/{room_id}/personal-memo
 PUT    /rooms/{room_id}/personal-memo
+
+GET    /rooms/{room_id}/tabletop
+PATCH  /rooms/{room_id}/tabletop/settings
+POST   /rooms/{room_id}/maps
+PATCH  /rooms/{room_id}/maps/{map_id}
+DELETE /rooms/{room_id}/maps/{map_id}
+POST   /rooms/{room_id}/drawings
+PATCH  /rooms/{room_id}/drawings/{drawing_id}
+DELETE /rooms/{room_id}/drawings
 ```
 
 **个人备忘录**（`room_personal_memos`）：仅当前登录用户读写本人在该房间的记录；须为房间成员，否则 `403`。不通过 WebSocket 同步。
@@ -189,7 +198,40 @@ POST  /characters/{character_id}/resources/{resource_id}/change
 
 ---
 
-# 12 场景与地图 API
+# 12 跑团桌面 Tabletop API（MVP，扁平 room 模型）
+
+> Campaign / Session / Scene 多场景 API 见下文「后续」；MVP 以房间为边界，见 `working-note/04-map-core.md`。
+
+```text
+GET    /rooms/{room_id}/tabletop
+PATCH  /rooms/{room_id}/tabletop/settings
+POST   /rooms/{room_id}/maps              # multipart: file=图片
+PATCH  /rooms/{room_id}/maps/{map_id}
+DELETE /rooms/{room_id}/maps/{map_id}
+POST   /rooms/{room_id}/drawings
+PATCH  /rooms/{room_id}/drawings/{drawing_id}
+DELETE /rooms/{room_id}/drawings          # body: { "ids": [1, 2] }
+```
+
+权限（`game_role`，见 `08` §6.4）：
+
+| 操作 | GM | PL | OB |
+|---|---|---|---|
+| GET tabletop | ✓ | ✓ | ✓ |
+| PATCH settings（grid_cell_ft/px） | ✓ | — | — |
+| POST/PATCH/DELETE maps | ✓ | — | — |
+| POST/PATCH drawings | ✓ | ✓ | — |
+| DELETE drawings（含批量） | ✓ | ✓ | — |
+
+`GET /tabletop` 响应：`settings`、`maps[]`、`drawings[]` 快照。
+
+`POST /maps`：上传 `map_background` asset 并创建 `room_maps` 行；MVP **每房间至多 1 张底图**。
+
+触发 WS 事件：`map_created`、`map_updated`、`map_deleted`、`drawing_created`、`drawing_updated`、`drawing_deleted`、`tabletop_settings_updated`（见 `06_websocket_protocol.md`）。
+
+---
+
+## 12.1 后续：场景与地图 API（非 MVP）
 
 ```text
 POST   /rooms/{room_id}/scenes
@@ -198,13 +240,10 @@ GET    /scenes/{scene_id}
 PATCH  /scenes/{scene_id}
 DELETE /scenes/{scene_id}
 POST   /rooms/{room_id}/current-scene
-
 PATCH  /scenes/{scene_id}/map
 ```
 
-触发事件：
-
-- 后续实现场景地图模块后定义。
+实现 Campaign/Session/Scene 归档后再定义。
 
 ---
 

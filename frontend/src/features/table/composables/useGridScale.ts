@@ -6,29 +6,14 @@ import {
   MAX_GRID_CELL_PX,
   MIN_GRID_CELL_PX,
 } from "@/features/table/constants";
+import { useTabletopStore } from "@/stores/tabletop.store";
 
-export function useGridScale(roomId: Ref<number>) {
+export function useGridScale(
+  roomId: Ref<number>,
+  options?: { canEdit?: Ref<boolean> },
+) {
+  const tabletopStore = useTabletopStore();
   const gridCellPx = ref(DEFAULT_GRID_CELL_PX);
-
-  function storageKey() {
-    return `tabletop:room:${roomId.value}:grid-cell-px`;
-  }
-
-  function load() {
-    if (!roomId.value || typeof localStorage === "undefined") return;
-    const raw = localStorage.getItem(storageKey());
-    const parsed = raw ? Number(raw) : NaN;
-    if (Number.isFinite(parsed)) {
-      gridCellPx.value = clampGridCellPx(parsed);
-    } else {
-      gridCellPx.value = DEFAULT_GRID_CELL_PX;
-    }
-  }
-
-  function persist() {
-    if (!roomId.value || typeof localStorage === "undefined") return;
-    localStorage.setItem(storageKey(), String(gridCellPx.value));
-  }
 
   function clampGridCellPx(value: number) {
     return Math.min(
@@ -37,33 +22,53 @@ export function useGridScale(roomId: Ref<number>) {
     );
   }
 
-  function increase() {
-    gridCellPx.value = clampGridCellPx(gridCellPx.value + GRID_CELL_PX_STEP);
-    persist();
+  const settings = computed(() => tabletopStore.getSettings(roomId.value));
+
+  watch(
+    settings,
+    (value) => {
+      if (value?.grid_cell_px) {
+        gridCellPx.value = clampGridCellPx(value.grid_cell_px);
+      }
+    },
+    { immediate: true },
+  );
+
+  const gridCellFt = computed(() => GRID_CELL_FT);
+
+  async function persistGridCellPx(next: number) {
+    gridCellPx.value = next;
+    if (options?.canEdit?.value && roomId.value) {
+      await tabletopStore.updateSettings(roomId.value, { grid_cell_px: next });
+    }
   }
 
-  function decrease() {
-    gridCellPx.value = clampGridCellPx(gridCellPx.value - GRID_CELL_PX_STEP);
-    persist();
+  async function increase() {
+    const next = clampGridCellPx(gridCellPx.value + GRID_CELL_PX_STEP);
+    await persistGridCellPx(next);
+  }
+
+  async function decrease() {
+    const next = clampGridCellPx(gridCellPx.value - GRID_CELL_PX_STEP);
+    await persistGridCellPx(next);
   }
 
   const canIncrease = computed(() => gridCellPx.value < MAX_GRID_CELL_PX);
   const canDecrease = computed(() => gridCellPx.value > MIN_GRID_CELL_PX);
+  const canEditGrid = computed(() => options?.canEdit?.value ?? false);
 
   const scaleBarCells = 5;
-  const scaleBarFt = computed(() => GRID_CELL_FT * scaleBarCells);
+  const scaleBarFt = computed(() => gridCellFt.value * scaleBarCells);
   const scaleBarWidthPx = computed(() => gridCellPx.value * scaleBarCells);
-
-  watch(roomId, () => load(), { immediate: true });
 
   return {
     gridCellPx,
-    gridCellFt: GRID_CELL_FT,
+    gridCellFt,
     scaleBarCells,
     scaleBarFt,
     scaleBarWidthPx,
-    canIncrease,
-    canDecrease,
+    canIncrease: computed(() => canEditGrid.value && canIncrease.value),
+    canDecrease: computed(() => canEditGrid.value && canDecrease.value),
     increase,
     decrease,
   };
