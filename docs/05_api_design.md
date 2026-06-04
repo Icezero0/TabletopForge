@@ -48,6 +48,7 @@ GET  /auth/me
 GET   /users/me
 PATCH /users/me
 POST  /users/me/avatar
+GET   /users/me/avatar-history
 GET   /users/me/rooms
 GET   /users/me/owned-rooms
 GET   /users
@@ -239,21 +240,33 @@ DELETE /tokens/{token_id}
 
 - `avatar`：用户头像。
 - `feedback_image`：反馈图片。
+- `image`：用户资源库中的通用图片。
+- `audio`：用户资源库中的通用音频。
 
-业务资源库中的长期 `image`，以及地图、Token、handout 等业务用途，后续在业务模块落地时再扩展。
+地图、Token、handout 等游戏语义层用途后续在业务模块落地时再扩展。
 
 ```text
+POST   /assets
+GET    /assets
+GET    /assets/{asset_id}
 GET    /assets/{asset_id}/content
+DELETE /assets/{asset_id}
 POST   /users/me/avatar
+GET    /users/me/avatar-history
 POST   /feedback
 ```
 
 说明：
 
-- `POST /users/me/avatar` 以 multipart 上传头像图片。
+- `POST /assets` 以 multipart 上传用户资源库 `image` / `audio`；后端按 SHA-256、大小、MIME 与类型去重，命中已有文件时复用 asset 并增加 `ref_count`。
+- `GET /assets` 分页列出用户资源库 asset，可按 `asset_type=image|audio` 过滤。
+- `GET /assets/{asset_id}` 返回 asset 元数据。
+- `DELETE /assets/{asset_id}` 释放一次用户资源库 asset 引用；`ref_count` 归零后才删除元数据和文件。
+- `POST /users/me/avatar` 以 multipart 上传头像图片；后端按 SHA-256、大小、MIME 与类型去重，命中已有头像文件时复用 asset 并增加 `ref_count`。
+- `GET /users/me/avatar-history` 分页返回当前用户的历史头像记录。当前头像仍由 `users.avatar_asset_id` 表示，历史记录作为用户侧对 avatar asset 的引用。
 - `POST /feedback` 可通过 multipart 字段 `images` 上传反馈图片。
-- `GET /assets/{asset_id}/content` 返回图片内容。
-- avatar 当前登录用户可读；feedback_image 仅提交者和具备查看全部反馈权限的 admin 可读。
+- `GET /assets/{asset_id}/content` 返回文件内容。
+- avatar 公开可读；feedback_image 仅提交者和具备查看全部反馈权限的 admin 可读；image/audio 公开可读，供共同游戏使用。
 
 ---
 

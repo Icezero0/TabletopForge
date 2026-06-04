@@ -1,7 +1,8 @@
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
-from app.modules.users.models import User
+from app.modules.users.models import User, UserAvatarHistory
 
 
 class UserRepository:
@@ -79,3 +80,43 @@ class UserRepository:
         await db.flush()
         await db.refresh(user)
         return user
+
+    async def create_avatar_history(
+        self,
+        db: AsyncSession,
+        *,
+        user_id: int,
+        asset_id: int,
+    ) -> UserAvatarHistory:
+        history = UserAvatarHistory(user_id=user_id, asset_id=asset_id)
+        db.add(history)
+        await db.flush()
+        await db.refresh(history)
+        return history
+
+    async def get_avatar_history(
+        self,
+        db: AsyncSession,
+        *,
+        user_id: int,
+        page: int,
+        page_size: int,
+    ) -> tuple[list[UserAvatarHistory], int]:
+        stmt = (
+            select(UserAvatarHistory)
+            .options(joinedload(UserAvatarHistory.asset))
+            .where(UserAvatarHistory.user_id == user_id)
+            .order_by(UserAvatarHistory.created_at.desc(), UserAvatarHistory.id.desc())
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        count_stmt = (
+            select(func.count())
+            .select_from(UserAvatarHistory)
+            .where(UserAvatarHistory.user_id == user_id)
+        )
+
+        result = await db.execute(stmt)
+        items = list(result.scalars().all())
+        total = await db.scalar(count_stmt)
+        return items, int(total or 0)

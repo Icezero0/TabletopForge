@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -12,6 +14,7 @@ from app.core.validators import (
     normalize_optional_non_empty_str,
     normalize_required_str,
 )
+from app.modules.assets.schemas import AssetResponse
 from app.modules.site.constants import SitePermission, SiteRole
 from app.modules.site.permissions import get_permissions_by_role
 
@@ -88,6 +91,29 @@ class UserMeResponse(UserResponse):
     @property
     def site_permissions(self) -> list[SitePermission]:
         return sorted(get_permissions_by_role(self.site_role), key=lambda item: item.value)
+
+
+class UserAvatarHistoryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    asset_id: int
+    created_at: datetime
+    asset: AssetResponse
+
+    @computed_field
+    @property
+    def url(self) -> str:
+        return f"/api/v1/assets/{self.asset_id}/content"
+
+
+class UserAvatarHistoryListResponse(BaseModel):
+    items: list[UserAvatarHistoryResponse] = Field(default_factory=list)
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
 
 
 class UserListResponse(BaseModel):
