@@ -4,6 +4,8 @@
 
 **文档与代码对照**：实现进度见 [`docs/10_repository_status.md`](docs/10_repository_status.md)；产品范围见 [`docs/01_product_requirements.md`](docs/01_product_requirements.md) §4；**各页面功能 / 布局 / 交互流** 见同文档 §5。
 
+**MVP 分步实现边界**（工作笔记，非正式设计）：[`working-note/README.md`](working-note/README.md)。
+
 TabletopForge 是一个面向 TRPG / DND 跑团场景的在线协作桌面系统，目标是提供房间、角色卡、地图桌面、Token、聊天、RP、骰子、日志与实时同步能力。
 
 ## 文档结构
