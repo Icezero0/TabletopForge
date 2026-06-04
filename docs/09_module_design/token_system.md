@@ -1,6 +1,6 @@
 # Token 模块设计
 
-版本：v0.3  
+版本：v0.4  
 状态：Draft
 
 ---
@@ -32,14 +32,14 @@ Token 包含：
 # 3 前端交互
 
 - 从房间角色库 **复用** 已有定义创建 Token
-- 创建 / 编辑 Token（DM 任意定义；member 仅自己创建的角色定义）
+- 创建 / 编辑 Token（GM 任意；PL 仅自己创建的角色定义）
 - 拖拽、缩放（权限内）
 - 选中 Token
 - **删除**：选中 → **右键 Context Menu → 删除**（未选中不可删）
 - 绑定角色
 - 地图上的 **HP 预览**（角色 Token）；怪物 Token 对 member 不显示精确 HP
 
-角色 Token 点击打开角色详情（侧栏 / 抽屉）。怪物 Token：DM 看全量信息与 HP；member 仅看 **累计受伤害 / 伤害记录**。
+角色 Token 点击打开角色详情。怪物 Token：GM 看全量 **CharacterState**；PL 仅看 **累计受伤害 / 伤害记录**。
 
 **缺省图**：绑定角色无 Token 图时，显示 **名称首字**（与 `character_card.md` §3.4 一致）。
 
@@ -47,22 +47,22 @@ Token 包含：
 
 # 4 权限规则
 
-通过 `room_role` 判定，见 `08_permission_design.md` §6.4：
+通过 `game_role` 判定，见 `08_permission_design.md` §6.4：
 
-- `owner` / `manager`：所有 Token 的增删改、移动。
-- `member`：移动绑定 **自己创建的角色定义** 的 Token（含主 PC 与附加角色）；仅可为自己创建的定义新建 Token；不可删除 / 新建 DM 怪物 Token。
+- **GM**：所有 Token 增删改、移动。
+- **PL**：移动并管理绑定 **自己创建角色** 的 Token；不可新建 GM 怪物 Token。
 
 ---
 
 # 5 可见性与 HP
 
-| 对象 | owner / manager | member |
-|---|---|---|
-| 角色 Token HP | 精确当前 HP 等 | 己方角色可见；他人按角色卡权限 |
-| 怪物 Token HP | 精确 current / max HP | **不展示**精确 HP；仅 **伤害记录 / 累计受伤害** |
-| 怪物详情正文 | 可读可编（DM） | 不展示完整私密字段（MVP 怪物为大文本，member 不看 DM 编辑区） |
+| 对象 | GM | PL | OB |
+|---|---|---|---|
+| 角色 Token HP | CharacterState 全量 | 己方全量；他人按策略 | 只读摘要 |
+| 怪物 Token HP | 精确 HP | 仅伤害记录 | 仅伤害记录 |
+| 怪物详情正文 | 可读可编 | 不可编辑 GM 怪物正文 | 只读 |
 
-服务端存储权威 HP；对 member 的 API / WS payload 过滤精确怪物 HP 字段。
+权威 HP 在 **CharacterState**；对 PL 的 API / WS 过滤怪物精确 HP。
 
 ---
 

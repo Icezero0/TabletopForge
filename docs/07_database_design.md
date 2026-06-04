@@ -97,7 +97,9 @@ joined_at
 unique(room_id, user_id)
 ```
 
-当前后端地基只实现 `role = owner | manager | member`。跑团桌面 MVP **不新增** `game_role` 列；DM/玩家权限通过该字段映射（见 `08_permission_design.md` §6.4）。独立 `game_role` 列为长期扩展。
+当前后端地基：`role` = `owner` | `manager` | `member`（`room_role`）。
+
+跑团 MVP 目标：同表增加 `game_role`（`GM` | `PL` | `OB`），与 `role` 独立。见 `08_permission_design.md` §5。
 
 ## 3.3 room_join_requests
 
