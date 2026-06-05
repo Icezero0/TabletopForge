@@ -1,6 +1,6 @@
 # TabletopForge 数据库设计
 
-版本：v0.2  
+版本：v0.3  
 状态：Draft
 
 ---
@@ -252,106 +252,55 @@ updated_at
 
 # 5 角色
 
-## 5.1 characters
+## 5.1 characters（已实现）
 
-用途：角色卡基础信息。
-
-核心字段：
-
-```text
-id
-room_id
-owner_user_id
-name
-character_type
-ruleset
-avatar_asset_id
-race
-class_name
-level
-background
-alignment
-public_bio
-private_notes
-created_at
-updated_at
-deleted_at
-```
-
-## 5.2 character_attributes
-
-用途：DND5E 属性。
+用途：角色卡，按用户所有，存储完整 DnD 5e 角色数据。不绑定房间（用户在多个房间使用同一角色）。
 
 核心字段：
 
 ```text
 id
-character_id
-strength
-dexterity
-constitution
-intelligence
-wisdom
-charisma
+owner_id           FK → users.id，CASCADE DELETE
+name               VARCHAR(255)，从 identity.name 冗余，方便列表查询
+player_name        VARCHAR(255)
+portrait_asset_id  FK → assets.id，SET NULL
+system             VARCHAR(50)，固定 "dnd5e"
+identity           JSON  — 基本信息（种族、职业列表、阵营、图库等）
+flavor             JSON  — 扮演设定（性格、理想、羁绊、缺陷、背景故事）
+attributes         JSON  — 六维属性、派生属性、豁免、技能、熟练项、语言
+features           JSON  — 种族特性、职业特性、自定义字段
+spells             JSON NULLABLE — 法术书、施法属性、法术位等
+equipment          JSON  — 物品列表
+extras             JSON  — 自由备注
 created_at
 updated_at
 ```
 
-## 5.3 character_states
+各 JSON 块的结构详见 `09_module_design/character_card.md` §2。
 
-用途：角色当前状态。
+索引：
 
-核心字段：
+```text
+ix_characters_id
+ix_characters_owner_id
+```
+
+## 5.2 character_states（未落地，规划态）
+
+用途：角色实时状态层（当前 HP / Buff 等高频变更字段），与 `characters` 1:1。
+
+与 characters 拆分的原因：角色定义稳定，状态层在对局中高频变更，需要单独同步与追溯。
+
+核心字段（规划，实现时可调整）：
 
 ```text
 id
-character_id
-max_hp
+character_id       FK → characters.id
 current_hp
+max_hp
 temp_hp
 armor_class
-initiative_bonus
-speed
-death_save_successes
-death_save_failures
-inspiration
-concentration
-created_at
-updated_at
-```
-
-## 5.4 character_resources
-
-用途：角色资源，如法术位、职业资源。
-
-核心字段：
-
-```text
-id
-character_id
-name
-current_value
-max_value
-recovery_type
-sort_order
-created_at
-updated_at
-```
-
-## 5.5 character_effects
-
-用途：角色状态效果。
-
-核心字段：
-
-```text
-id
-character_id
-name
-description
-source
-duration
-created_at
+conditions         JSON，状态效果列表
 updated_at
 ```
 

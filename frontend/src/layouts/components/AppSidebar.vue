@@ -11,6 +11,7 @@ import {
   InformationCircleIcon,
   RectangleStackIcon,
   ShieldCheckIcon,
+  UserGroupIcon,
 } from "@heroicons/vue/24/outline";
 import AppIcon from "@/ui/base/AppIcon.vue";
 import { useAuthStore } from "@/stores/auth.store";
@@ -40,6 +41,11 @@ const items = computed(() => [
     to: linkTarget("/library"),
     label: t("sidebar.library"),
     icon: RectangleStackIcon,
+  },
+  {
+    to: linkTarget("/characters"),
+    label: t("sidebar.characters"),
+    icon: UserGroupIcon,
   },
   {
     to: linkTarget("/join-requests"),

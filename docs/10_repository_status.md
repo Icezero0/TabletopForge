@@ -1,8 +1,8 @@
 # TabletopForge 仓库现状
 
-版本：v0.2  
+版本：v0.3  
 状态：Living Document  
-最后核对：2026-06-04（文档与 MVP 需求同步）
+最后核对：2026-06-06（角色卡模块落地后同步）
 仓库：`Icezero0/TabletopForge`（`main`）
 
 ---
@@ -65,20 +65,21 @@ TabletopForge/
 | 入房审批 | `rooms/join_request` | `JoinRequestsPage`、房间 Requests Tab | `room_join_requests` |
 | 站内通知 | `notifications` | `NotificationsPage` | `notifications` |
 | 房间普通聊天 | `messages` + realtime 广播 | `RoomChatTab`, `ChatPanel` | `messages` |
-| 头像 / 头像历史 / 反馈截图 / 底层 image/audio | `assets`, `users` | 资料编辑、联系页截图上传；业务资源库页面待接入 | `assets`, `user_avatar_history` |
+| 头像 / 头像历史 / 反馈截图 / 底层 image/audio | `assets`, `users` | 资料编辑、联系页截图上传；资源库页面 | `assets`, `user_avatar_history` |
 | 用户反馈 | `feedback` | `ContactPage`, `FeedbackAdminPage` | `feedbacks` |
-| 个人资源库（map_background 类型） | `library` | 资源库管理页面待接入 | `library_resources` |
+| 个人资源库（image / audio / map_background） | `library` | `LibraryPage` | `library_resources` |
+| 角色卡（DnD 5e） | `characters` | `CharactersPage`（列表）、`CharacterEditPage`（新建/编辑，6 Tab） | `characters` |
 | WebSocket 实时 | `realtime/*` | `useRoomRealtimeSession` | — |
 | 个人备忘录（按房间） | `rooms/personal_memo` | `PersonalMemo` | `room_personal_memos` |
 
 HTTP 路由（`backend/app/api/v1/router.py`）当前注册：
 
-- `auth`, `assets`, `users`, `rooms`, `notifications`, `room_join_request`, `messages`, `feedback`, `library`
+- `auth`, `assets`, `users`, `rooms`, `notifications`, `room_join_request`, `messages`, `feedback`, `library`, `characters`
 
 ORM 模型导出（`backend/app/db/models.py`）：
 `User`, `UserAvatarHistory`, `Asset`, `Room`, `RoomMember`, `RoomJoinRequest`,
 `RoomPersonalMemo`, `RoomTabletopSettings`, `RoomMap`, `RoomDrawing`,
-`Notification`, `Message`, `Feedback`, `LibraryResource`。
+`Notification`, `Message`, `Feedback`, `LibraryResource`, `Character`。
 
 数据库迁移链：
 
@@ -87,13 +88,14 @@ ORM 模型导出（`backend/app/db/models.py`）：
 - `20260604_0003_add_room_personal_memos`
 - `20260605_0004_add_asset_hash_ref_count_and_avatar_history`
 - `20260604_0004_add_room_tabletop`
-- `20260606_0005_add_library_resources`（current head）
+- `20260606_0005_add_library_resources`
+- `20260606_0006_add_characters`（current head）
 
 ## 4.2 文档已规划、代码未落地
 
 | 模块（设计文档） | 说明 |
 |---|---|
-| 角色卡 / 角色状态 | `09_module_design/character_card.md`；预期表如 `characters`, `character_states` 等 |
+| CharacterState 实时状态层 | `09_module_design/character_card.md` §7；`character_states` 表；当前 HP / Buff 等待落地 |
 | RP 消息 | `09_module_design/chat_and_rp.md`；`rp_messages` |
 | 地图桌面（MVP 扁平） | `rooms/tabletop`；`room_tabletop_settings`, `room_maps`, `room_drawings`；Phase 1–2 已落地 |
 | Token | `09_module_design/token_system.md` |
@@ -140,7 +142,12 @@ Client (Vue)
 | `/public-rooms` | public-rooms | 是 | 公开房间列表 |
 | `/notifications` | notifications | 是 | 站内通知 |
 | `/contact` | contact | 是 | 用户反馈 |
+| `/library` | library | 是 | 用户资源库（图片 / 音频） |
+| `/characters` | characters | 是 | 角色卡列表 |
+| `/characters/new` | character-new | 是 | 新建角色卡 |
+| `/characters/:id` | character-edit | 是 | 编辑角色卡 |
 | `/feedback-admin` | feedback-admin | 是 | 站点管理员处理反馈 |
+| `/site-admin` | site-admin | 是 | 站点管理 |
 
 主要 Pinia Store：`auth`, `rooms`, `messages`, `notifications`, `entities`, `toasts`, `media-viewer`。
 
@@ -185,6 +192,7 @@ Client (Vue)
 3. 清理与 asset 资源库落地
 4. 统一 initial schema（2026-06-04）
 5. 前端房间 / 聊天 / 实时会话打磨
+6. 角色卡模块落地（2026-06-06）：`characters` 表、CRUD API、6-Tab 编辑页（DnD 5e 结构化数据）、角色列表页、脏数据守卫
 
 ## 9.2 建议开发顺序
 

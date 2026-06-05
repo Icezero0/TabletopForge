@@ -166,23 +166,30 @@ GET  /rooms/{room_id}/rp-messages
 
 ---
 
-# 10 角色 API
+# 10 角色 API（已实现）
+
+角色按用户所有，不绑定房间（用户在多个房间使用同一角色）。
 
 ```text
-POST   /rooms/{room_id}/characters
-GET    /rooms/{room_id}/characters
-GET    /characters/{character_id}
-PATCH  /characters/{character_id}
-DELETE /characters/{character_id}
+GET    /characters                  # 分页列出当前用户的角色
+POST   /characters                  # 创建角色
+GET    /characters/{character_id}   # 获取单个角色
+PATCH  /characters/{character_id}   # 更新角色（仅 owner 可操作）
+DELETE /characters/{character_id}   # 删除角色（仅 owner 可操作）
 ```
 
-触发事件：
+说明：
 
-- 后续实现角色模块后定义。
+- `GET /characters` 支持分页参数 `page` / `page_size`，仅返回当前用户的角色。
+- `POST /characters` / `PATCH` 请求体包含 `name`、`system`、`portrait_asset_id`、`identity`、
+  `flavor`、`attributes`、`features`、`spells`、`equipment`、`extras` 等字段。
+- `PATCH` 仅更新请求体中显式包含的字段（`model_fields_set`），允许传 `null` 清空可空字段
+  （`portrait_asset_id`、`spells`）而不影响其他字段。
+- 权限：需登录；写操作仅限 `owner_id == current_user.id`。
 
 ---
 
-# 11 角色状态 API
+# 11 角色状态 API（未落地，规划态）
 
 ```text
 GET   /characters/{character_id}/state
@@ -190,12 +197,11 @@ PATCH /characters/{character_id}/state
 POST  /characters/{character_id}/hp-change
 POST  /characters/{character_id}/effects
 DELETE /characters/{character_id}/effects/{effect_id}
-POST  /characters/{character_id}/resources/{resource_id}/change
 ```
 
 触发事件：
 
-- 后续实现角色状态和操作日志模块后定义。
+- 后续实现 CharacterState 层时定义。
 
 ---
 

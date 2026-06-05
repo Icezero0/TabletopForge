@@ -14,3 +14,4 @@ from app.modules.notifications.models import Notification
 from app.modules.messages.models import Message
 from app.modules.feedback.models import Feedback
 from app.modules.library.models import LibraryResource
+from app.modules.character.models import Character

@@ -62,3 +62,6 @@ class ErrorReason(StrEnum):
     LIBRARY_RESOURCE_PERMISSION_DENIED = "library_resource_permission_denied"
     LIBRARY_RESOURCE_IN_USE = "library_resource_in_use"
     LIBRARY_RESOURCE_TYPE_FIELD_REQUIRED = "library_resource_type_field_required"
+
+    CHARACTER_NOT_FOUND = "character_not_found"
+    CHARACTER_PERMISSION_DENIED = "character_permission_denied"

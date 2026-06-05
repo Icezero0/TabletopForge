@@ -65,6 +65,21 @@ export default [
         component: () => import("@/pages/library/LibraryPage.vue"),
       },
       {
+        path: "characters",
+        name: "characters",
+        component: () => import("@/pages/characters/CharactersPage.vue"),
+      },
+      {
+        path: "characters/new",
+        name: "character-new",
+        component: () => import("@/pages/characters/CharacterEditPage.vue"),
+      },
+      {
+        path: "characters/:id",
+        name: "character-edit",
+        component: () => import("@/pages/characters/CharacterEditPage.vue"),
+      },
+      {
         path: "feedback-admin",
         name: "feedback-admin",
         component: () =>

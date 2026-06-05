@@ -206,7 +206,7 @@ get_characters
 
 负责房间成员关系和 room role。
 
-当前后端地基只实现 `owner / manager / member`。game role 后续随角色、地图、Token 等游戏业务一起设计。
+当前已实现 `owner / manager / member`（`room_role`）及 `GM / PL / OB`（`game_role`）双轨身份，存储在 `room_members.game_role`。
 
 ## 10.3 assets
 

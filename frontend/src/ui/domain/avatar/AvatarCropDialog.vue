@@ -246,6 +246,20 @@ async function usePhoto() {
   background: rgb(0 0 0 / 0.38) !important;
 }
 
+/* Circular guide — shows the inscribed circle of the square crop area */
+.cropper :deep(.vue-rectangle-stencil) {
+  position: relative;
+}
+.cropper :deep(.vue-rectangle-stencil::after) {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px dashed rgba(255, 255, 255, 0.55);
+  pointer-events: none;
+  z-index: 2;
+}
+
 .toolbar {
   margin-top: 12px;
   display: flex;
