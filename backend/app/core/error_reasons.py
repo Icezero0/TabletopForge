@@ -57,3 +57,8 @@ class ErrorReason(StrEnum):
 
     FEEDBACK_NOT_FOUND = "feedback_not_found"
     FEEDBACK_PERMISSION_DENIED = "feedback_permission_denied"
+
+    LIBRARY_RESOURCE_NOT_FOUND = "library_resource_not_found"
+    LIBRARY_RESOURCE_PERMISSION_DENIED = "library_resource_permission_denied"
+    LIBRARY_RESOURCE_IN_USE = "library_resource_in_use"
+    LIBRARY_RESOURCE_TYPE_FIELD_REQUIRED = "library_resource_type_field_required"
