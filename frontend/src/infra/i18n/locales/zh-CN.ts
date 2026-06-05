@@ -6,6 +6,8 @@ export default {
     loading: "加载中…",
     backHome: "返回首页",
     backToRoom: "返回房间",
+    rename: "重命名",
+    delete: "删除",
   },
   chat: {
     newMessagesBelow: "{count} 条新消息",
@@ -13,6 +15,7 @@ export default {
   sidebar: {
     home: "首页",
     publicRooms: "大厅",
+    library: "资源库",
     notifications: "通知",
     contact: "联系与反馈",
     feedbackAdmin: "反馈管理",
@@ -114,6 +117,60 @@ export default {
       hint: "新的通知会在这里显示。",
     },
     inviteYouToJoin: "邀请您加入 {room}",
+  },
+  library: {
+    title: "资源库",
+    addResource: "创建资源",
+    filter: {
+      all: "全部类型",
+    },
+    types: {
+      mapBackground: "地图背景",
+      unknown: "未知类型",
+    },
+    card: {
+      inUse: "桌面使用中",
+    },
+    upload: {
+      title: "创建资源",
+      typeLabel: "资源类型",
+      nameLabel: "名称",
+      namePlaceholder: "为资源起个名字",
+      fileLabel: "文件",
+      dropHint: "点击或拖拽文件至此处",
+      dropSub: "支持 PNG、JPG、WEBP 等图片格式",
+      clearFile: "移除",
+      invalidImageType: "请选择图片文件",
+      submit: "创建",
+    },
+    rename: {
+      title: "重命名",
+      placeholder: "输入新名称",
+    },
+    delete: {
+      title: "删除资源",
+      message: "确定要删除「{name}」吗？此操作不可撤销。",
+      confirm: "删除",
+    },
+    empty: {
+      title: "资源库为空",
+    },
+    pagination: {
+      prev: "上一页",
+      next: "下一页",
+    },
+    toast: {
+      created: "资源已创建",
+      createFailed: "创建失败",
+      renamed: "已重命名",
+      renameFailed: "重命名失败",
+      deleted: "资源已删除",
+      deleteFailed: "删除失败",
+      deleteInUse: "该资源正在桌面使用中，无法删除",
+    },
+    errors: {
+      loadFailed: "加载失败，请刷新重试",
+    },
   },
   contact: {
     title: "联系与反馈",

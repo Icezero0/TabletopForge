@@ -60,6 +60,11 @@ export default [
         component: () => import("@/pages/contact/ContactPage.vue"),
       },
       {
+        path: "library",
+        name: "library",
+        component: () => import("@/pages/library/LibraryPage.vue"),
+      },
+      {
         path: "feedback-admin",
         name: "feedback-admin",
         component: () =>

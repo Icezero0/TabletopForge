@@ -4,6 +4,14 @@ import { assetContentUrl } from "@/infra/api/rooms.api";
 
 const blobCache = new Map<number, string>();
 
+export function invalidateBlobCache(assetId: number) {
+  const url = blobCache.get(assetId);
+  if (url) {
+    URL.revokeObjectURL(url);
+    blobCache.delete(assetId);
+  }
+}
+
 export function useAuthenticatedAssetUrl(assetId: Ref<number | null | undefined>) {
   const url = ref("");
   const loading = ref(false);

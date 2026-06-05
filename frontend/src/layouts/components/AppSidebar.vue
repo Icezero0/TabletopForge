@@ -9,6 +9,7 @@ import {
   InboxStackIcon,
   HomeIcon,
   InformationCircleIcon,
+  RectangleStackIcon,
   ShieldCheckIcon,
 } from "@heroicons/vue/24/outline";
 import AppIcon from "@/ui/base/AppIcon.vue";
@@ -34,6 +35,11 @@ const items = computed(() => [
     to: linkTarget("/public-rooms"),
     label: t("sidebar.publicRooms"),
     icon: BuildingLibraryIcon,
+  },
+  {
+    to: linkTarget("/library"),
+    label: t("sidebar.library"),
+    icon: RectangleStackIcon,
   },
   {
     to: linkTarget("/join-requests"),

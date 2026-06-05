@@ -5,6 +5,8 @@ export default {
     loading: "Loading…",
     backHome: "Back to Home",
     backToRoom: "Back to room",
+    rename: "Rename",
+    delete: "Delete",
   },
   chat: {
     newMessagesBelow: "{count} new message(s)",
@@ -12,6 +14,7 @@ export default {
   sidebar: {
     home: "Home",
     publicRooms: "Lobby",
+    library: "Library",
     notifications: "Notifications",
     contact: "Contact & Feedback",
     feedbackAdmin: "Feedback Admin",
@@ -114,6 +117,60 @@ export default {
       hint: "New notifications will appear here.",
     },
     inviteYouToJoin: "invited you to join {room}",
+  },
+  library: {
+    title: "Library",
+    addResource: "Create Resource",
+    filter: {
+      all: "All Types",
+    },
+    types: {
+      mapBackground: "Map Background",
+      unknown: "Unknown",
+    },
+    card: {
+      inUse: "In use on table",
+    },
+    upload: {
+      title: "Create Resource",
+      typeLabel: "Resource Type",
+      nameLabel: "Name",
+      namePlaceholder: "Give your resource a name",
+      fileLabel: "File",
+      dropHint: "Click or drag a file here",
+      dropSub: "Supports PNG, JPG, WEBP and other image formats",
+      clearFile: "Remove",
+      invalidImageType: "Please choose an image file",
+      submit: "Create",
+    },
+    rename: {
+      title: "Rename",
+      placeholder: "Enter a new name",
+    },
+    delete: {
+      title: "Delete Resource",
+      message: "Are you sure you want to delete \"{name}\"? This cannot be undone.",
+      confirm: "Delete",
+    },
+    empty: {
+      title: "Library is empty",
+    },
+    pagination: {
+      prev: "Previous",
+      next: "Next",
+    },
+    toast: {
+      created: "Resource created",
+      createFailed: "Failed to create resource",
+      renamed: "Renamed",
+      renameFailed: "Failed to rename",
+      deleted: "Resource deleted",
+      deleteFailed: "Failed to delete",
+      deleteInUse: "This resource is in use on the table and cannot be deleted",
+    },
+    errors: {
+      loadFailed: "Failed to load. Please refresh.",
+    },
   },
   contact: {
     title: "Contact & Feedback",

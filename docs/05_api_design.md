@@ -309,7 +309,33 @@ POST   /feedback
 
 ---
 
-# 15 骰子 API
+# 15 资源库 API
+
+个人资源库（`library_resources`）。资源类型由 `type` 字段决定字段要求；
+当前实现：`map_background`（必须上传图片）。
+
+```text
+GET    /library/resources
+POST   /library/resources
+GET    /library/resources/{resource_id}
+PATCH  /library/resources/{resource_id}
+DELETE /library/resources/{resource_id}
+```
+
+说明：
+
+- `GET /library/resources`：分页列出当前用户的资源，支持 `?type=map_background`。
+- `POST /library/resources`：multipart 创建资源；通用字段 `type`、`name`；
+  `map_background` 类型需附带 `image` 文件字段，写入 `IMAGE` 类型 asset（享受 hash 去重）。
+- `PATCH /library/resources/{id}`：仅限改名（`name` 字段），仅所有者可操作。
+- `DELETE /library/resources/{id}`：`usage_count > 0` 时返回 409（桌面上有引用）；
+  删除成功后自动递减 `assets.ref_count`，归零则清理物理文件。
+
+权限：所有端点需登录，且仅所有者可读写本人资源。
+
+---
+
+# 16 骰子 API
 
 ```text
 POST /rooms/{room_id}/dice-rolls

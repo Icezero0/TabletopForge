@@ -184,7 +184,36 @@ updated_at
 
 ---
 
-# 4 消息
+# 4 资源库
+
+## 4.1 library_resources
+
+用途：用户个人资源库，按资源类型（`ResourceType`）管理可复用素材。
+
+核心字段：
+
+```text
+id
+owner_id          # FK → users.id，CASCADE DELETE
+type              # ResourceType：map_background；后续扩展 token_image / audio_track 等
+name              # 用户命名
+primary_asset_id  # FK → assets.id，SET NULL；主文件资产（图片 / 音频）
+meta              # JSON，类型附加字段，默认 {}
+usage_count       # 桌面引用计数；>0 时拒绝删除
+created_at
+updated_at
+```
+
+说明：
+
+- `type` 决定必填字段；当前 `map_background` 要求上传图片，存为 `IMAGE` 类型 asset。
+- `primary_asset_id` 对应 `IMAGE` / `AUDIO` asset，享受 `content_hash` 去重与 `ref_count` 生命周期管理。
+- 删除资源时自动递减 `assets.ref_count`；归零则删除物理文件。
+- `usage_count` 由桌面模块调用 `increment_usage` / `decrement_usage` 维护，当前尚未接入。
+
+---
+
+# 5 消息
 
 ## 4.1 messages
 
