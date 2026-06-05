@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n";
 import { ArrowUpTrayIcon } from "@heroicons/vue/24/outline";
 import type { ResourceType } from "@/infra/api/library.api";
 import { RESOURCE_TYPE_OPTIONS, getResourceTypeMeta } from "@/features/library/constants";
+import TagInput from "./TagInput.vue";
 import BaseDialog from "@/ui/base/BaseDialog.vue";
 import BaseButton from "@/ui/base/BaseButton.vue";
 import BaseInput from "@/ui/base/BaseInput.vue";
@@ -13,13 +14,15 @@ import AppIcon from "@/ui/base/AppIcon.vue";
 const props = defineProps<{ modelValue: boolean }>();
 const emit = defineEmits<{
   (e: "update:modelValue", v: boolean): void;
-  (e: "submit", payload: { type: ResourceType; name: string; image?: File }): void;
+  (e: "submit", payload: { type: ResourceType; name: string; image?: File; audio?: File; tags?: string[]; comment?: string }): void;
 }>();
 
 const { t } = useI18n();
 
 const type = ref<ResourceType>("map_background");
 const name = ref("");
+const tags = ref<string[]>([]);
+const comment = ref("");
 const file = ref<File | null>(null);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const dragOver = ref(false);
@@ -35,9 +38,15 @@ const typeOptions = computed(() =>
 
 const currentMeta = computed(() => getResourceTypeMeta(type.value));
 
+const needsFile = computed(() => currentMeta.value.isImage || currentMeta.value.isAudio);
+const fileAccept = computed(() => currentMeta.value.isAudio ? "audio/*" : "image/*");
+const dropSubKey = computed(() =>
+  currentMeta.value.isAudio ? "library.upload.dropSubAudio" : "library.upload.dropSubImage",
+);
+
 const canSubmit = computed(() => {
   if (!name.value.trim()) return false;
-  if (currentMeta.value.isImage && !file.value) return false;
+  if (needsFile.value && !file.value) return false;
   return true;
 });
 
@@ -47,6 +56,8 @@ watch(
     if (!open) {
       type.value = "map_background";
       name.value = "";
+      tags.value = [];
+      comment.value = "";
       file.value = null;
       validationError.value = "";
       submitting.value = false;
@@ -56,6 +67,8 @@ watch(
 
 watch(type, () => {
   file.value = null;
+  tags.value = [];
+  comment.value = "";
   validationError.value = "";
 });
 
@@ -87,6 +100,10 @@ function setFile(f: File) {
     validationError.value = t("library.upload.invalidImageType");
     return;
   }
+  if (currentMeta.value.isAudio && !f.type.startsWith("audio/")) {
+    validationError.value = t("library.upload.invalidAudioType");
+    return;
+  }
   file.value = f;
   if (!name.value.trim()) {
     name.value = f.name.replace(/\.[^.]+$/, "");
@@ -106,6 +123,9 @@ async function handleSubmit() {
       type: type.value,
       name: name.value.trim(),
       image: currentMeta.value.isImage ? (file.value ?? undefined) : undefined,
+      audio: currentMeta.value.isAudio ? (file.value ?? undefined) : undefined,
+      tags: currentMeta.value.hasTags && tags.value.length ? tags.value : undefined,
+      comment: currentMeta.value.hasComment && comment.value.trim() ? comment.value.trim() : undefined,
     });
   } finally {
     submitting.value = false;
@@ -123,7 +143,7 @@ function close() {
       <div class="dialog-title">{{ t("library.upload.title") }}</div>
 
       <div class="field">
-        <label class="label">{{ t("library.upload.typeLabel") }}</label>
+        <label class="label">{{ t("library.upload.typeLabel") }}<span class="required">*</span></label>
         <BaseSelect
           :model-value="type"
           :options="typeOptions"
@@ -132,16 +152,16 @@ function close() {
       </div>
 
       <div class="field">
-        <label class="label">{{ t("library.upload.nameLabel") }}</label>
+        <label class="label">{{ t("library.upload.nameLabel") }}<span class="required">*</span></label>
         <BaseInput
           v-model="name"
           :placeholder="t('library.upload.namePlaceholder')"
         />
       </div>
 
-      <template v-if="currentMeta.isImage">
+      <template v-if="needsFile">
         <div class="field">
-          <label class="label">{{ t("library.upload.fileLabel") }}</label>
+          <label class="label">{{ t("library.upload.fileLabel") }}<span class="required">*</span></label>
           <div
             class="drop-zone"
             :class="{ active: dragOver, 'has-file': !!file }"
@@ -153,7 +173,7 @@ function close() {
             <input
               ref="fileInputRef"
               type="file"
-              accept="image/*"
+              :accept="fileAccept"
               class="hidden-input"
               @change="onFileChange"
             />
@@ -167,12 +187,29 @@ function close() {
             <template v-else>
               <AppIcon :icon="ArrowUpTrayIcon" :size="24" />
               <div class="drop-hint">{{ t("library.upload.dropHint") }}</div>
-              <div class="drop-sub">{{ t("library.upload.dropSub") }}</div>
+              <div class="drop-sub">{{ t(dropSubKey) }}</div>
             </template>
           </div>
           <div v-if="validationError" class="error-text">{{ validationError }}</div>
         </div>
       </template>
+
+      <div v-if="currentMeta.hasTags" class="field">
+        <label class="label">{{ t("library.upload.tagsLabel") }}</label>
+        <TagInput
+          v-model="tags"
+          :placeholder="t('library.upload.tagsPlaceholder')"
+        />
+      </div>
+
+      <div v-if="currentMeta.hasComment" class="field">
+        <label class="label">{{ t("library.upload.commentLabel") }}</label>
+        <textarea
+          v-model="comment"
+          class="comment-textarea"
+          :placeholder="t('library.upload.commentPlaceholder')"
+        />
+      </div>
 
       <div class="actions">
         <BaseButton variant="default" @click="close">{{ t("common.cancel") }}</BaseButton>
@@ -211,6 +248,11 @@ function close() {
   font-size: 13px;
   font-weight: 500;
   color: var(--c-text-muted);
+}
+
+.required {
+  margin-left: 3px;
+  color: var(--c-danger, #e53e3e);
 }
 
 .drop-zone {
@@ -277,6 +319,36 @@ function close() {
 .error-text {
   font-size: 12px;
   color: var(--c-danger, #e53e3e);
+}
+
+.comment-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  height: 72px;
+  padding: 8px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-1);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: 13px;
+  font-family: inherit;
+  resize: none;
+  overflow-y: auto;
+  scrollbar-width: none;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.comment-textarea::-webkit-scrollbar {
+  display: none;
+}
+
+.comment-textarea:focus {
+  border-color: var(--c-accent);
+}
+
+.comment-textarea::placeholder {
+  color: var(--c-text-muted);
 }
 
 .actions {

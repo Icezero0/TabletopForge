@@ -126,6 +126,8 @@ export default {
     },
     types: {
       mapBackground: "地图背景",
+      token: "指示物",
+      sound: "音效",
       unknown: "未知类型",
     },
     card: {
@@ -138,14 +140,22 @@ export default {
       namePlaceholder: "为资源起个名字",
       fileLabel: "文件",
       dropHint: "点击或拖拽文件至此处",
-      dropSub: "支持 PNG、JPG、WEBP 等图片格式",
+      dropSubImage: "支持 PNG、JPG、WEBP 等图片格式",
+      dropSubAudio: "支持 MP3、WAV、OGG 等音频格式",
       clearFile: "移除",
       invalidImageType: "请选择图片文件",
+      invalidAudioType: "请选择音频文件",
+      tagsLabel: "标签",
+      tagsPlaceholder: "输入后按 Enter 或逗号添加",
+      commentLabel: "备注",
+      commentPlaceholder: "可选的补充说明",
       submit: "创建",
     },
     rename: {
-      title: "重命名",
       placeholder: "输入新名称",
+    },
+    edit: {
+      title: "编辑资源",
     },
     delete: {
       title: "删除资源",
@@ -162,8 +172,8 @@ export default {
     toast: {
       created: "资源已创建",
       createFailed: "创建失败",
-      renamed: "已重命名",
-      renameFailed: "重命名失败",
+      saved: "已保存",
+      saveFailed: "保存失败",
       deleted: "资源已删除",
       deleteFailed: "删除失败",
       deleteInUse: "该资源正在桌面使用中，无法删除",

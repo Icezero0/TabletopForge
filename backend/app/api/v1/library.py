@@ -44,6 +44,9 @@ async def create_resource(
     type: ResourceType = Form(...),
     name: str = Form(..., min_length=1, max_length=255),
     image: UploadFile | None = File(default=None),
+    audio: UploadFile | None = File(default=None),
+    tags: list[str] = Form(default=[]),
+    comment: str | None = Form(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> LibraryResourceResponse:
@@ -53,6 +56,9 @@ async def create_resource(
         type=type,
         name=name,
         image=image,
+        audio=audio,
+        tags=tags if tags else None,
+        comment=comment if comment else None,
     )
     return LibraryResourceResponse.model_validate(resource)
 
@@ -79,6 +85,8 @@ async def update_resource(
         resource_id=resource_id,
         user=current_user,
         name=payload.name,
+        tags=payload.tags,
+        comment=payload.comment,
     )
     return LibraryResourceResponse.model_validate(resource)
 

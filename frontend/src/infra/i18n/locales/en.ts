@@ -126,6 +126,8 @@ export default {
     },
     types: {
       mapBackground: "Map Background",
+      token: "Token",
+      sound: "Sound",
       unknown: "Unknown",
     },
     card: {
@@ -138,14 +140,22 @@ export default {
       namePlaceholder: "Give your resource a name",
       fileLabel: "File",
       dropHint: "Click or drag a file here",
-      dropSub: "Supports PNG, JPG, WEBP and other image formats",
+      dropSubImage: "Supports PNG, JPG, WEBP and other image formats",
+      dropSubAudio: "Supports MP3, WAV, OGG and other audio formats",
       clearFile: "Remove",
       invalidImageType: "Please choose an image file",
+      invalidAudioType: "Please choose an audio file",
+      tagsLabel: "Tags",
+      tagsPlaceholder: "Press Enter or comma to add",
+      commentLabel: "Notes",
+      commentPlaceholder: "Optional description or notes",
       submit: "Create",
     },
     rename: {
-      title: "Rename",
       placeholder: "Enter a new name",
+    },
+    edit: {
+      title: "Edit Resource",
     },
     delete: {
       title: "Delete Resource",
@@ -162,8 +172,8 @@ export default {
     toast: {
       created: "Resource created",
       createFailed: "Failed to create resource",
-      renamed: "Renamed",
-      renameFailed: "Failed to rename",
+      saved: "Saved",
+      saveFailed: "Failed to save",
       deleted: "Resource deleted",
       deleteFailed: "Failed to delete",
       deleteInUse: "This resource is in use on the table and cannot be deleted",

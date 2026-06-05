@@ -45,6 +45,9 @@ class LibraryService:
         type: ResourceType,
         name: str,
         image: UploadFile | None = None,
+        audio: UploadFile | None = None,
+        tags: list[str] | None = None,
+        comment: str | None = None,
     ) -> LibraryResource:
         spec = RESOURCE_TYPE_SPECS[type]
 
@@ -53,6 +56,13 @@ class LibraryService:
                 f"Resource type '{type}' requires an image file",
                 reason=ErrorReason.LIBRARY_RESOURCE_TYPE_FIELD_REQUIRED,
                 details={"type": type, "missing_field": "image"},
+            )
+
+        if spec.required_audio and audio is None:
+            raise BadRequestError(
+                f"Resource type '{type}' requires an audio file",
+                reason=ErrorReason.LIBRARY_RESOURCE_TYPE_FIELD_REQUIRED,
+                details={"type": type, "missing_field": "audio"},
             )
 
         primary_asset_id: int | None = None
@@ -65,6 +75,20 @@ class LibraryService:
                 owner_id=user.id,
             )
             primary_asset_id = asset.id
+        elif audio is not None:
+            asset = await self.asset_service.create_upload_asset(
+                db,
+                file=audio,
+                asset_type=AssetType.AUDIO,
+                owner_id=user.id,
+            )
+            primary_asset_id = asset.id
+
+        meta: dict = {}
+        if tags is not None:
+            meta["tags"] = tags
+        if comment is not None:
+            meta["comment"] = comment
 
         resource = await self.repo.create(
             db,
@@ -72,7 +96,7 @@ class LibraryService:
             type=type.value,
             name=name,
             primary_asset_id=primary_asset_id,
-            meta={},
+            meta=meta,
         )
         await db.commit()
         await db.refresh(resource)
@@ -121,10 +145,19 @@ class LibraryService:
         resource_id: int,
         user: User,
         name: str,
+        tags: list[str] | None = None,
+        comment: str | None = None,
     ) -> LibraryResource:
         resource = await self._get_or_404(db, resource_id=resource_id)
         await self._require_owner(resource, user)
-        updated = await self.repo.update_name(db, resource=resource, name=name)
+        meta_patch: dict | None = None
+        if tags is not None or comment is not None:
+            meta_patch = {}
+            if tags is not None:
+                meta_patch["tags"] = tags
+            if comment is not None:
+                meta_patch["comment"] = comment
+        updated = await self.repo.update(db, resource=resource, name=name, meta_patch=meta_patch)
         await db.commit()
         return updated
 

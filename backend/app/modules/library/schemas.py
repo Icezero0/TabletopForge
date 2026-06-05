@@ -30,3 +30,5 @@ class LibraryResourceListResponse(BaseModel):
 
 class LibraryResourcePatch(BaseModel):
     name: str = Field(min_length=1, max_length=255)
+    tags: list[str] | None = None
+    comment: str | None = None

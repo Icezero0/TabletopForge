@@ -1,6 +1,6 @@
 import { http } from "@/infra/http/client";
 
-export type ResourceType = "map_background";
+export type ResourceType = "map_background" | "token" | "sound";
 
 export type LibraryResource = {
   id: number;
@@ -43,24 +43,28 @@ export async function createLibraryResource(payload: {
   type: ResourceType;
   name: string;
   image?: File;
+  audio?: File;
+  tags?: string[];
+  comment?: string;
 }) {
   const form = new FormData();
   form.append("type", payload.type);
   form.append("name", payload.name);
-  if (payload.image) {
-    form.append("image", payload.image);
-  }
+  if (payload.image) form.append("image", payload.image);
+  if (payload.audio) form.append("audio", payload.audio);
+  if (payload.tags) payload.tags.forEach((tag) => form.append("tags", tag));
+  if (payload.comment) form.append("comment", payload.comment);
   const { data } = await http.post<LibraryResource>("/library/resources", form, {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return data;
 }
 
-export async function patchLibraryResource(id: number, name: string) {
-  const { data } = await http.patch<LibraryResource>(
-    `/library/resources/${id}`,
-    { name },
-  );
+export async function patchLibraryResource(
+  id: number,
+  payload: { name: string; tags?: string[]; comment?: string },
+) {
+  const { data } = await http.patch<LibraryResource>(`/library/resources/${id}`, payload);
   return data;
 }
 

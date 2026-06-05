@@ -4,6 +4,16 @@ import { useI18n } from "vue-i18n";
 import { PencilIcon, TrashIcon } from "@heroicons/vue/24/outline";
 import type { LibraryResource } from "@/infra/api/library.api";
 import { getResourceTypeMeta } from "@/features/library/constants";
+
+function resourceTags(resource: LibraryResource): string[] {
+  const t = resource.meta?.tags;
+  return Array.isArray(t) ? t : [];
+}
+
+function resourceComment(resource: LibraryResource): string {
+  const c = resource.meta?.comment;
+  return typeof c === "string" ? c : "";
+}
 import ResourceCardThumbnail from "./ResourceCardThumbnail.vue";
 import BaseIconButton from "@/ui/base/BaseIconButton.vue";
 import AppIcon from "@/ui/base/AppIcon.vue";
@@ -33,6 +43,12 @@ const typeMeta = computed(() => getResourceTypeMeta(props.resource.type));
     <div class="body">
       <div class="name" :title="resource.name">{{ resource.name }}</div>
       <div class="type">{{ t(typeMeta.labelKey) }}</div>
+      <div v-if="resourceTags(resource).length" class="tags">
+        <span v-for="tag in resourceTags(resource)" :key="tag" class="tag">{{ tag }}</span>
+      </div>
+      <div v-if="resourceComment(resource)" class="comment" :title="resourceComment(resource)">
+        {{ resourceComment(resource) }}
+      </div>
     </div>
 
     <Transition name="fade">
@@ -78,7 +94,24 @@ const typeMeta = computed(() => getResourceTypeMeta(props.resource.type));
 .body {
   padding: 10px 12px 12px;
   display: grid;
-  gap: 2px;
+  gap: 4px;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.tag {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--c-surface-raised);
+  border: 1px solid var(--c-border);
+  color: var(--c-text-muted);
+  white-space: nowrap;
 }
 
 .name {
@@ -93,6 +126,15 @@ const typeMeta = computed(() => getResourceTypeMeta(props.resource.type));
 .type {
   font-size: 12px;
   color: var(--c-text-muted);
+}
+
+.comment {
+  font-size: 12px;
+  color: var(--c-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
 }
 
 .overlay-actions {

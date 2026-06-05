@@ -49,14 +49,17 @@ export function useLibraryResources() {
     type: ResourceType;
     name: string;
     image?: File;
+    audio?: File;
+    tags?: string[];
+    comment?: string;
   }) {
     const resource = await createLibraryResource(payload);
     await fetchPage(1);
     return resource;
   }
 
-  async function rename(id: number, name: string) {
-    const updated = await patchLibraryResource(id, name);
+  async function update(id: number, name: string, tags?: string[], comment?: string) {
+    const updated = await patchLibraryResource(id, { name, tags, comment });
     const idx = items.value.findIndex((r) => r.id === id);
     if (idx !== -1) items.value[idx] = updated;
     return updated;
@@ -81,7 +84,7 @@ export function useLibraryResources() {
     fetchPage,
     refresh,
     create,
-    rename,
+    update,
     remove,
   };
 }

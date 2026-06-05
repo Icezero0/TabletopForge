@@ -4,6 +4,8 @@ import { useI18n } from "vue-i18n";
 import { PlusIcon } from "@heroicons/vue/24/outline";
 import type { LibraryResource, ResourceType } from "@/infra/api/library.api";
 import { useLibraryResources } from "@/features/library/composables/useLibraryResources";
+import { RESOURCE_TYPE_OPTIONS, getResourceTypeMeta } from "@/features/library/constants";
+import TagInput from "@/features/library/components/TagInput.vue";
 import ResourceCard from "@/features/library/components/ResourceCard.vue";
 import UploadResourceDialog from "@/features/library/components/UploadResourceDialog.vue";
 import { usePageReturnTo } from "@/composables/useNavigationReturn";
@@ -22,17 +24,23 @@ const lib = useLibraryResources();
 
 const showUpload = ref(false);
 const showDelete = ref(false);
-const showRename = ref(false);
+const showEdit = ref(false);
 const targetResource = ref<LibraryResource | null>(null);
-const renameValue = ref("");
+const editName = ref("");
+const editTags = ref<string[]>([]);
+const editComment = ref("");
 const deleteLoading = ref(false);
+
+const editTargetMeta = computed(() =>
+  targetResource.value ? getResourceTypeMeta(targetResource.value.type) : null,
+);
 
 const ALL_FILTER = "__all__";
 const typeFilterValue = ref<string>(ALL_FILTER);
 
 const typeFilterOptions = computed(() => [
   { value: ALL_FILTER, label: t("library.filter.all") },
-  { value: "map_background", label: t("library.types.mapBackground") },
+  ...RESOURCE_TYPE_OPTIONS.map((opt) => ({ value: opt.value, label: t(opt.labelKey) })),
 ]);
 
 watch(typeFilterValue, (v) => {
@@ -40,10 +48,14 @@ watch(typeFilterValue, (v) => {
   void lib.fetchPage(1);
 });
 
-function openRename(resource: LibraryResource) {
+function openEdit(resource: LibraryResource) {
   targetResource.value = resource;
-  renameValue.value = resource.name;
-  showRename.value = true;
+  editName.value = resource.name;
+  const t = resource.meta?.tags;
+  editTags.value = Array.isArray(t) ? [...t] : [];
+  const c = resource.meta?.comment;
+  editComment.value = typeof c === "string" ? c : "";
+  showEdit.value = true;
 }
 
 function openDelete(resource: LibraryResource) {
@@ -51,14 +63,18 @@ function openDelete(resource: LibraryResource) {
   showDelete.value = true;
 }
 
-async function handleRenameConfirm() {
-  if (!targetResource.value || !renameValue.value.trim()) return;
+async function handleEditConfirm() {
+  if (!targetResource.value || !editName.value.trim()) return;
   try {
-    await lib.rename(targetResource.value.id, renameValue.value.trim());
-    showRename.value = false;
-    toasts.push({ message: t("library.toast.renamed"), tone: "success" });
+    const tags = editTargetMeta.value?.hasTags ? editTags.value : undefined;
+    const comment = editTargetMeta.value?.hasComment && editComment.value.trim()
+      ? editComment.value.trim()
+      : undefined;
+    await lib.update(targetResource.value.id, editName.value.trim(), tags, comment);
+    showEdit.value = false;
+    toasts.push({ message: t("library.toast.saved"), tone: "success" });
   } catch {
-    toasts.push({ message: t("library.toast.renameFailed"), tone: "danger" });
+    toasts.push({ message: t("library.toast.saveFailed"), tone: "danger" });
   }
 }
 
@@ -88,6 +104,9 @@ async function handleUploadSubmit(payload: {
   type: ResourceType;
   name: string;
   image?: File;
+  audio?: File;
+  tags?: string[];
+  comment?: string;
 }) {
   try {
     await lib.create(payload);
@@ -144,7 +163,7 @@ onMounted(() => {
           v-for="resource in lib.items.value"
           :key="resource.id"
           :resource="resource"
-          @rename="openRename"
+          @rename="openEdit"
           @delete="openDelete"
         />
       </div>
@@ -174,23 +193,39 @@ onMounted(() => {
     @submit="handleUploadSubmit"
   />
 
-  <!-- Rename dialog -->
-  <BaseDialog v-model="showRename" :max-width="400">
-    <div class="rename-inner">
-      <div class="rename-title">{{ t("library.rename.title") }}</div>
-      <BaseInput
-        v-model="renameValue"
-        :placeholder="t('library.rename.placeholder')"
-        @keydown.enter="handleRenameConfirm"
-      />
-      <div class="rename-actions">
-        <BaseButton variant="default" @click="showRename = false">
+  <!-- Edit dialog -->
+  <BaseDialog v-model="showEdit" :max-width="420">
+    <div class="edit-inner">
+      <div class="edit-title">{{ t("library.edit.title") }}</div>
+      <div class="edit-field">
+        <label class="edit-label">{{ t("library.upload.nameLabel") }}</label>
+        <BaseInput
+          v-model="editName"
+          :placeholder="t('library.rename.placeholder')"
+          @keydown.enter="handleEditConfirm"
+        />
+      </div>
+      <div v-if="editTargetMeta?.hasTags" class="edit-field">
+        <label class="edit-label">{{ t("library.upload.tagsLabel") }}</label>
+        <TagInput v-model="editTags" :placeholder="t('library.upload.tagsPlaceholder')" />
+      </div>
+      <div v-if="editTargetMeta?.hasComment" class="edit-field">
+        <label class="edit-label">{{ t("library.upload.commentLabel") }}</label>
+        <textarea
+          v-model="editComment"
+          class="edit-textarea"
+          :placeholder="t('library.upload.commentPlaceholder')"
+          rows="3"
+        />
+      </div>
+      <div class="edit-actions">
+        <BaseButton variant="default" @click="showEdit = false">
           {{ t("common.cancel") }}
         </BaseButton>
         <BaseButton
           variant="primary"
-          :disabled="!renameValue.trim()"
-          @click="handleRenameConfirm"
+          :disabled="!editName.trim()"
+          @click="handleEditConfirm"
         >
           {{ t("common.save") }}
         </BaseButton>
@@ -269,19 +304,53 @@ onMounted(() => {
   color: var(--c-text-muted);
 }
 
-.rename-inner {
+.edit-inner {
   padding: 24px;
   display: grid;
   gap: 16px;
 }
 
-.rename-title {
+.edit-title {
   font-size: 17px;
   font-weight: 600;
   color: var(--c-text);
 }
 
-.rename-actions {
+.edit-field {
+  display: grid;
+  gap: 6px;
+}
+
+.edit-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--c-text-muted);
+}
+
+.edit-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-1);
+  background: var(--c-surface);
+  color: var(--c-text);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.edit-textarea:focus {
+  border-color: var(--c-accent);
+}
+
+.edit-textarea::placeholder {
+  color: var(--c-text-muted);
+}
+
+.edit-actions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
