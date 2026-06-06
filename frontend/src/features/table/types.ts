@@ -4,6 +4,7 @@ export type { DrawSubTool } from "@/features/table/drawingTypes";
 
 export type TabletopSelection =
   | { type: "map"; id: number }
+  | { type: "token"; id: number }
   | { type: "drawing"; id: number }
   | null;
 

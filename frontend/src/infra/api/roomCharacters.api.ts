@@ -1,0 +1,104 @@
+import { http } from "@/infra/http/client";
+
+export type CharacterKind = "pc" | "additional" | "monster";
+
+export type CharacterStateSummary = {
+  current_hp: number | null;
+  max_hp: number | null;
+  armor_class: number | null;
+  damage_taken?: number | null;
+};
+
+export type RoomCharacterEntry = {
+  room_character_id: number;
+  character_id: number;
+  owner_id: number;
+  kind: CharacterKind;
+  name: string;
+  player_name: string;
+  token_image_asset_id: number | null;
+  state: CharacterStateSummary;
+};
+
+export type RoomCharacterStateInput = {
+  current_hp?: number | null;
+  max_hp?: number | null;
+  temp_hp?: number;
+  armor_class?: number | null;
+  conditions?: Record<string, unknown>;
+};
+
+export type RoomCharacterCreatePayload = {
+  kind: CharacterKind;
+  name: string;
+  player_name?: string;
+  system?: string;
+  portrait_asset_id?: number | null;
+  token_image_asset_id?: number | null;
+  identity?: Record<string, unknown>;
+  flavor?: Record<string, unknown>;
+  attributes?: Record<string, unknown>;
+  features?: Record<string, unknown>;
+  spells?: Record<string, unknown> | null;
+  equipment?: Record<string, unknown>;
+  extras?: Record<string, unknown>;
+  state?: RoomCharacterStateInput;
+  file?: File;
+};
+
+export async function getRoomCharacters(roomId: number) {
+  const { data } = await http.get<RoomCharacterEntry[]>(`/rooms/${roomId}/characters`);
+  return data;
+}
+
+export async function postRoomCharacter(roomId: number, payload: RoomCharacterCreatePayload) {
+  const form = new FormData();
+  form.append("kind", payload.kind);
+  form.append("name", payload.name);
+  if (payload.player_name != null) form.append("player_name", payload.player_name);
+  if (payload.system != null) form.append("system", payload.system);
+  if (payload.portrait_asset_id != null) {
+    form.append("portrait_asset_id", String(payload.portrait_asset_id));
+  }
+  if (payload.token_image_asset_id != null) {
+    form.append("token_image_asset_id", String(payload.token_image_asset_id));
+  }
+  if (payload.identity && Object.keys(payload.identity).length > 0) {
+    form.append("identity_json", JSON.stringify(payload.identity));
+  }
+  if (payload.flavor && Object.keys(payload.flavor).length > 0) {
+    form.append("flavor_json", JSON.stringify(payload.flavor));
+  }
+  if (payload.attributes && Object.keys(payload.attributes).length > 0) {
+    form.append("attributes_json", JSON.stringify(payload.attributes));
+  }
+  if (payload.features && Object.keys(payload.features).length > 0) {
+    form.append("features_json", JSON.stringify(payload.features));
+  }
+  if (payload.spells != null) {
+    form.append("spells_json", JSON.stringify(payload.spells));
+  }
+  if (payload.equipment && Object.keys(payload.equipment).length > 0) {
+    form.append("equipment_json", JSON.stringify(payload.equipment));
+  }
+  if (payload.extras && Object.keys(payload.extras).length > 0) {
+    form.append("extras_json", JSON.stringify(payload.extras));
+  }
+  if (payload.state) {
+    const hasState = Object.values(payload.state).some(
+      (value) => value != null && (typeof value !== "object" || Object.keys(value).length > 0),
+    );
+    if (hasState) {
+      form.append("state_json", JSON.stringify(payload.state));
+    }
+  }
+  if (payload.file) {
+    form.append("file", payload.file);
+  }
+
+  const { data } = await http.post<RoomCharacterEntry>(
+    `/rooms/${roomId}/characters`,
+    form,
+  );
+  return data;
+}

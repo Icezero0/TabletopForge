@@ -263,7 +263,9 @@ id
 owner_id           FK → users.id，CASCADE DELETE
 name               VARCHAR(255)，从 identity.name 冗余，方便列表查询
 player_name        VARCHAR(255)
-portrait_asset_id  FK → assets.id，SET NULL
+kind               VARCHAR(16)，pc | additional | monster，默认 pc
+portrait_asset_id  FK → assets.id，SET NULL（角色卡头像）
+token_image_asset_id FK → assets.id，SET NULL（地图 Token 圆图，AssetType.TOKEN_IMAGE）
 system             VARCHAR(50)，固定 "dnd5e"
 identity           JSON  — 基本信息（种族、职业列表、阵营、图库等）
 flavor             JSON  — 扮演设定（性格、理想、羁绊、缺陷、背景故事）
@@ -285,24 +287,41 @@ ix_characters_id
 ix_characters_owner_id
 ```
 
-## 5.2 character_states（未落地，规划态）
+## 5.2 character_states（已实现）
 
 用途：角色实时状态层（当前 HP / Buff 等高频变更字段），与 `characters` 1:1。
 
 与 characters 拆分的原因：角色定义稳定，状态层在对局中高频变更，需要单独同步与追溯。
 
-核心字段（规划，实现时可调整）：
+核心字段：
+
+```text
+character_id       PK/FK → characters.id，CASCADE DELETE
+current_hp         INT NULLABLE
+max_hp             INT NULLABLE
+temp_hp            INT，默认 0
+armor_class        INT NULLABLE
+conditions         JSON，默认 {}
+damage_taken       INT，默认 0（Phase 4 怪物伤害记录用）
+updated_at
+```
+
+API：`GET/PATCH /characters/{id}/state`；创建角色（全局或房间库）时自动 bootstrap 默认行。
+
+## 5.3 room_characters（已实现）
+
+用途：房间角色库 — 标记某角色在本房间可用/上场；不复制 `characters` 定义。
 
 ```text
 id
+room_id            FK → rooms.id
 character_id       FK → characters.id
-current_hp
-max_hp
-temp_hp
-armor_class
-conditions         JSON，状态效果列表
-updated_at
+kind               VARCHAR(16)，pc | additional | monster
+added_by_user_id   FK → users.id
+created_at
 ```
+
+API：`GET/POST /rooms/{id}/characters`；列表含 character 摘要 + state 摘要。
 
 ---
 
@@ -394,6 +413,8 @@ updated_at
 ## 6.3 tokens
 
 用途：地图上的可操作对象。
+
+**MVP 已落地**：表 `room_tokens`（Alembic `20260606_0007`）；扁平 `room_id`，**无** `scene_id`。API：`POST/PATCH/DELETE /rooms/{id}/tokens`；`POST .../characters/{id}/spawn-token`；快照 `GET /rooms/{id}/tabletop` 含 `tokens`（`state_summary` 全量 HP/AC/PP）；WS `token_created/updated/deleted`、`character_state_updated`（`state_summary`）。
 
 核心字段：
 

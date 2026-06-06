@@ -8,10 +8,14 @@ import {
   type RoomRealtimeSessionClosed,
   type RoomRealtimeSnapshot,
 } from "@/infra/realtime/roomRealtime";
+import type { GameRole } from "@/features/room/types";
+import { pickCharacterStateSummaryForRole } from "@/features/table/utils/tokenDisplay";
 import type {
   RoomDrawing,
   RoomMap,
+  RoomToken,
   RoomTabletopSettings,
+  TokenStateSummary,
 } from "@/infra/api/rooms.api";
 import type { MessageResponse } from "@/infra/api/messages.api";
 import { useAuthStore } from "@/stores/auth.store";
@@ -25,9 +29,11 @@ import type {
 
 type UseRoomRealtimeSessionOptions = {
   roomId: Ref<number>;
+  gameRole: Ref<GameRole | "unknown">;
   refreshRoom: () => void | Promise<void>;
   refreshRoomMembers: () => void | Promise<void>;
   refreshRoomRequests: () => void | Promise<void>;
+  onCharacterStateUpdated?: (characterId: number, summary: TokenStateSummary) => void;
   onSessionClosed?: (payload: RoomRealtimeSessionClosed) => void;
   onPointerPresence?: (payload: PointerPresencePayload) => void;
   onPointerLaser?: (payload: PointerLaserPayload) => void;
@@ -208,6 +214,36 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
       wsClient.onEvent<{ room_id: number; drawing_ids: number[] }>("drawing_deleted", (payload) => {
         if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
         tabletopStore.applyDrawingsDeleted(options.roomId.value, payload.drawing_ids);
+      }),
+      wsClient.onEvent<{ room_id: number; token: RoomToken }>("token_created", (payload) => {
+        if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+        tabletopStore.applyTokenCreated(options.roomId.value, payload.token);
+      }),
+      wsClient.onEvent<{ room_id: number; token: RoomToken }>("token_updated", (payload) => {
+        if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+        tabletopStore.applyTokenUpdated(options.roomId.value, payload.token);
+      }),
+      wsClient.onEvent<{ room_id: number; token_id: number }>("token_deleted", (payload) => {
+        if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+        tabletopStore.applyTokenDeleted(options.roomId.value, payload.token_id);
+      }),
+      wsClient.onEvent<{
+        room_id: number;
+        character_id: number;
+        state_summary: TokenStateSummary;
+        state_summary_public?: TokenStateSummary;
+      }>("character_state_updated", (payload) => {
+        if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+        const summary = pickCharacterStateSummaryForRole(
+          payload,
+          options.gameRole.value,
+        );
+        tabletopStore.applyCharacterStateUpdated(
+          options.roomId.value,
+          payload.character_id,
+          summary,
+        );
+        options.onCharacterStateUpdated?.(payload.character_id, summary);
       }),
       wsClient.onEvent<PointerPresencePayload>("pointer_presence", (payload) => {
         if (!isCurrentRoomPayload(payload, options.roomId.value)) return;

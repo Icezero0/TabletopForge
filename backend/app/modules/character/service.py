@@ -1,18 +1,34 @@
 from math import ceil
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_reasons import ErrorReason
 from app.core.exceptions import ForbiddenError, NotFoundError
-from app.modules.character.models import Character
+from app.modules.character.attributes import derived_int
+from app.modules.character.constants import CharacterKind
+from app.modules.character.models import Character, CharacterState
+from app.modules.character.presenter import present_character_state
 from app.modules.character.repository import CharacterRepository
-from app.modules.character.schemas import CharacterListResponse, CharacterResponse
+from app.modules.character.schemas import (
+    CharacterListResponse,
+    CharacterResponse,
+    CharacterStateCreate,
+    CharacterStatePatch,
+    CharacterStateResponse,
+)
+from app.modules.character.state_repository import CharacterStateRepository
+from app.modules.rooms.characters.repository import RoomCharacterRepository
+from app.modules.rooms.constants import GamePermission, GameRole
+from app.modules.rooms.game_permissions import require_game_permission
 from app.modules.users.models import User
 
 
 class CharacterService:
     def __init__(self) -> None:
         self.repo = CharacterRepository()
+        self.state_repo = CharacterStateRepository()
+        self.room_character_repo = RoomCharacterRepository()
 
     def _require_owner(self, character: Character, user: User) -> None:
         if character.owner_id != user.id:
@@ -32,15 +48,17 @@ class CharacterService:
             )
         return character
 
-    async def create_character(
+    async def _create_character_record(
         self,
         db: AsyncSession,
         *,
-        user: User,
+        owner_id: int,
         name: str,
         player_name: str = "",
+        kind: str = CharacterKind.PC.value,
         system: str = "dnd5e",
         portrait_asset_id: int | None = None,
+        token_image_asset_id: int | None = None,
         identity: dict | None = None,
         flavor: dict | None = None,
         attributes: dict | None = None,
@@ -49,13 +67,15 @@ class CharacterService:
         equipment: dict | None = None,
         extras: dict | None = None,
     ) -> Character:
-        character = await self.repo.create(
+        return await self.repo.create(
             db,
-            owner_id=user.id,
+            owner_id=owner_id,
             name=name,
             player_name=player_name,
+            kind=kind,
             system=system,
             portrait_asset_id=portrait_asset_id,
+            token_image_asset_id=token_image_asset_id,
             identity=identity,
             flavor=flavor,
             attributes=attributes,
@@ -63,6 +83,81 @@ class CharacterService:
             spells=spells,
             equipment=equipment,
             extras=extras,
+        )
+
+    async def _create_default_state(
+        self,
+        db: AsyncSession,
+        *,
+        character_id: int,
+        attributes: dict | None = None,
+        explicit: CharacterStateCreate | None = None,
+    ) -> CharacterState:
+        max_hp = explicit.max_hp if explicit else None
+        current_hp = explicit.current_hp if explicit else None
+        armor_class = explicit.armor_class if explicit else None
+        temp_hp = explicit.temp_hp if explicit else 0
+        conditions = explicit.conditions if explicit else {}
+
+        if max_hp is None:
+            max_hp = derived_int(attributes, "max_hp")
+        if armor_class is None:
+            armor_class = derived_int(attributes, "ac")
+        if current_hp is None and max_hp is not None:
+            current_hp = max_hp
+
+        return await self.state_repo.create(
+            db,
+            character_id=character_id,
+            current_hp=current_hp,
+            max_hp=max_hp,
+            temp_hp=temp_hp,
+            armor_class=armor_class,
+            conditions=conditions,
+        )
+
+    async def create_character(
+        self,
+        db: AsyncSession,
+        *,
+        user: User,
+        name: str,
+        player_name: str = "",
+        kind: str = CharacterKind.PC.value,
+        system: str = "dnd5e",
+        portrait_asset_id: int | None = None,
+        token_image_asset_id: int | None = None,
+        identity: dict | None = None,
+        flavor: dict | None = None,
+        attributes: dict | None = None,
+        features: dict | None = None,
+        spells: dict | None = None,
+        equipment: dict | None = None,
+        extras: dict | None = None,
+        state: CharacterStateCreate | None = None,
+    ) -> Character:
+        character = await self._create_character_record(
+            db,
+            owner_id=user.id,
+            name=name,
+            player_name=player_name,
+            kind=kind,
+            system=system,
+            portrait_asset_id=portrait_asset_id,
+            token_image_asset_id=token_image_asset_id,
+            identity=identity,
+            flavor=flavor,
+            attributes=attributes,
+            features=features,
+            spells=spells,
+            equipment=equipment,
+            extras=extras,
+        )
+        await self._create_default_state(
+            db,
+            character_id=character.id,
+            attributes=attributes,
+            explicit=state,
         )
         await db.commit()
         await db.refresh(character)
@@ -75,8 +170,12 @@ class CharacterService:
         character_id: int,
         user: User,
     ) -> Character:
-        character = await self._get_or_404(db, character_id=character_id)
-        self._require_owner(character, user)
+        character, _ = await self.require_character_accessible(
+            db,
+            character_id=character_id,
+            user=user,
+            read_only=True,
+        )
         return character
 
     async def list_characters(
@@ -102,6 +201,23 @@ class CharacterService:
             total_pages=ceil(total / page_size) if total else 0,
         )
 
+    def _require_stable_layer_write(
+        self,
+        character: Character,
+        user: User,
+        game_role: GameRole | None,
+    ) -> None:
+        if character.owner_id != user.id:
+            raise ForbiddenError(
+                "You do not have permission to perform this action",
+                reason=ErrorReason.CHARACTER_PERMISSION_DENIED,
+                details={"character_id": character.id},
+            )
+        require_game_permission(
+            game_role or GameRole.PL,
+            GamePermission.EDIT_OWN_CHARACTER,
+        )
+
     async def update_character(
         self,
         db: AsyncSession,
@@ -110,8 +226,12 @@ class CharacterService:
         user: User,
         patch_fields: dict,
     ) -> Character:
-        character = await self._get_or_404(db, character_id=character_id)
-        self._require_owner(character, user)
+        character, game_role = await self.require_character_accessible(
+            db,
+            character_id=character_id,
+            user=user,
+        )
+        self._require_stable_layer_write(character, user, game_role)
         updated = await self.repo.update(db, character=character, **patch_fields)
         await db.commit()
         return updated
@@ -128,17 +248,12 @@ class CharacterService:
         await self.repo.delete(db, character=character)
         await db.commit()
 
-    # =========================
-    # Extension points — for internal module use (no ownership check)
-    # =========================
-
     async def get_character_internal(
         self,
         db: AsyncSession,
         *,
         character_id: int,
     ) -> Character:
-        """Fetch a character without ownership verification. For internal module calls only."""
         return await self._get_or_404(db, character_id=character_id)
 
     async def require_character_accessible(
@@ -147,9 +262,135 @@ class CharacterService:
         *,
         character_id: int,
         user: User,
-    ) -> Character:
-        """Verify a character can be used by this user. Currently: owner only.
-        Extend here if sharing or GM-access rules are added."""
+        read_only: bool = False,
+    ) -> tuple[Character, GameRole | None]:
         character = await self._get_or_404(db, character_id=character_id)
-        self._require_owner(character, user)
-        return character
+        if character.owner_id == user.id:
+            return character, None
+
+        game_role = await self.room_character_repo.user_game_role_for_character(
+            db,
+            character_id=character_id,
+            user_id=user.id,
+        )
+        if game_role is None:
+            raise ForbiddenError(
+                "You do not have permission to access this character",
+                reason=ErrorReason.CHARACTER_PERMISSION_DENIED,
+                details={"character_id": character_id},
+            )
+        return character, game_role
+
+    def _require_state_write(
+        self,
+        character: Character,
+        user: User,
+        game_role: GameRole | None,
+    ) -> None:
+        if character.owner_id == user.id:
+            require_game_permission(game_role or GameRole.PL, GamePermission.EDIT_OWN_CHARACTER_STATE)
+            return
+        if game_role == GameRole.GM:
+            require_game_permission(game_role, GamePermission.EDIT_ANY_CHARACTER_STATE)
+            return
+        raise ForbiddenError(
+            "You do not have permission to perform this action",
+            reason=ErrorReason.CHARACTER_PERMISSION_DENIED,
+            details={"character_id": character.id},
+        )
+
+    async def get_character_state(
+        self,
+        db: AsyncSession,
+        *,
+        character_id: int,
+        user: User,
+    ) -> CharacterStateResponse:
+        character, game_role = await self.require_character_accessible(
+            db,
+            character_id=character_id,
+            user=user,
+            read_only=True,
+        )
+        state = await self.state_repo.get_by_character_id(db, character_id=character_id)
+        if state is None:
+            raise NotFoundError(
+                "Character state not found",
+                reason=ErrorReason.CHARACTER_NOT_FOUND,
+                details={"character_id": character_id},
+            )
+        owner_is_gm = await self.room_character_repo.character_owner_is_gm_in_any_room(
+            db,
+            character_id=character_id,
+            owner_id=character.owner_id,
+        )
+        return present_character_state(
+            character,
+            state,
+            game_role=game_role,
+            viewer_user_id=user.id,
+            owner_is_gm_in_room=owner_is_gm,
+        )
+
+    async def patch_character_state(
+        self,
+        db: AsyncSession,
+        *,
+        character_id: int,
+        user: User,
+        patch_fields: dict,
+    ) -> CharacterStateResponse:
+        character, game_role = await self.require_character_accessible(
+            db,
+            character_id=character_id,
+            user=user,
+        )
+        self._require_state_write(character, user, game_role)
+
+        state = await self.state_repo.get_by_character_id(db, character_id=character_id)
+        if state is None:
+            raise NotFoundError(
+                "Character state not found",
+                reason=ErrorReason.CHARACTER_NOT_FOUND,
+                details={"character_id": character_id},
+            )
+
+        patch_fields = dict(patch_fields)
+        if "current_hp" in patch_fields:
+            owner_is_gm = await self.room_character_repo.character_owner_is_gm_in_any_room(
+                db,
+                character_id=character_id,
+                owner_id=character.owner_id,
+            )
+            can_track_damage = game_role == GameRole.GM or (
+                character.owner_id == user.id and owner_is_gm
+            )
+            if can_track_damage:
+                old_hp = state.current_hp or 0
+                new_hp = patch_fields["current_hp"]
+                if new_hp is not None and new_hp < old_hp:
+                    delta = new_hp - old_hp
+                    patch_fields["damage_taken"] = state.damage_taken + abs(delta)
+                    conditions = dict(state.conditions or {})
+                    log = list(conditions.get("damage_log") or [])
+                    log.append({
+                        "delta": delta,
+                        "at": datetime.now(UTC).isoformat(),
+                    })
+                    conditions["damage_log"] = log
+                    patch_fields["conditions"] = conditions
+
+        updated = await self.state_repo.update(db, state=state, **patch_fields)
+        await db.commit()
+        owner_is_gm = await self.room_character_repo.character_owner_is_gm_in_any_room(
+            db,
+            character_id=character_id,
+            owner_id=character.owner_id,
+        )
+        return present_character_state(
+            character,
+            updated,
+            game_role=game_role,
+            viewer_user_id=user.id,
+            owner_is_gm_in_room=owner_is_gm,
+        )

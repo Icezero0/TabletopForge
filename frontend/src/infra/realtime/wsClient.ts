@@ -21,6 +21,10 @@ export type WSEventName =
   | "drawing_created"
   | "drawing_updated"
   | "drawing_deleted"
+  | "token_created"
+  | "token_updated"
+  | "token_deleted"
+  | "character_state_updated"
   | "pointer_presence"
   | "pointer_laser";
 

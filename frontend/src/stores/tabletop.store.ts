@@ -2,16 +2,22 @@ import { defineStore } from "pinia";
 import {
   deleteRoomDrawings,
   deleteRoomMap,
+  deleteRoomToken,
   getRoomTabletop,
   patchRoomDrawing,
   patchRoomMap,
+  patchRoomToken,
   patchRoomTabletopSettings,
   postRoomDrawing,
   postRoomMap,
+  postRoomToken,
+  spawnRoomCharacterToken,
   type RoomDrawing,
   type RoomMap,
+  type RoomToken,
   type RoomTabletopSettings,
   type RoomTabletopSnapshot,
+  type TokenStateSummary,
 } from "@/infra/api/rooms.api";
 
 type RoomTabletopState = {
@@ -52,6 +58,7 @@ export const useTabletopStore = defineStore("tabletop", {
     getSettings: (state) => (roomId: number) => state.rooms[roomId]?.snapshot?.settings ?? null,
     getMaps: (state) => (roomId: number) => state.rooms[roomId]?.snapshot?.maps ?? [],
     getDrawings: (state) => (roomId: number) => state.rooms[roomId]?.snapshot?.drawings ?? [],
+    getTokens: (state) => (roomId: number) => state.rooms[roomId]?.snapshot?.tokens ?? [],
   },
 
   actions: {
@@ -71,7 +78,7 @@ export const useTabletopStore = defineStore("tabletop", {
     applySettings(roomId: number, settings: RoomTabletopSettings) {
       const state = this.ensureRoom(roomId);
       if (!state.snapshot) {
-        state.snapshot = { settings, maps: [], drawings: [] };
+        state.snapshot = { settings, maps: [], drawings: [], tokens: [] };
         return;
       }
       state.snapshot.settings = settings;
@@ -114,6 +121,40 @@ export const useTabletopStore = defineStore("tabletop", {
       if (!state.snapshot) return;
       const idSet = new Set(drawingIds);
       state.snapshot.drawings = state.snapshot.drawings.filter((d) => !idSet.has(d.id));
+    },
+
+    applyTokenCreated(roomId: number, token: RoomToken) {
+      const state = this.ensureRoom(roomId);
+      if (!state.snapshot) return;
+      const tokens = state.snapshot.tokens.filter((t) => t.id !== token.id);
+      tokens.push(token);
+      state.snapshot.tokens = tokens.sort((a, b) => a.z_index - b.z_index || a.id - b.id);
+    },
+
+    applyTokenUpdated(roomId: number, token: RoomToken) {
+      this.applyTokenCreated(roomId, token);
+    },
+
+    applyTokenDeleted(roomId: number, tokenId: number) {
+      const state = this.ensureRoom(roomId);
+      if (!state.snapshot) return;
+      state.snapshot.tokens = state.snapshot.tokens.filter((t) => t.id !== tokenId);
+    },
+
+    applyCharacterStateUpdated(
+      roomId: number,
+      characterId: number,
+      summary: TokenStateSummary,
+    ) {
+      const state = this.ensureRoom(roomId);
+      if (!state.snapshot) return;
+      state.snapshot = {
+        ...state.snapshot,
+        tokens: state.snapshot.tokens.map((token) => {
+          if (token.linked_character_id !== characterId) return token;
+          return { ...token, state_summary: summary };
+        }),
+      };
     },
 
     async loadSnapshot(roomId: number) {
@@ -183,6 +224,40 @@ export const useTabletopStore = defineStore("tabletop", {
     async removeDrawings(roomId: number, ids: number[]) {
       await deleteRoomDrawings(roomId, ids);
       this.applyDrawingsDeleted(roomId, ids);
+    },
+
+    async createToken(
+      roomId: number,
+      payload: Parameters<typeof postRoomToken>[1],
+    ) {
+      const token = await postRoomToken(roomId, payload);
+      this.applyTokenCreated(roomId, token);
+      return token;
+    },
+
+    async spawnCharacterToken(
+      roomId: number,
+      characterId: number,
+      payload?: { x?: number; y?: number; name?: string },
+    ) {
+      const token = await spawnRoomCharacterToken(roomId, characterId, payload);
+      this.applyTokenCreated(roomId, token);
+      return token;
+    },
+
+    async updateToken(
+      roomId: number,
+      tokenId: number,
+      payload: Parameters<typeof patchRoomToken>[2],
+    ) {
+      const token = await patchRoomToken(roomId, tokenId, payload);
+      this.applyTokenUpdated(roomId, token);
+      return token;
+    },
+
+    async removeToken(roomId: number, tokenId: number) {
+      await deleteRoomToken(roomId, tokenId);
+      this.applyTokenDeleted(roomId, tokenId);
     },
 
     resetRoom(roomId: number) {

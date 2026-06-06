@@ -9,7 +9,8 @@ import {
 import {
   getCharacter, createCharacter, patchCharacter,
 } from "@/infra/api/character.api";
-import { usePageReturnTo } from "@/composables/useNavigationReturn";
+import { postRoomCharacter } from "@/infra/api/roomCharacters.api";
+import { usePageReturnTo, RETURN_TO_QUERY } from "@/composables/useNavigationReturn";
 import { useToastsStore } from "@/stores/toasts.store";
 import CharacterIdentityTab from "@/features/character/components/tabs/CharacterIdentityTab.vue";
 import CharacterAttributesTab from "@/features/character/components/tabs/CharacterAttributesTab.vue";
@@ -30,6 +31,32 @@ const characterId = computed(() => {
   return id && id !== "new" ? Number(id) : null;
 });
 const isEdit = computed(() => characterId.value !== null);
+
+const roomIdFromQuery = computed(() => {
+  const raw = route.query.roomId;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+});
+
+const kindFromQuery = computed(() => {
+  const raw = route.query.kind;
+  if (raw === "additional" || raw === "pc") return raw;
+  return "pc";
+});
+
+function routeQueryWithReturn() {
+  const query: Record<string, string> = {};
+  if (typeof route.query[RETURN_TO_QUERY] === "string") {
+    query[RETURN_TO_QUERY] = route.query[RETURN_TO_QUERY];
+  }
+  if (roomIdFromQuery.value != null) {
+    query.roomId = String(roomIdFromQuery.value);
+  }
+  if (kindFromQuery.value !== "pc") {
+    query.kind = kindFromQuery.value;
+  }
+  return query;
+}
 
 const TABS = [
   { key: "identity",   label: () => t("character.tabs.identity") },
@@ -91,7 +118,7 @@ async function loadCharacter(id: number) {
     savedSnapshot.value = currentSnapshot.value;
   } catch {
     toasts.push({ message: t("character.errors.loadFailed"), tone: "danger" });
-    router.push("/characters");
+    router.push({ path: "/characters", query: routeQueryWithReturn() });
   } finally {
     isLoading.value = false;
   }
@@ -110,6 +137,7 @@ async function save() {
       name: charName.value,
       system: formSystem.value,
       portrait_asset_id: formPortraitAssetId.value,
+      token_image_asset_id: formPortraitAssetId.value ?? undefined,
       identity: formIdentity.value,
       flavor: formFlavor.value,
       attributes: formAttributes.value,
@@ -123,11 +151,32 @@ async function save() {
       await patchCharacter(characterId.value!, payload);
       savedSnapshot.value = currentSnapshot.value;
       toasts.push({ message: t("character.toast.saved"), tone: "success" });
+    } else if (roomIdFromQuery.value != null) {
+      await postRoomCharacter(roomIdFromQuery.value, {
+        kind: kindFromQuery.value,
+        ...payload,
+      });
+      savedSnapshot.value = currentSnapshot.value;
+      toasts.push({ message: t("room.characters.created"), tone: "success" });
+      if (backTo.value.startsWith("/rooms/")) {
+        await router.push({
+          path: backTo.value,
+          query: { openCharacterPopover: "1" },
+        });
+      } else {
+        await router.push({
+          path: `/rooms/${roomIdFromQuery.value}`,
+          query: { openCharacterPopover: "1" },
+        });
+      }
     } else {
       const created = await createCharacter(payload);
       savedSnapshot.value = currentSnapshot.value;
       toasts.push({ message: t("character.toast.created"), tone: "success" });
-      router.replace(`/characters/${created.id}`);
+      await router.replace({
+        path: `/characters/${created.id}`,
+        query: routeQueryWithReturn(),
+      });
     }
   } catch {
     toasts.push({ message: isEdit.value ? t("character.toast.saveFailed") : t("character.toast.createFailed"), tone: "danger" });

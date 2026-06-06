@@ -6,7 +6,7 @@ import { PlusIcon } from "@heroicons/vue/24/outline";
 import { useCharacters } from "@/features/character/composables/useCharacters";
 import CharacterCard from "@/features/character/components/CharacterCard.vue";
 import type { Character } from "@/infra/api/character.api";
-import { usePageReturnTo } from "@/composables/useNavigationReturn";
+import { usePageReturnTo, useNavigationReturn } from "@/composables/useNavigationReturn";
 import { useToastsStore } from "@/stores/toasts.store";
 import BaseButton from "@/ui/base/BaseButton.vue";
 import BaseConfirmDialog from "@/ui/base/BaseConfirmDialog.vue";
@@ -16,6 +16,7 @@ import { ref } from "vue";
 const { t } = useI18n();
 const router = useRouter();
 const { backTo, backText } = usePageReturnTo();
+const { linkTarget } = useNavigationReturn();
 const toasts = useToastsStore();
 const chars = useCharacters();
 
@@ -53,7 +54,7 @@ onMounted(() => void chars.fetchPage(1));
     :max-width="1100"
   >
     <template #actions>
-      <BaseButton variant="primary" @click="router.push('/characters/new')">
+      <BaseButton variant="primary" @click="router.push(linkTarget('/characters/new'))">
         <span class="btn-icon-text">
           <AppIcon :icon="PlusIcon" :size="16" />
           {{ t("character.newCharacter") }}

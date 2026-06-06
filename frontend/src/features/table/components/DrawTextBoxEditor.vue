@@ -28,9 +28,11 @@ function applyInitialText() {
 
 watch(
   () => props.bounds,
-  (b) => {
+  (b, prev) => {
     localWidth.value = b.width;
     localHeight.value = b.height;
+    const moved = prev == null || b.x !== prev.x || b.y !== prev.y;
+    if (!moved) return;
     void nextTick(() => {
       inputRef.value?.focus();
       applyInitialText();
@@ -47,8 +49,7 @@ watch(
 );
 
 onMounted(() => {
-  applyInitialText();
-  inputRef.value?.focus();
+  if (inputRef.value) applyInitialText();
 });
 
 function measureSize() {
@@ -62,7 +63,9 @@ function measureSize() {
   const h = Math.max(props.bounds.height, el.scrollHeight + 4);
   localHeight.value = h;
   el.style.height = `${h}px`;
-  emit("resize", w);
+  if (w !== props.bounds.width) {
+    emit("resize", w);
+  }
 }
 
 function submit() {

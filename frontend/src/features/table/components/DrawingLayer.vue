@@ -4,7 +4,7 @@ import type { RoomDrawing } from "@/infra/api/rooms.api";
 import type { GameRole } from "@/features/room/types";
 import type { TableToolMode } from "@/features/table/types";
 import type { DrawPreview } from "@/features/table/composables/useDrawingTools";
-import { DRAWING_PICK_STROKE_HIT } from "@/features/table/constants";
+import { DRAWING_BAND_BASE, DRAWING_PICK_STROKE_HIT } from "@/features/table/constants";
 import {
   brushPathFromPoints,
   findTopDrawingAt,
@@ -28,6 +28,7 @@ const emit = defineEmits<{
   pointerUp: [x: number, y: number, event: PointerEvent];
   selectDrawing: [id: number];
   editText: [id: number];
+  drawingContextMenu: [id: number, event: MouseEvent];
 }>();
 
 const svgRef = ref<SVGSVGElement | null>(null);
@@ -98,7 +99,9 @@ function onPointerDown(event: PointerEvent) {
   if (!canDraw.value) return;
   event.stopPropagation();
   event.preventDefault();
-  svgRef.value?.setPointerCapture(event.pointerId);
+  if (props.subTool !== "text") {
+    svgRef.value?.setPointerCapture(event.pointerId);
+  }
   emit("pointerDown", pt.x, pt.y, event);
 }
 
@@ -135,6 +138,17 @@ function onPickClick(event: MouseEvent) {
   const pt = scenePointFromClient(event.clientX, event.clientY);
   const hit = findTopDrawingAt(props.drawings, pt.x, pt.y);
   if (hit) emit("selectDrawing", hit.id);
+}
+
+function onDrawingContextMenu(event: MouseEvent) {
+  if (!canPickDrawing.value) return;
+  const pt = scenePointFromClient(event.clientX, event.clientY);
+  const hit = findTopDrawingAt(props.drawings, pt.x, pt.y);
+  if (!hit) return;
+  event.preventDefault();
+  event.stopPropagation();
+  emit("selectDrawing", hit.id);
+  emit("drawingContextMenu", hit.id, event);
 }
 
 function onTextDblClick(drawing: RoomDrawing, event: MouseEvent) {
@@ -195,12 +209,16 @@ function previewLabelPos(p: DrawPreview) {
       handTool: toolMode === 'hand',
       drawMode: canDraw,
     }"
-    :style="drawCursor ? { cursor: drawCursor } : undefined"
+    :style="{
+      ...(drawCursor ? { cursor: drawCursor } : {}),
+      zIndex: DRAWING_BAND_BASE,
+    }"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
     @pointercancel="onPointerUp"
     @click="onPickClick"
+    @contextmenu="onDrawingContextMenu"
   >
     <g
       v-for="drawing in sortedDrawings"
@@ -423,7 +441,6 @@ function previewLabelPos(p: DrawPreview) {
   height: 100%;
   pointer-events: none;
   overflow: visible;
-  z-index: 6;
 }
 
 .drawingLayer.interactive.drawMode {

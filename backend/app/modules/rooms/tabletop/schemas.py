@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.modules.rooms.tabletop.constants import DrawingKind
+from app.modules.rooms.tabletop.constants import DrawingKind, TokenType
 
 
 class RoomTabletopSettingsResponse(BaseModel):
@@ -77,3 +77,55 @@ class RoomTabletopSnapshotResponse(BaseModel):
     settings: RoomTabletopSettingsResponse
     maps: list[RoomMapResponse]
     drawings: list[RoomDrawingResponse]
+    tokens: list["RoomTokenResponse"]
+
+
+class TokenStateSummary(BaseModel):
+    current_hp: int | None = None
+    max_hp: int | None = None
+    ac: int | None = None
+    pp: int | None = None
+    damage_taken: int | None = None
+
+
+class RoomTokenResponse(BaseModel):
+    id: int
+    room_id: int
+    asset_id: int | None
+    linked_character_id: int | None
+    name: str
+    token_type: TokenType
+    x: float
+    y: float
+    width: float
+    height: float
+    rotation: float
+    z_index: int
+    visible: bool
+    locked: bool
+    owner_user_id: int
+    linked_character_owner_id: int | None = None
+    state_summary: TokenStateSummary | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class RoomTokenPatch(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=255)
+    x: float | None = None
+    y: float | None = None
+    width: float | None = Field(default=None, gt=0)
+    height: float | None = Field(default=None, gt=0)
+    rotation: float | None = None
+    z_index: int | None = None
+    visible: bool | None = None
+    locked: bool | None = None
+    linked_character_id: int | None = None
+
+
+class SpawnCharacterTokenRequest(BaseModel):
+    x: float | None = None
+    y: float | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=255)

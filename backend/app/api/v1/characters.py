@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi import Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_realtime_publisher
 from app.core.database import get_db
 from app.modules.auth.deps import get_current_user
 from app.modules.character.schemas import (
@@ -9,13 +10,20 @@ from app.modules.character.schemas import (
     CharacterListResponse,
     CharacterPatch,
     CharacterResponse,
+    CharacterStatePatch,
+    CharacterStateResponse,
 )
 from app.modules.character.service import CharacterService
+from app.modules.rooms.characters.repository import RoomCharacterRepository
+from app.modules.rooms.tabletop.service import RoomTabletopService
 from app.modules.users.models import User
+from app.realtime.publisher import RealtimePublisher
 
 router = APIRouter(prefix="/characters", tags=["characters"])
 
 character_service = CharacterService()
+room_character_repo = RoomCharacterRepository()
+tabletop_service = RoomTabletopService()
 
 
 @router.get("", response_model=CharacterListResponse)
@@ -36,10 +44,16 @@ async def create_character(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CharacterResponse:
+    data = payload.model_dump()
+    state = data.pop("state", None)
+    kind = data.get("kind")
+    if kind is not None:
+        data["kind"] = kind.value if hasattr(kind, "value") else kind
     character = await character_service.create_character(
         db,
         user=current_user,
-        **payload.model_dump(),
+        state=state,
+        **data,
     )
     return CharacterResponse.model_validate(character)
 
@@ -63,12 +77,11 @@ async def update_character(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CharacterResponse:
-    # Only update fields that were explicitly included in the request body.
-    # This lets clients send null to clear nullable fields (portrait_asset_id, spells)
-    # without affecting fields they didn't mention.
     patch_fields = {
         k: v for k, v in payload.model_dump().items() if k in payload.model_fields_set
     }
+    if "kind" in patch_fields and patch_fields["kind"] is not None:
+        patch_fields["kind"] = patch_fields["kind"].value
     character = await character_service.update_character(
         db, character_id=character_id, user=current_user, patch_fields=patch_fields
     )
@@ -85,3 +98,52 @@ async def delete_character(
         db, character_id=character_id, user=current_user
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{character_id}/state", response_model=CharacterStateResponse)
+async def get_character_state(
+    character_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CharacterStateResponse:
+    return await character_service.get_character_state(
+        db,
+        character_id=character_id,
+        user=current_user,
+    )
+
+
+@router.patch("/{character_id}/state", response_model=CharacterStateResponse)
+async def patch_character_state(
+    character_id: int,
+    payload: CharacterStatePatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> CharacterStateResponse:
+    patch_fields = {
+        k: v for k, v in payload.model_dump().items() if k in payload.model_fields_set
+    }
+    state = await character_service.patch_character_state(
+        db,
+        character_id=character_id,
+        user=current_user,
+        patch_fields=patch_fields,
+    )
+    broadcast = await tabletop_service.build_character_state_broadcast(
+        db,
+        character_id=character_id,
+    )
+    if broadcast is not None and broadcast.get("state_summary") is not None:
+        room_ids = await room_character_repo.list_room_ids_for_character(
+            db,
+            character_id=character_id,
+        )
+        for room_id in room_ids:
+            await publisher.publish_character_state_updated(
+                room_id=room_id,
+                character_id=character_id,
+                state_summary=broadcast["state_summary"],
+                state_summary_public=broadcast.get("state_summary_public"),
+            )
+    return state

@@ -12,8 +12,10 @@ class CharacterRepository:
         owner_id: int,
         name: str,
         player_name: str = "",
+        kind: str = "pc",
         system: str = "dnd5e",
         portrait_asset_id: int | None = None,
+        token_image_asset_id: int | None = None,
         identity: dict | None = None,
         flavor: dict | None = None,
         attributes: dict | None = None,
@@ -26,8 +28,10 @@ class CharacterRepository:
             owner_id=owner_id,
             name=name,
             player_name=player_name,
+            kind=kind,
             system=system,
             portrait_asset_id=portrait_asset_id,
+            token_image_asset_id=token_image_asset_id,
             identity=identity or {},
             flavor=flavor or {},
             attributes=attributes or {},
@@ -51,6 +55,19 @@ class CharacterRepository:
             select(Character).where(Character.id == character_id)
         )
         return result.scalar_one_or_none()
+
+    async def get_by_ids(
+        self,
+        db: AsyncSession,
+        *,
+        character_ids: list[int],
+    ) -> dict[int, Character]:
+        if not character_ids:
+            return {}
+        result = await db.execute(
+            select(Character).where(Character.id.in_(character_ids))
+        )
+        return {c.id: c for c in result.scalars().all()}
 
     async def list_by_owner(
         self,

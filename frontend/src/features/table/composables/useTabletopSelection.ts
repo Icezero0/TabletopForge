@@ -12,6 +12,10 @@ export function useTabletopSelection() {
     selection.value = { type: "drawing", id };
   }
 
+  function selectToken(id: number) {
+    selection.value = { type: "token", id };
+  }
+
   function clearSelection() {
     selection.value = null;
   }
@@ -20,6 +24,7 @@ export function useTabletopSelection() {
     selection,
     selectMap,
     selectDrawing,
+    selectToken,
     clearSelection,
   };
 }

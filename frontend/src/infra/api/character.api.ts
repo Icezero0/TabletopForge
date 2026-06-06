@@ -1,11 +1,15 @@
 import { http } from "@/infra/http/client";
 
+export type CharacterKind = "pc" | "additional" | "monster";
+
 export type Character = {
   id: number;
   owner_id: number;
   name: string;
   player_name: string;
+  kind: CharacterKind;
   portrait_asset_id: number | null;
+  token_image_asset_id: number | null;
   system: string;
   identity: Record<string, unknown>;
   flavor: Record<string, unknown>;
@@ -29,8 +33,10 @@ export type CharacterListResponse = {
 export type CharacterPayload = {
   name: string;
   player_name?: string;
+  kind?: CharacterKind;
   system?: string;
   portrait_asset_id?: number | null;
+  token_image_asset_id?: number | null;
   identity?: Record<string, unknown>;
   flavor?: Record<string, unknown>;
   attributes?: Record<string, unknown>;

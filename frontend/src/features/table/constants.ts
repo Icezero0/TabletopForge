@@ -9,6 +9,18 @@ export const GRID_CELL_PX_STEP = 4;
 /** Scene-space half-size of the repeating grid (total span = 2 × half). */
 export const SCENE_GRID_HALF_EXTENT = 32000;
 
+export const TOKEN_BAND_BASE = 100;
+/** 绘制与 Token 同类 band 基准（effectiveZ = base + z_index） */
+export const DRAWING_BAND_BASE = TOKEN_BAND_BASE;
+/** 测距叠层：高于 Token/绘制，仅低于网格 */
+export const MEASURE_LAYER_Z = TOKEN_BAND_BASE + 99;
+/** 网格叠层：SceneCanvas 内最上（不拦截指针） */
+export const GRID_LAYER_Z = TOKEN_BAND_BASE + 100;
+
+export function sceneBandZ(zIndex: number, base = TOKEN_BAND_BASE) {
+  return base + zIndex;
+}
+
 export const MAP_SCALE_MIN = 0.01;
 export const MAP_SCALE_STEP = 0.001;
 

@@ -89,25 +89,30 @@ ORM 模型导出（`backend/app/db/models.py`）：
 - `20260605_0004_add_asset_hash_ref_count_and_avatar_history`
 - `20260604_0004_add_room_tabletop`
 - `20260606_0005_add_library_resources`
-- `20260606_0006_add_characters`（current head）
+- `20260606_0006_add_characters`
+- `20260606_0007_add_room_tokens`
+- `20260606_0008_extend_characters_kind_token_image`
+- `20260606_0009_add_character_states`
+- `20260606_0010_add_room_characters`（current head）
 
 ## 4.2 文档已规划、代码未落地
 
 | 模块（设计文档） | 说明 |
 |---|---|
-| CharacterState 实时状态层 | `09_module_design/character_card.md` §7；`character_states` 表；当前 HP / Buff 等待落地 |
 | RP 消息 | `09_module_design/chat_and_rp.md`；`rp_messages` |
-| 地图桌面（MVP 扁平） | `rooms/tabletop`；`room_tabletop_settings`, `room_maps`, `room_drawings`；Phase 1–2 已落地 |
-| Token | `09_module_design/token_system.md` |
+| 地图桌面（MVP 扁平） | `rooms/tabletop`；`room_tabletop_settings`, `room_maps`, `room_drawings`, **`room_tokens`**（Phase 1）；地图/绘制/Token HTTP+WS 已落地 |
+| **房间角色库 / CharacterState** | **Phase 2–4 已落地**：`room_characters`、`character_states`；`characters.kind`（业务 `pc`/`additional`）；GM-owned 角色 PL 仅 `damage_taken`（presenter）；`portrait_asset_id`→`token_image_asset_id` 回退；GM PATCH 降 HP 累计伤害；WS `state_summary_public` |
+| Token | **Phase 1–4 已落地**：`room_tokens` CRUD、WS、`TokenLayer`；`linked_character_id`、`spawn-token`、`state_summary`（HP/AC/PP）、`character_state_updated` WS |
+| InfoPanel / 场上列表 | **Phase 3–4 已落地**：统一 `InfoPanel`（PC/additional State 编辑）；`InGameCharacterList`；统一 `AddRoomCharacterDialog`（PL/GM 分支）；Context Menu「查看信息」 |
 | 骰子 / DND5E 规则 | `09_module_design/dice.md`, `dnd5e_rules.md` |
 | 操作日志 | `09_module_design/operation_log.md` |
 | 战斗辅助 | `09_module_design/combat_assistant.md` |
-| 资源库 Token/角色 素材类型 | 后端 `library` 模块已落地，当前仅 `map_background` 类型；Token 图片等资源类型待扩展 |
+| 资源库 Token/角色 素材类型 | 后端 `library` 模块已落地；业务 asset **`token_image`** 已用于地图 Token 上传 |
 | 跑团桌面（Table） | `01_product_requirements.md` §4.2、`09_module_design/tabletop_scene.md` 等 |
 
 **身份说明**：`room_members.game_role`（`GM` | `PL` | `OB`）已落地，与 `room_role`（DB 列 `role`）分离；Tabletop 权限桩见 `game_permissions.py`（`08` §6.4，Step 4 起消费）。
 
-房间页（`frontend/src/pages/room/RoomPage.vue`）已实现 **全屏地图 + 悬浮可收起面板**（`features/table/`）：`TableStage` + `MapViewport` 铺满视口；左上 `GovernanceDock` + `InGameCharacterList`（空态）、左下聊天、顶部工具条、底部素材条、右侧信息/备忘录均为 `FloatingPanel`；个人备忘录经 `GET/PUT /rooms/{id}/personal-memo` 持久化。地图导入、Token、绘制、场上角色业务数据仍待 Step 4–5；交互见 `03_frontend_design.md` §4.2。
+房间页（`frontend/src/pages/room/RoomPage.vue`）已实现 **全屏地图 + 悬浮可收起面板**（`features/table/`）：`TableStage` + `MapViewport` 铺满视口；地图/绘制/**Token** 协作；底栏房间库 + 左上 **InGameCharacterList** 上场；Token **HP/AC/PP 预览**；右侧 **InfoPanel** 单槽；仍保留 Phase 1 独立 Token 放置。
 
 ---
 
@@ -161,7 +166,7 @@ Client (Vue)
 
 包含：协议（`protocol`）、频道（`channels`）、WS 认证、房间 handler、在线 presence、`rest_sync`（HTTP 变更后推送）、`publisher`、`dispatcher` 等。
 
-与 `06_websocket_protocol.md` 设计方向一致。当前主要服务**房间级消息与成员相关事件**；Token 移动、场景切换、角色状态、骰子结果等游戏事件**尚未接入**。
+与 `06_websocket_protocol.md` 设计方向一致。已接入 tabletop 事件（settings/map/drawing/**token**）；角色状态、骰子结果等游戏事件尚未接入。
 
 ---
 
@@ -179,7 +184,7 @@ Client (Vue)
 | 文档阶段（`00_overview.md` §10） | 状态 |
 |---|---|
 | Phase 1：基础房间与权限 | **大部分完成**（Table 区未实现） |
-| 跑团桌面 MVP（`01` §4.2） | **进行中**（Step 1–4 地图/绘制/Pointer 已落地；Step 5 角色/Token 待做，见 `working-note/04-map-core.md`） |
+| 跑团桌面 MVP（`01` §4.2） | **Step 5 已完成**（Phase 1–4：Token、房间角色库、绑定/InfoPanel、GM 怪物与伤害可见性，见 `working-note/05-character-core.md`） |
 | Phase 4：RP 与骰子 | **未开始**（普通聊天已具备；不在跑团桌面 MVP） |
 | Phase 5：战斗辅助 | **未开始** |
 
@@ -200,7 +205,7 @@ Client (Vue)
 
 1. ~~迁移 `game_role`~~（已完成）→ ~~Table 布局（Step 2）~~（已完成）→ ~~Step 3 迁入收尾~~（已完成）→ Tabletop 权限消费（Step 4）+ 业务 assets。
 2. Table 视口、网格常显、地图底图（上传、锁定，band z=0）。
-3. Token 层（band z=100）与角色 / 怪物数据模型。
+3. ~~Token 层（band z=100）~~（Phase 1 已落地）→ ~~角色绑定 / InfoPanel / 场上列表~~（Phase 3 已落地）→ GM 怪物（Phase 4）。
 4. 绘制层（band z=200）、橡皮擦与框选删除（测距 ○ 后续）。
 5. 每步更新 `05_api_design.md`、`07_database_design.md` 与本节实现对照表。
 6. **跑团桌面 MVP 完成后**：悬浮面板统一入口显隐 + 自由拖动（`01` §4.3、`03` §11）。

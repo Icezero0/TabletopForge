@@ -170,6 +170,63 @@ class RealtimePublisher:
             data={"room_id": room_id, "drawing_ids": drawing_ids},
         )
 
+    async def publish_token_created(
+        self,
+        *,
+        room_id: int,
+        token: dict[str, Any],
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.TOKEN_CREATED,
+            data={"room_id": room_id, "token": token},
+        )
+
+    async def publish_token_updated(
+        self,
+        *,
+        room_id: int,
+        token: dict[str, Any],
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.TOKEN_UPDATED,
+            data={"room_id": room_id, "token": token},
+        )
+
+    async def publish_token_deleted(
+        self,
+        *,
+        room_id: int,
+        token_id: int,
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.TOKEN_DELETED,
+            data={"room_id": room_id, "token_id": token_id},
+        )
+
+    async def publish_character_state_updated(
+        self,
+        *,
+        room_id: int,
+        character_id: int,
+        state_summary: dict[str, Any],
+        state_summary_public: dict[str, Any] | None = None,
+    ) -> None:
+        data: dict[str, Any] = {
+            "room_id": room_id,
+            "character_id": character_id,
+            "state_summary": state_summary,
+        }
+        if state_summary_public is not None:
+            data["state_summary_public"] = state_summary_public
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.CHARACTER_STATE_UPDATED,
+            data=data,
+        )
+
     async def publish_pointer_presence(
         self,
         *,

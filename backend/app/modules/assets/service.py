@@ -18,6 +18,7 @@ from app.modules.assets.constants import (
 )
 from app.modules.assets.models import Asset
 from app.modules.assets.repository import AssetRepository
+from app.modules.rooms.characters.repository import RoomCharacterRepository
 from app.modules.rooms.tabletop.repository import RoomTabletopRepository
 from app.modules.site.constants import SitePermission, SiteRole
 from app.modules.site.permissions import require_site_permission
@@ -28,6 +29,7 @@ class AssetService:
     def __init__(self) -> None:
         self.repo = AssetRepository()
         self.tabletop_repo = RoomTabletopRepository()
+        self.room_character_repo = RoomCharacterRepository()
         self.settings = get_settings()
 
     def _site_role(self, user: User) -> SiteRole:
@@ -41,6 +43,7 @@ class AssetService:
             AssetType.AVATAR: ALLOWED_IMAGE_CONTENT_TYPES,
             AssetType.FEEDBACK_IMAGE: ALLOWED_IMAGE_CONTENT_TYPES,
             AssetType.MAP_BACKGROUND: ALLOWED_IMAGE_CONTENT_TYPES,
+            AssetType.TOKEN_IMAGE: ALLOWED_IMAGE_CONTENT_TYPES,
             AssetType.IMAGE: ALLOWED_IMAGE_CONTENT_TYPES,
             AssetType.AUDIO: ALLOWED_AUDIO_CONTENT_TYPES,
         }.get(asset_type)
@@ -224,6 +227,20 @@ class AssetService:
 
         if asset_type == AssetType.MAP_BACKGROUND:
             if await self.tabletop_repo.user_can_read_map_asset(
+                db,
+                asset_id=asset.id,
+                user_id=user.id,
+            ):
+                return
+
+        if asset_type == AssetType.TOKEN_IMAGE:
+            if await self.tabletop_repo.user_can_read_token_asset(
+                db,
+                asset_id=asset.id,
+                user_id=user.id,
+            ):
+                return
+            if await self.room_character_repo.user_can_read_character_token_image(
                 db,
                 asset_id=asset.id,
                 user_id=user.id,

@@ -21,6 +21,7 @@ async def test_get_tabletop_creates_default_settings(
     assert body["settings"]["grid_cell_px"] == 40
     assert body["maps"] == []
     assert body["drawings"] == []
+    assert body["tokens"] == []
 
 
 async def test_gm_can_upload_map_pl_cannot(

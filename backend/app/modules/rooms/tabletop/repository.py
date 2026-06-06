@@ -1,7 +1,7 @@
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.rooms.models import RoomDrawing, RoomMap, RoomMember, RoomTabletopSettings
+from app.modules.rooms.models import RoomDrawing, RoomMap, RoomMember, RoomTabletopSettings, RoomToken
 from app.modules.rooms.tabletop.constants import DEFAULT_GRID_CELL_FT, DEFAULT_GRID_CELL_PX
 
 
@@ -224,5 +224,124 @@ class RoomTabletopRepository:
             select(RoomMember.room_id)
             .join(RoomMap, RoomMap.room_id == RoomMember.room_id)
             .where(RoomMap.asset_id == asset_id, RoomMember.user_id == user_id)
+        )
+        return result.first() is not None
+
+    async def list_tokens(self, db: AsyncSession, *, room_id: int) -> list[RoomToken]:
+        result = await db.execute(
+            select(RoomToken)
+            .where(RoomToken.room_id == room_id)
+            .order_by(RoomToken.z_index, RoomToken.id)
+        )
+        return list(result.scalars().all())
+
+    async def get_token(
+        self,
+        db: AsyncSession,
+        *,
+        token_id: int,
+        room_id: int,
+    ) -> RoomToken | None:
+        result = await db.execute(
+            select(RoomToken).where(RoomToken.id == token_id, RoomToken.room_id == room_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def create_token(
+        self,
+        db: AsyncSession,
+        *,
+        room_id: int,
+        name: str,
+        x: float,
+        y: float,
+        width: float,
+        height: float,
+        owner_user_id: int,
+        asset_id: int | None = None,
+        linked_character_id: int | None = None,
+        token_type: str = "character",
+        rotation: float = 0.0,
+        z_index: int = 0,
+        visible: bool = True,
+        locked: bool = False,
+    ) -> RoomToken:
+        token = RoomToken(
+            room_id=room_id,
+            asset_id=asset_id,
+            linked_character_id=linked_character_id,
+            name=name,
+            token_type=token_type,
+            x=x,
+            y=y,
+            width=width,
+            height=height,
+            rotation=rotation,
+            z_index=z_index,
+            visible=visible,
+            locked=locked,
+            owner_user_id=owner_user_id,
+        )
+        db.add(token)
+        await db.flush()
+        await db.refresh(token)
+        return token
+
+    async def update_token(
+        self,
+        db: AsyncSession,
+        *,
+        token: RoomToken,
+        name: str | None = None,
+        x: float | None = None,
+        y: float | None = None,
+        width: float | None = None,
+        height: float | None = None,
+        rotation: float | None = None,
+        z_index: int | None = None,
+        visible: bool | None = None,
+        locked: bool | None = None,
+        linked_character_id: int | None = None,
+        _linked_character_id_set: bool = False,
+    ) -> RoomToken:
+        if name is not None:
+            token.name = name
+        if x is not None:
+            token.x = x
+        if y is not None:
+            token.y = y
+        if width is not None:
+            token.width = width
+        if height is not None:
+            token.height = height
+        if rotation is not None:
+            token.rotation = rotation
+        if z_index is not None:
+            token.z_index = z_index
+        if visible is not None:
+            token.visible = visible
+        if locked is not None:
+            token.locked = locked
+        if _linked_character_id_set:
+            token.linked_character_id = linked_character_id
+        await db.flush()
+        await db.refresh(token)
+        return token
+
+    async def delete_token(self, db: AsyncSession, *, token: RoomToken) -> None:
+        await db.delete(token)
+        await db.flush()
+
+    async def user_can_read_token_asset(
+        self,
+        db: AsyncSession,
+        *,
+        asset_id: int,
+        user_id: int,
+    ) -> bool:
+        result = await db.execute(
+            select(RoomMember.room_id)
+            .join(RoomToken, RoomToken.room_id == RoomMember.room_id)
+            .where(RoomToken.asset_id == asset_id, RoomMember.user_id == user_id)
         )
         return result.first() is not None

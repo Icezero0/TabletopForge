@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { MeasureState } from "@/features/table/composables/useMeasureTool";
+import { MEASURE_LAYER_Z } from "@/features/table/constants";
 
 const props = defineProps<{
   state: MeasureState | null;
@@ -18,6 +19,7 @@ const midpoint = computed(() => {
     v-if="state"
     class="measureOverlay"
     aria-hidden="true"
+    :style="{ zIndex: MEASURE_LAYER_Z }"
   >
     <line
       :x1="state.x1"
@@ -56,7 +58,6 @@ const midpoint = computed(() => {
   height: 100%;
   overflow: visible;
   pointer-events: none;
-  z-index: 7;
 }
 
 .measureLine {

@@ -2,13 +2,15 @@
 import { computed, onUnmounted, ref, useId, watch } from "vue";
 import type { GameRole } from "@/features/room/types";
 import type { TableToolMode, TabletopSelection } from "@/features/table/types";
-import type { RoomDrawing, RoomMap } from "@/infra/api/rooms.api";
+import type { RoomDrawing, RoomMap, RoomToken } from "@/infra/api/rooms.api";
 import type { DrawPreview, TextPlacementRequest } from "@/features/table/composables/useDrawingTools";
 import type { MeasureState } from "@/features/table/composables/useMeasureTool";
 import type { TextEditRequest } from "@/features/table/composables/useTextDrawingEdit";
-import { SCENE_GRID_HALF_EXTENT } from "@/features/table/constants";
+import { GRID_LAYER_Z, SCENE_GRID_HALF_EXTENT } from "@/features/table/constants";
 import { useTabletopViewport } from "@/features/table/composables/useTabletopViewport";
 import MapLayer from "@/features/table/components/MapLayer.vue";
+import TokenLayer from "@/features/table/components/TokenLayer.vue";
+import TokenSelectionOverlay from "@/features/table/components/TokenSelectionOverlay.vue";
 import DrawingLayer from "@/features/table/components/DrawingLayer.vue";
 import DrawingSelectionOverlay from "@/features/table/components/DrawingSelectionOverlay.vue";
 import DrawTextBoxEditor from "@/features/table/components/DrawTextBoxEditor.vue";
@@ -21,8 +23,10 @@ import type { RemoteCursor, RemoteLaser } from "@/features/table/composables/use
 const props = withDefaults(
   defineProps<{
     maps?: RoomMap[];
+    tokens?: RoomToken[];
     drawings?: RoomDrawing[];
     gridCellPx?: number;
+    gridCellFt?: number;
     scaleBarCells?: number;
     toolMode?: TableToolMode;
     gameRole?: GameRole | "unknown";
@@ -38,11 +42,16 @@ const props = withDefaults(
     remoteCursors?: RemoteCursor[];
     remoteLasers?: RemoteLaser[];
     measureState?: MeasureState | null;
+    currentUserId?: number | null;
+    characterOwnerById?: Map<number, number>;
+    characterKindById?: Map<number, import("@/infra/api/roomCharacters.api").CharacterKind>;
   }>(),
   {
     maps: () => [],
+    tokens: () => [],
     drawings: () => [],
     gridCellPx: 40,
+    gridCellFt: 5,
     scaleBarCells: 5,
     toolMode: "select",
     gameRole: "unknown",
@@ -58,14 +67,23 @@ const props = withDefaults(
     remoteCursors: () => [],
     remoteLasers: () => [],
     measureState: null,
+    currentUserId: null,
+    characterOwnerById: () => new Map<number, number>(),
+    characterKindById: () => new Map(),
   },
 );
 
 const emit = defineEmits<{
   selectMap: [mapId: number];
   mapContextMenu: [mapId: number, event: MouseEvent];
+  selectToken: [tokenId: number];
+  tokenContextMenu: [tokenId: number, event: MouseEvent];
   selectDrawing: [drawingId: number];
   patchMap: [mapId: number, payload: { x?: number; y?: number; scale?: number; locked?: boolean }];
+  patchToken: [
+    tokenId: number,
+    payload: { x?: number; y?: number; width?: number; height?: number },
+  ];
   patchDrawing: [
     drawingId: number,
     payload: { geometry?: Record<string, unknown>; style?: Record<string, unknown> },
@@ -80,6 +98,7 @@ const emit = defineEmits<{
   cancelTextEdit: [];
   textPlacementResize: [width: number];
   editText: [drawingId: number];
+  drawingContextMenu: [drawingId: number, event: MouseEvent];
   contextMenu: [event: MouseEvent];
   clearSelection: [];
   viewportPointerMove: [event: PointerEvent];
@@ -160,11 +179,21 @@ const selectedDrawingId = computed(() =>
   props.selection?.type === "drawing" ? props.selection.id : null,
 );
 
+const selectedTokenId = computed(() =>
+  props.selection?.type === "token" ? props.selection.id : null,
+);
+
 function onContextMenu(event: MouseEvent) {
   if (props.toolMode === "draw" || props.toolMode === "measure") return;
-  if ((event.target as Element).closest(".mapItem")) return;
+  if ((event.target as Element).closest(".mapItem, .tokenWrap, .tokenItem, .tokenSelectionOverlay, .drawingLayer")) return;
   event.preventDefault();
   emit("contextMenu", event);
+}
+
+function onTokenSelectionContextMenu(event: MouseEvent) {
+  const id = selectedTokenId.value;
+  if (id == null) return;
+  emit("tokenContextMenu", id, event);
 }
 
 function onViewportClick(event: MouseEvent) {
@@ -172,7 +201,7 @@ function onViewportClick(event: MouseEvent) {
   const target = event.target as Element;
   if (
     target.closest(
-      ".mapItem, .selectionOverlay, .drawingSelectionOverlay, .textBoxEditor, .drawingLayer.pickMode",
+      ".mapItem, .tokenWrap, .tokenItem, .selectionOverlay, .tokenSelectionOverlay, .drawingSelectionOverlay, .textBoxEditor, .drawingLayer.pickMode",
     )
   ) {
     return;
@@ -184,14 +213,25 @@ function getViewportWidth() {
   return rootRef.value?.clientWidth ?? 0;
 }
 
-defineExpose({ getViewportWidth, scenePointFromClient });
+function scenePointFromViewportCenter() {
+  const el = rootRef.value;
+  if (!el) return { x: 0, y: 0 };
+  const rect = el.getBoundingClientRect();
+  return scenePointFromClient(rect.left + rect.width / 2, rect.top + rect.height / 2);
+}
+
+defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCenter });
 </script>
 
 <template>
   <div
     ref="rootRef"
     class="mapViewport"
-    :class="{ handMode: sceneInteractive, pointerMode, measureMode }"
+    :class="{
+      handMode: sceneInteractive,
+      pointerMode,
+      measureMode,
+    }"
     @contextmenu="onContextMenu"
     @click="onViewportClick"
     @pointermove="onViewportPointerMove"
@@ -211,6 +251,19 @@ defineExpose({ getViewportWidth, scenePointFromClient });
         @map-context-menu="(id, ev) => emit('mapContextMenu', id, ev)"
         @natural-size="emit('mapNaturalSize', $event)"
       />
+      <TokenLayer
+        :tokens="tokens"
+        :tool-mode="toolMode"
+        :game-role="gameRole"
+        :grid-cell-ft="gridCellFt"
+        :grid-cell-px="gridCellPx"
+        :selected-token-id="selectedTokenId"
+        :current-user-id="currentUserId"
+        :character-owner-by-id="characterOwnerById"
+        :character-kind-by-id="characterKindById"
+        @select-token="emit('selectToken', $event)"
+        @token-context-menu="(id, ev) => emit('tokenContextMenu', id, ev)"
+      />
       <DrawingLayer
         ref="drawingLayerRef"
         :drawings="drawings"
@@ -226,7 +279,9 @@ defineExpose({ getViewportWidth, scenePointFromClient });
         @pointer-down="(x, y, e) => emit('drawPointerDown', x, y, e)"
         @pointer-move="(x, y, e) => emit('drawPointerMove', x, y, e)"
         @pointer-up="(x, y, e) => emit('drawPointerUp', x, y, e)"
+        @drawing-context-menu="(id, ev) => emit('drawingContextMenu', id, ev)"
       />
+      <MeasureOverlay :state="measureState" />
       <svg
         class="gridLayer"
         aria-hidden="true"
@@ -236,6 +291,7 @@ defineExpose({ getViewportWidth, scenePointFromClient });
           top: `${gridOrigin}px`,
           width: `${gridSpan}px`,
           height: `${gridSpan}px`,
+          zIndex: GRID_LAYER_Z,
         }"
       >
         <defs>
@@ -268,6 +324,19 @@ defineExpose({ getViewportWidth, scenePointFromClient });
         :viewport-scale="viewportScale"
         @patch-map="(id, p) => emit('patchMap', id, p)"
       />
+      <TokenSelectionOverlay
+        :selection="selection"
+        :tokens="tokens"
+        :tool-mode="toolMode"
+        :game-role="gameRole"
+        :grid-cell-ft="gridCellFt"
+        :grid-cell-px="gridCellPx"
+        :current-user-id="currentUserId"
+        :character-owner-by-id="characterOwnerById"
+        :viewport-scale="viewportScale"
+        @patch-token="(id, p) => emit('patchToken', id, p)"
+        @token-context-menu="onTokenSelectionContextMenu"
+      />
       <DrawingSelectionOverlay
         :selection="selection"
         :drawings="drawings"
@@ -299,7 +368,6 @@ defineExpose({ getViewportWidth, scenePointFromClient });
         @confirm="emit('confirmTextEdit', $event)"
         @cancel="emit('cancelTextEdit')"
       />
-      <MeasureOverlay :state="measureState" />
       <PointerOverlay
         :cursors="remoteCursors"
         :lasers="remoteLasers"
@@ -335,7 +403,6 @@ defineExpose({ getViewportWidth, scenePointFromClient });
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 5;
   overflow: visible;
   pointer-events: none;
 }

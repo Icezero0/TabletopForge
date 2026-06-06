@@ -352,6 +352,37 @@ export type RoomTabletopSnapshot = {
   settings: RoomTabletopSettings;
   maps: RoomMap[];
   drawings: RoomDrawing[];
+  tokens: RoomToken[];
+};
+
+export type TokenStateSummary = {
+  current_hp: number | null;
+  max_hp: number | null;
+  ac: number | null;
+  pp: number | null;
+  damage_taken?: number | null;
+};
+
+export type RoomToken = {
+  id: number;
+  room_id: number;
+  asset_id: number | null;
+  linked_character_id: number | null;
+  name: string;
+  token_type: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+  z_index: number;
+  visible: boolean;
+  locked: boolean;
+  owner_user_id: number;
+  linked_character_owner_id?: number | null;
+  state_summary: TokenStateSummary | null;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 export function assetContentUrl(assetId: number) {
@@ -436,4 +467,69 @@ export async function patchRoomDrawing(
 
 export async function deleteRoomDrawings(roomId: number, ids: number[]) {
   await http.delete(`/rooms/${roomId}/drawings`, { data: { ids } });
+}
+
+export async function postRoomToken(
+  roomId: number,
+  payload: {
+    name: string;
+    x: number;
+    y: number;
+    file?: File;
+    linked_character_id?: number | null;
+  },
+) {
+  const form = new FormData();
+  form.append("name", payload.name);
+  form.append("x", String(payload.x));
+  form.append("y", String(payload.y));
+  if (payload.linked_character_id != null) {
+    form.append("linked_character_id", String(payload.linked_character_id));
+  }
+  if (payload.file) {
+    form.append("file", payload.file);
+  }
+  const { data } = await http.post<RoomToken>(`/rooms/${roomId}/tokens`, form, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+}
+
+export async function spawnRoomCharacterToken(
+  roomId: number,
+  characterId: number,
+  payload?: { x?: number; y?: number; name?: string },
+) {
+  const { data } = await http.post<RoomToken>(
+    `/rooms/${roomId}/characters/${characterId}/spawn-token`,
+    payload ?? {},
+  );
+  return data;
+}
+
+export async function patchRoomToken(
+  roomId: number,
+  tokenId: number,
+  payload: {
+    name?: string;
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    rotation?: number;
+    z_index?: number;
+    visible?: boolean;
+    locked?: boolean;
+    linked_character_id?: number | null;
+  },
+) {
+  const { data } = await http.patch<RoomToken>(
+    `/rooms/${roomId}/tokens/${tokenId}`,
+    payload,
+  );
+  return data;
+}
+
+export async function deleteRoomToken(roomId: number, tokenId: number) {
+  await http.delete(`/rooms/${roomId}/tokens/${tokenId}`);
 }

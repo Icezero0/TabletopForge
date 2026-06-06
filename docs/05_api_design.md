@@ -194,7 +194,6 @@ DELETE /characters/{character_id}   # 删除角色（仅 owner 可操作）
 ```text
 GET   /characters/{character_id}/state
 PATCH /characters/{character_id}/state
-POST  /characters/{character_id}/hp-change
 POST  /characters/{character_id}/effects
 DELETE /characters/{character_id}/effects/{effect_id}
 ```

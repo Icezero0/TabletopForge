@@ -41,6 +41,10 @@ class WsEventType(StrEnum):
     DRAWING_CREATED = "drawing_created"
     DRAWING_UPDATED = "drawing_updated"
     DRAWING_DELETED = "drawing_deleted"
+    TOKEN_CREATED = "token_created"
+    TOKEN_UPDATED = "token_updated"
+    TOKEN_DELETED = "token_deleted"
+    CHARACTER_STATE_UPDATED = "character_state_updated"
     POINTER_PRESENCE = "pointer_presence"
     POINTER_LASER = "pointer_laser"
 

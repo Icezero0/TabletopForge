@@ -5,6 +5,7 @@ class AssetType(StrEnum):
     AVATAR = "avatar"
     FEEDBACK_IMAGE = "feedback_image"
     MAP_BACKGROUND = "map_background"
+    TOKEN_IMAGE = "token_image"
     IMAGE = "image"
     AUDIO = "audio"
 

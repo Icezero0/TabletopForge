@@ -14,10 +14,14 @@ import RoomChatTab from "@/features/room/components/workspace/RoomChatTab.vue";
 import type { GameRole, MemberStatus, RoomRole } from "@/features/room/types";
 import type { ChatSegment } from "@/features/chat/types";
 import { useRoomJoinRequests } from "@/features/room/composables/useRoomJoinRequests";
+import { useRoomCharacters } from "@/features/room/composables/useRoomCharacters";
+import { useRoomInspection } from "@/features/room/composables/useRoomInspection";
 import { useRoomMemberActions } from "@/features/room/composables/useRoomMemberActions";
 import { useRoomRealtimeSession } from "@/features/room/composables/useRoomRealtimeSession";
 import type { RoomRealtimeSessionClosed } from "@/infra/realtime/roomRealtime";
 import BottomAssetBar from "@/features/table/components/BottomAssetBar.vue";
+import AddRoomCharacterDialog from "@/features/room/components/AddRoomCharacterDialog.vue";
+import InGameCharacterList from "@/features/room/components/InGameCharacterList.vue";
 import FloatingPanel from "@/features/table/components/FloatingPanel.vue";
 import GovernanceDock from "@/features/table/components/GovernanceDock.vue";
 import InfoPanel from "@/features/table/components/InfoPanel.vue";
@@ -36,6 +40,7 @@ import { useTableToolMode } from "@/features/table/composables/useTableToolMode"
 import { useTabletopPointer } from "@/features/table/composables/useTabletopPointer";
 import { nextDrawingZIndex } from "@/features/table/drawingTypes";
 import { computeMapScaleForViewport } from "@/features/table/utils/mapScale";
+import { canInspectToken, canManageToken } from "@/features/table/utils/tokenDisplay";
 import { useMessagesStore } from "@/stores/messages.store";
 import { useTabletopStore } from "@/stores/tabletop.store";
 import { useEntitiesStore } from "@/stores/entities.store";
@@ -67,6 +72,24 @@ const roomId = computed(() => {
   const raw = route.params.id;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : 0;
+});
+
+const {
+  characters: roomCharacters,
+  isLoading: roomCharactersLoading,
+  fetchCharacters: fetchRoomCharacters,
+  createCharacter: createRoomCharacter,
+  updateEntryState: updateRoomCharacterState,
+} = useRoomCharacters(roomId);
+
+const { activeInspection, inspectCharacter, clearInspection } = useRoomInspection();
+
+const characterOwnerById = computed(() => {
+  const map = new Map<number, number>();
+  for (const entry of roomCharacters.value) {
+    map.set(entry.character_id, entry.owner_id);
+  }
+  return map;
 });
 
 const canManageRoomRequests = computed(() =>
@@ -108,11 +131,27 @@ watch(toolMode, (mode) => {
 
 const tabletopMaps = computed(() => tabletopStore.getMaps(roomId.value));
 const tabletopDrawings = computed(() => tabletopStore.getDrawings(roomId.value));
-const { selection, selectMap, selectDrawing, clearSelection } = useTabletopSelection();
+const tabletopTokens = computed(() => tabletopStore.getTokens(roomId.value));
+const currentUserId = computed(() => auth.me?.id ?? null);
+const { selection, selectMap, selectDrawing, selectToken, clearSelection } = useTabletopSelection();
 const mapNaturalSizes = ref<Record<number, { w: number; h: number }>>({});
 const mapViewportRef = ref<InstanceType<typeof MapViewport> | null>(null);
 const mapUploadInput = ref<HTMLInputElement | null>(null);
 const mapUploading = ref(false);
+
+const addCharacterDialogOpen = ref(false);
+const characterPopoverOpen = ref(false);
+const infoPanelCollapsed = ref(false);
+const characterSubmitting = ref(false);
+
+const currentUserDisplayName = computed(
+  () => auth.me?.username?.trim() || auth.me?.email?.trim() || "",
+);
+
+const selectedToken = computed(() => {
+  if (selection.value?.type !== "token") return null;
+  return tabletopTokens.value.find((t) => t.id === selection.value!.id) ?? null;
+});
 
 const selectedMap = computed(() => {
   if (selection.value?.type !== "map") return null;
@@ -217,6 +256,13 @@ watch(tabletopMaps, (maps) => {
   }
 });
 
+watch(tabletopTokens, (tokens) => {
+  if (selection.value?.type === "token") {
+    const exists = tokens.some((t) => t.id === selection.value!.id);
+    if (!exists) clearSelection();
+  }
+});
+
 let mapPatchTimer: ReturnType<typeof setTimeout> | null = null;
 const pendingMapPatch = ref<{
   mapId: number;
@@ -278,6 +324,126 @@ function handleSelectDrawing(drawingId: number) {
   selectDrawing(drawingId);
 }
 
+function handleDrawingContextMenu(drawingId: number, event: MouseEvent) {
+  if (toolMode.value === "draw" || toolMode.value === "measure") return;
+  if (!canDraw.value) return;
+  selectDrawing(drawingId);
+  contextMenuX.value = event.clientX;
+  contextMenuY.value = event.clientY;
+  contextMenuOpen.value = true;
+}
+
+const selectedDrawing = computed(() => {
+  if (selection.value?.type !== "drawing") return null;
+  return tabletopDrawings.value.find((d) => d.id === selection.value!.id) ?? null;
+});
+
+function tokenCanManage(token: (typeof tabletopTokens.value)[number]) {
+  return canManageToken(
+    token,
+    currentUserGameRole.value,
+    currentUserId.value,
+    characterOwnerById.value,
+  );
+}
+
+function tokenCanInteract(token: (typeof tabletopTokens.value)[number]) {
+  return canInspectToken(token) || tokenCanManage(token);
+}
+
+function handleSelectToken(tokenId: number) {
+  if (toolMode.value !== "select" && toolMode.value !== "hand") return;
+  const token = tabletopTokens.value.find((t) => t.id === tokenId);
+  if (!token || !tokenCanInteract(token)) return;
+  selectToken(tokenId);
+  if (!infoPanelCollapsed.value && token.linked_character_id != null && canInspectToken(token)) {
+    inspectCharacter({
+      characterId: token.linked_character_id,
+      tokenId: token.id,
+      tokenInstanceName: token.name,
+    });
+  }
+}
+
+function handleTokenContextMenu(tokenId: number, event: MouseEvent) {
+  if (toolMode.value === "draw" || toolMode.value === "measure") return;
+  const token = tabletopTokens.value.find((t) => t.id === tokenId);
+  if (!token || !tokenCanInteract(token)) return;
+  selectToken(tokenId);
+  contextMenuX.value = event.clientX;
+  contextMenuY.value = event.clientY;
+  contextMenuOpen.value = true;
+}
+
+function handleInspectToken(tokenId: number) {
+  const token = tabletopTokens.value.find((t) => t.id === tokenId);
+  if (!token?.linked_character_id) return;
+  inspectCharacter({
+    characterId: token.linked_character_id,
+    tokenId: token.id,
+    tokenInstanceName: token.name,
+  });
+}
+
+function handleInspectCharacter(payload: {
+  characterId: number;
+  tokenId?: number;
+  tokenInstanceName?: string;
+}) {
+  inspectCharacter(payload);
+}
+
+function viewportCenterPoint() {
+  return mapViewportRef.value?.scenePointFromViewportCenter?.() ?? { x: 0, y: 0 };
+}
+
+async function handleSpawnCharacter(characterId: number) {
+  if (!roomId.value) return;
+  const center = viewportCenterPoint();
+  try {
+    await tabletopStore.spawnCharacterToken(roomId.value, characterId, {
+      x: center.x,
+      y: center.y,
+    });
+    toasts.push({ message: t("table.characterList.spawned"), tone: "success" });
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error) || t("table.characterList.spawnFailed"),
+      tone: "danger",
+    });
+  }
+}
+
+function handleInfoStatePatched(
+  characterId: number,
+  state: {
+    current_hp: number | null;
+    max_hp: number | null;
+    armor_class: number | null;
+    damage_taken?: number;
+  },
+) {
+  updateRoomCharacterState(characterId, {
+    current_hp: state.current_hp,
+    max_hp: state.max_hp,
+    ac: state.armor_class,
+    pp:
+      tabletopTokens.value.find((t) => t.linked_character_id === characterId)?.state_summary
+        ?.pp ?? null,
+    damage_taken: state.damage_taken,
+  });
+  if (!roomId.value) return;
+  const existing = tabletopTokens.value.find((t) => t.linked_character_id === characterId);
+  const summary = {
+    current_hp: state.current_hp,
+    max_hp: state.max_hp,
+    ac: state.armor_class,
+    pp: existing?.state_summary?.pp ?? null,
+    damage_taken: state.damage_taken ?? existing?.state_summary?.damage_taken ?? null,
+  };
+  tabletopStore.applyCharacterStateUpdated(roomId.value, characterId, summary);
+}
+
 function handleEditTextDrawing(drawingId: number) {
   if (toolMode.value !== "select" && toolMode.value !== "hand") return;
   if (!canDraw.value) return;
@@ -289,6 +455,7 @@ function handleEditTextDrawing(drawingId: number) {
 
 function handleTextPlacementResize(width: number) {
   if (!textPlacement.value) return;
+  if (textPlacement.value.width === width) return;
   textPlacement.value = { ...textPlacement.value, width };
 }
 
@@ -410,6 +577,33 @@ async function handleContextDeleteDrawing(drawingId: number) {
   }
 }
 
+async function handleContextDrawingLayer(action: "up" | "down" | "top" | "bottom") {
+  const drawing = selectedDrawing.value;
+  if (!drawing || !roomId.value || tabletopDrawings.value.length <= 1) return;
+  const sorted = [...tabletopDrawings.value].sort((a, b) => a.z_index - b.z_index);
+  const idx = sorted.findIndex((d) => d.id === drawing.id);
+  if (idx < 0) return;
+  let target = drawing.z_index;
+  if (action === "up" && idx < sorted.length - 1) {
+    target = sorted[idx + 1]!.z_index;
+  } else if (action === "down" && idx > 0) {
+    target = sorted[idx - 1]!.z_index;
+  } else if (action === "top") {
+    target = Math.max(...sorted.map((d) => d.z_index)) + 1;
+  } else if (action === "bottom") {
+    target = Math.min(...sorted.map((d) => d.z_index)) - 1;
+  }
+  if (target === drawing.z_index) return;
+  try {
+    await tabletopStore.updateDrawing(roomId.value, drawing.id, { z_index: target });
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error),
+      tone: "danger",
+    });
+  }
+}
+
 async function handleContextMapLayer(action: "up" | "down" | "top" | "bottom") {
   const map = selectedMap.value;
   if (!map || !roomId.value || tabletopMaps.value.length <= 1) return;
@@ -429,6 +623,110 @@ async function handleContextMapLayer(action: "up" | "down" | "top" | "bottom") {
   if (target === map.z_index) return;
   try {
     await tabletopStore.updateMap(roomId.value, map.id, { z_index: target });
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error),
+      tone: "danger",
+    });
+  }
+}
+
+let tokenPatchTimer: ReturnType<typeof setTimeout> | null = null;
+const pendingTokenPatch = ref<{
+  tokenId: number;
+  payload: {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    z_index?: number;
+  };
+} | null>(null);
+
+function scheduleTokenPatch(
+  tokenId: number,
+  payload: {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+    z_index?: number;
+  },
+) {
+  const token = tabletopTokens.value.find((t) => t.id === tokenId);
+  if (!token || !roomId.value) return;
+  tabletopStore.applyTokenUpdated(roomId.value, { ...token, ...payload });
+  if (pendingTokenPatch.value?.tokenId === tokenId) {
+    pendingTokenPatch.value = {
+      tokenId,
+      payload: { ...pendingTokenPatch.value.payload, ...payload },
+    };
+  } else {
+    pendingTokenPatch.value = { tokenId, payload };
+  }
+  if (tokenPatchTimer) clearTimeout(tokenPatchTimer);
+  tokenPatchTimer = setTimeout(() => {
+    void flushTokenPatch();
+  }, 150);
+}
+
+async function flushTokenPatch() {
+  const pending = pendingTokenPatch.value;
+  pendingTokenPatch.value = null;
+  tokenPatchTimer = null;
+  if (!pending || !roomId.value) return;
+  try {
+    await tabletopStore.updateToken(roomId.value, pending.tokenId, pending.payload);
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error),
+      tone: "danger",
+    });
+    void tabletopStore.loadSnapshot(roomId.value);
+  }
+}
+
+function handlePatchToken(
+  tokenId: number,
+  payload: { x?: number; y?: number; width?: number; height?: number },
+) {
+  scheduleTokenPatch(tokenId, payload);
+}
+
+async function handleContextDeleteToken(tokenId: number) {
+  if (!roomId.value) return;
+  try {
+    await tabletopStore.removeToken(roomId.value, tokenId);
+    if (selection.value?.type === "token" && selection.value.id === tokenId) {
+      clearSelection();
+    }
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error),
+      tone: "danger",
+    });
+  }
+}
+
+async function handleContextTokenLayer(action: "up" | "down" | "top" | "bottom") {
+  const token = selectedToken.value;
+  if (!token || !roomId.value || tabletopTokens.value.length <= 1) return;
+  const sorted = [...tabletopTokens.value].sort((a, b) => a.z_index - b.z_index);
+  const idx = sorted.findIndex((t) => t.id === token.id);
+  if (idx < 0) return;
+  let target = token.z_index;
+  if (action === "up" && idx < sorted.length - 1) {
+    target = sorted[idx + 1]!.z_index;
+  } else if (action === "down" && idx > 0) {
+    target = sorted[idx - 1]!.z_index;
+  } else if (action === "top") {
+    target = Math.max(...sorted.map((t) => t.z_index)) + 1;
+  } else if (action === "bottom") {
+    target = Math.min(...sorted.map((t) => t.z_index)) - 1;
+  }
+  if (target === token.z_index) return;
+  try {
+    await tabletopStore.updateToken(roomId.value, token.id, { z_index: target });
   } catch (error) {
     toasts.push({
       message: getBackendErrorMessage(error),
@@ -565,9 +863,13 @@ const {
 
 const realtime = useRoomRealtimeSession({
   roomId,
+  gameRole: currentUserGameRole,
   refreshRoom: () => fetchRoom({ silent: true }),
   refreshRoomMembers: fetchRoomMembers,
   refreshRoomRequests: () => fetchRoomRequests({ force: true }),
+  onCharacterStateUpdated: (characterId, summary) => {
+    updateRoomCharacterState(characterId, summary);
+  },
   onSessionClosed: handleRealtimeSessionClosed,
   onPointerPresence: handlePointerPresence,
   onPointerLaser: handlePointerLaser,
@@ -612,6 +914,26 @@ const roomMemberItems = computed(() => entityRoomMembers.value.map((member) => {
 }));
 const roomMemberStatusByUserId = computed<Map<number, MemberStatus>>(() =>
   new Map(roomMemberItems.value.map((member) => [member.id, member.status])));
+
+const characterKindById = computed(() => {
+  const map = new Map<number, (typeof roomCharacters.value)[number]["kind"]>();
+  for (const entry of roomCharacters.value) {
+    map.set(entry.character_id, entry.kind);
+  }
+  return map;
+});
+
+const characterById = computed(() => {
+  const map = new Map<number, (typeof roomCharacters.value)[number]>();
+  for (const entry of roomCharacters.value) {
+    map.set(entry.character_id, entry);
+  }
+  return map;
+});
+
+const ownerNameByUserId = computed(
+  () => new Map(roomMemberItems.value.map((member) => [member.id, member.name])),
+);
 
 function syncCurrentUserRoles() {
   const meId = auth.me?.id;
@@ -759,23 +1081,179 @@ function handleRealtimeSessionClosed(payload: RoomRealtimeSessionClosed) {
   }
 }
 
-function handleAssetPlaceholder() {
-  toasts.push({
-    message: t("table.assets.comingSoon"),
-    tone: "default",
-  });
+function openAddCharacterDialog() {
+  characterPopoverOpen.value = true;
+  addCharacterDialogOpen.value = true;
+}
+
+function closeAddCharacterDialog() {
+  addCharacterDialogOpen.value = false;
+}
+
+const OPEN_CHARACTER_POPOVER_QUERY = "openCharacterPopover";
+
+function applyOpenCharacterPopoverFromQuery() {
+  if (route.query[OPEN_CHARACTER_POPOVER_QUERY] !== "1") return;
+  characterPopoverOpen.value = true;
+  void fetchRoomCharacters();
+  const nextQuery = { ...route.query };
+  delete nextQuery[OPEN_CHARACTER_POPOVER_QUERY];
+  void router.replace({ query: nextQuery });
+}
+
+async function handleCreateRoomPc(payload: {
+  name: string;
+  player_name: string;
+  max_hp: number | null;
+  armor_class: number | null;
+  file: File | null;
+  spawnAfterCreate?: boolean;
+}) {
+  if (!roomId.value) {
+    toasts.push({ message: t("room.invalidId"), tone: "danger" });
+    return;
+  }
+  if (characterSubmitting.value) return;
+  characterSubmitting.value = true;
+  try {
+    const hasState = payload.max_hp != null || payload.armor_class != null;
+    const entry = await createRoomCharacter({
+      kind: "pc",
+      name: payload.name,
+      player_name: payload.player_name,
+      state: hasState
+        ? {
+            max_hp: payload.max_hp,
+            current_hp: payload.max_hp,
+            armor_class: payload.armor_class,
+          }
+        : undefined,
+      file: payload.file ?? undefined,
+    });
+    closeAddCharacterDialog();
+    characterPopoverOpen.value = true;
+    toasts.push({ message: t("room.characters.created"), tone: "success" });
+    if (payload.spawnAfterCreate) {
+      await handleSpawnCharacter(entry.character_id);
+    }
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error) || t("room.characters.createFailed"),
+      tone: "danger",
+    });
+  } finally {
+    characterSubmitting.value = false;
+  }
+}
+
+async function handleCreateRoomAdditional(payload: {
+  name: string;
+  race: string;
+  class_name: string;
+  backstory: string;
+  file: File | null;
+  spawnAfterCreate?: boolean;
+}) {
+  if (!roomId.value) {
+    toasts.push({ message: t("room.invalidId"), tone: "danger" });
+    return;
+  }
+  if (characterSubmitting.value) return;
+  characterSubmitting.value = true;
+  try {
+    const identity: Record<string, unknown> = {};
+    if (payload.race) identity.race = payload.race;
+    if (payload.class_name) {
+      identity.classes = [{ name: payload.class_name, level: 1, subclass: "" }];
+    }
+    const flavor: Record<string, unknown> = {};
+    if (payload.backstory) flavor.backstory = payload.backstory;
+
+    const entry = await createRoomCharacter({
+      kind: "additional",
+      name: payload.name,
+      identity,
+      flavor,
+      file: payload.file ?? undefined,
+    });
+    closeAddCharacterDialog();
+    characterPopoverOpen.value = true;
+    toasts.push({ message: t("room.characters.created"), tone: "success" });
+    if (payload.spawnAfterCreate) {
+      await handleSpawnCharacter(entry.character_id);
+    }
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error) || t("room.characters.createFailed"),
+      tone: "danger",
+    });
+  } finally {
+    characterSubmitting.value = false;
+  }
+}
+
+async function handleCreateRoomQuick(payload: {
+  name: string;
+  max_hp: number | null;
+  armor_class: number | null;
+  backstory: string;
+  file: File | null;
+  spawnAfterCreate?: boolean;
+}) {
+  if (!roomId.value) {
+    toasts.push({ message: t("room.invalidId"), tone: "danger" });
+    return;
+  }
+  if (characterSubmitting.value) return;
+  characterSubmitting.value = true;
+  try {
+    const hasState = payload.max_hp != null || payload.armor_class != null;
+    const flavor: Record<string, unknown> = {};
+    if (payload.backstory) flavor.backstory = payload.backstory;
+
+    const entry = await createRoomCharacter({
+      kind: "additional",
+      name: payload.name,
+      flavor,
+      state: hasState
+        ? {
+            max_hp: payload.max_hp,
+            current_hp: payload.max_hp,
+            armor_class: payload.armor_class,
+          }
+        : undefined,
+      file: payload.file ?? undefined,
+    });
+    closeAddCharacterDialog();
+    characterPopoverOpen.value = true;
+    toasts.push({ message: t("room.characters.created"), tone: "success" });
+    if (payload.spawnAfterCreate) {
+      await handleSpawnCharacter(entry.character_id);
+    }
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error) || t("room.characters.createFailed"),
+      tone: "danger",
+    });
+  } finally {
+    characterSubmitting.value = false;
+  }
 }
 
 onMounted(() => {
+  applyOpenCharacterPopoverFromQuery();
   void fetchRoom();
   void fetchRoomMessages();
   void fetchRoomMembers();
   if (roomId.value) {
     void tabletopStore.loadSnapshot(roomId.value);
+    void fetchRoomCharacters();
   }
 });
 
 watch(roomId, (newId, oldId) => {
+  closeAddCharacterDialog();
+  characterPopoverOpen.value = false;
   currentUserRoomRole.value = "unknown";
   currentUserGameRole.value = "unknown";
   resetRoomRequestsState();
@@ -788,6 +1266,7 @@ watch(roomId, (newId, oldId) => {
   void fetchRoomMembers();
   if (newId) {
     void tabletopStore.loadSnapshot(newId);
+    void fetchRoomCharacters();
   }
 });
 watch(() => auth.me?.id, () => {
@@ -796,6 +1275,10 @@ watch(() => auth.me?.id, () => {
 watch([roomId, currentUserRoomRole], () => {
   void fetchRoomRequests();
 });
+watch(
+  () => route.query[OPEN_CHARACTER_POPOVER_QUERY],
+  () => applyOpenCharacterPopoverFromQuery(),
+);
 </script>
 
 <template>
@@ -822,11 +1305,14 @@ watch([roomId, currentUserRoomRole], () => {
           <MapViewport
             ref="mapViewportRef"
             :maps="tabletopMaps"
+            :tokens="tabletopTokens"
             :drawings="tabletopDrawings"
             :grid-cell-px="gridCellPx"
+            :grid-cell-ft="gridCellFt"
             :scale-bar-cells="scaleBarCells"
             :tool-mode="toolMode"
             :game-role="currentUserGameRole"
+            :current-user-id="currentUserId"
             :selection="selection"
             :draw-preview="drawPreview"
             :map-natural-size="selectedMapNaturalSize"
@@ -839,11 +1325,17 @@ watch([roomId, currentUserRoomRole], () => {
             :remote-cursors="remoteCursors"
             :remote-lasers="remoteLasers"
             :measure-state="measureState"
+            :character-owner-by-id="characterOwnerById"
+            :character-kind-by-id="characterKindById"
             @select-map="handleSelectMap"
             @map-context-menu="handleMapContextMenu"
+            @select-token="handleSelectToken"
+            @token-context-menu="handleTokenContextMenu"
             @select-drawing="handleSelectDrawing"
+            @drawing-context-menu="handleDrawingContextMenu"
             @text-placement-resize="handleTextPlacementResize"
             @patch-map="handlePatchMap"
+            @patch-token="handlePatchToken"
             @patch-drawing="handlePatchDrawing"
             @confirm-text="confirmText"
             @cancel-text="cancelText"
@@ -869,14 +1361,32 @@ watch([roomId, currentUserRoomRole], () => {
             :client-y="contextMenuY"
             :selection="selection"
             :maps="tabletopMaps"
+            :tokens="tabletopTokens"
             :drawings="tabletopDrawings"
             :game-role="currentUserGameRole"
+            :current-user-id="currentUserId"
+            :character-owner-by-id="characterOwnerById"
             @close="closeContextMenu"
             @delete-map="handleContextDeleteMap"
             @delete-drawing="handleContextDeleteDrawing"
+            @delete-token="handleContextDeleteToken"
+            @inspect-token="handleInspectToken"
             @edit-text-drawing="handleEditTextDrawing"
             @toggle-map-lock="handleContextToggleMapLock"
             @map-layer="handleContextMapLayer"
+            @token-layer="handleContextTokenLayer"
+            @drawing-layer="handleContextDrawingLayer"
+          />
+          <AddRoomCharacterDialog
+            :open="addCharacterDialogOpen"
+            :room-id="roomId"
+            :game-role="currentUserGameRole"
+            :current-user-display-name="currentUserDisplayName"
+            :submitting="characterSubmitting"
+            @close="closeAddCharacterDialog"
+            @create-pc="handleCreateRoomPc"
+            @create-additional="handleCreateRoomAdditional"
+            @create-quick="handleCreateRoomQuick"
           />
         </template>
 
@@ -916,6 +1426,15 @@ watch([roomId, currentUserRoomRole], () => {
             @reject-request="rejectRequest"
             @save-settings="handleSaveRoomSettings"
             @open-requests="fetchRoomRequests({ force: true })"
+          />
+          <InGameCharacterList
+            :room-id="roomId"
+            :tokens="tabletopTokens"
+            :character-by-id="characterById"
+            :owner-name-by-user-id="ownerNameByUserId"
+            :loading="roomCharactersLoading"
+            :game-role="currentUserGameRole"
+            @inspect="handleInspectCharacter"
           />
           </div>
 
@@ -978,22 +1497,36 @@ watch([roomId, currentUserRoomRole], () => {
             :storage-key="`room-${roomId}-assets`"
           >
             <BottomAssetBar
+              v-model:popover-open="characterPopoverOpen"
               :can-add-map="canAddMap"
               :can-add-character="canAddCharacter"
+              :characters="roomCharacters"
+              :characters-loading="roomCharactersLoading"
+              :game-role="currentUserGameRole"
+              :current-user-id="currentUserId"
               @add-map="handleAddMapClick"
-              @add-character="handleAssetPlaceholder"
+              @add-character="openAddCharacterDialog"
+              @spawn="handleSpawnCharacter"
             />
           </FloatingPanel>
 
           <div class="rightStack">
             <FloatingPanel
+              v-model:collapsed="infoPanelCollapsed"
               :title="t('table.inspector.infoTitle')"
               inline
               collapse-to="right"
               variant="info"
               :storage-key="`room-${roomId}-info`"
             >
-              <InfoPanel />
+              <InfoPanel
+                :inspection="activeInspection"
+                :room-id="roomId"
+                :game-role="currentUserGameRole"
+                :current-user-id="currentUserId"
+                @close="clearInspection"
+                @state-patched="handleInfoStatePatched"
+              />
             </FloatingPanel>
 
             <FloatingPanel

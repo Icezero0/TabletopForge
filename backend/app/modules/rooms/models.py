@@ -276,3 +276,93 @@ class RoomDrawing(Base):
 
     room: Mapped["Room"] = relationship("Room")
     created_by: Mapped["User"] = relationship("User")
+
+
+class RoomToken(Base):
+    __tablename__ = "room_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    room_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("rooms.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    asset_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("assets.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    linked_character_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("characters.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    token_type: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="character",
+        server_default="character",
+    )
+    x: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
+    y: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
+    width: Mapped[float] = mapped_column(Float, nullable=False)
+    height: Mapped[float] = mapped_column(Float, nullable=False)
+    rotation: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
+    z_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    visible: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    owner_user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    room: Mapped["Room"] = relationship("Room")
+    owner: Mapped["User"] = relationship("User")
+
+
+class RoomCharacter(Base):
+    __tablename__ = "room_characters"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    room_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("rooms.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    character_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("characters.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    added_by_user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    room: Mapped["Room"] = relationship("Room")
+    character: Mapped["Character"] = relationship("Character")
+    added_by: Mapped["User"] = relationship("User", foreign_keys=[added_by_user_id])

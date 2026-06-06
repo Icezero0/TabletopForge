@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, watch } from "vue";
 import {
   ChevronDownIcon,
   ChevronUpIcon,
@@ -14,7 +14,7 @@ const props = withDefaults(
     storageKey?: string;
     defaultCollapsed?: boolean;
     inline?: boolean;
-    variant?: "governance" | "chat" | "tools" | "assets" | "info" | "memo";
+    variant?: "governance" | "chat" | "tools" | "assets" | "info" | "memo" | "character_list";
   }>(),
   {
     anchor: "top-left",
@@ -23,7 +23,7 @@ const props = withDefaults(
   },
 );
 
-const collapsed = ref(props.defaultCollapsed);
+const collapsed = defineModel<boolean>("collapsed", { default: false });
 
 const collapseIcon = computed(() => {
   const collapseTarget =
@@ -53,7 +53,7 @@ function loadCollapsed() {
   if (!key || typeof localStorage === "undefined") return;
   const raw = localStorage.getItem(key);
   if (raw === "1") collapsed.value = true;
-  if (raw === "0") collapsed.value = false;
+  else if (raw === "0") collapsed.value = false;
 }
 
 function saveCollapsed() {

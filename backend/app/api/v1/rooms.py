@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -40,8 +40,13 @@ from app.modules.rooms.tabletop.schemas import (
     RoomTabletopSettingsPatch,
     RoomTabletopSettingsResponse,
     RoomTabletopSnapshotResponse,
+    RoomTokenPatch,
+    RoomTokenResponse,
+    SpawnCharacterTokenRequest,
 )
 from app.modules.rooms.tabletop.service import RoomTabletopService
+from app.modules.rooms.characters.schemas import RoomCharacterEntryResponse
+from app.modules.rooms.characters.service import RoomCharacterService
 from app.modules.rooms.room.schemas import (
     RoomCreate,
     RoomListResponse,
@@ -64,6 +69,7 @@ membership_service = RoomMembershipService()
 join_request_service = RoomJoinRequestService()
 personal_memo_service = RoomPersonalMemoService()
 tabletop_service = RoomTabletopService()
+room_characters_service = RoomCharacterService()
 
 
 @router.post("", response_model=RoomResponse, status_code=status.HTTP_201_CREATED)
@@ -378,6 +384,170 @@ async def delete_room_drawings(
             drawing_ids=deleted_ids,
         )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/{room_id}/tokens",
+    response_model=RoomTokenResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_room_token(
+    room_id: int,
+    name: str = Form(...),
+    x: float = Form(...),
+    y: float = Form(...),
+    linked_character_id: int | None = Form(None),
+    file: UploadFile | None = File(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> RoomTokenResponse:
+    token = await tabletop_service.create_token(
+        db,
+        room_id=room_id,
+        user=current_user,
+        name=name,
+        x=x,
+        y=y,
+        file=file,
+        linked_character_id=linked_character_id,
+    )
+    await publisher.publish_token_created(
+        room_id=room_id,
+        token=token.model_dump(mode="json"),
+    )
+    return token
+
+
+@router.patch("/{room_id}/tokens/{token_id}", response_model=RoomTokenResponse)
+async def patch_room_token(
+    room_id: int,
+    token_id: int,
+    payload: RoomTokenPatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> RoomTokenResponse:
+    token = await tabletop_service.patch_token(
+        db,
+        room_id=room_id,
+        token_id=token_id,
+        user=current_user,
+        payload=payload,
+    )
+    await publisher.publish_token_updated(
+        room_id=room_id,
+        token=token.model_dump(mode="json"),
+    )
+    return token
+
+
+@router.delete("/{room_id}/tokens/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_room_token(
+    room_id: int,
+    token_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> Response:
+    await tabletop_service.delete_token(
+        db,
+        room_id=room_id,
+        token_id=token_id,
+        user=current_user,
+    )
+    await publisher.publish_token_deleted(room_id=room_id, token_id=token_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/{room_id}/characters", response_model=list[RoomCharacterEntryResponse])
+async def get_room_characters(
+    room_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[RoomCharacterEntryResponse]:
+    return await room_characters_service.list_room_characters(
+        db,
+        room_id=room_id,
+        user=current_user,
+    )
+
+
+@router.post(
+    "/{room_id}/characters",
+    response_model=RoomCharacterEntryResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_room_character(
+    room_id: int,
+    kind: str = Form(...),
+    name: str = Form(...),
+    player_name: str = Form(""),
+    system: str = Form("dnd5e"),
+    portrait_asset_id: int | None = Form(None),
+    token_image_asset_id: int | None = Form(None),
+    identity_json: str | None = Form(None),
+    flavor_json: str | None = Form(None),
+    attributes_json: str | None = Form(None),
+    features_json: str | None = Form(None),
+    spells_json: str | None = Form(None),
+    equipment_json: str | None = Form(None),
+    extras_json: str | None = Form(None),
+    state_json: str | None = Form(None),
+    file: UploadFile | None = File(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RoomCharacterEntryResponse:
+    payload = RoomCharacterService.parse_room_character_create(
+        kind=kind,
+        name=name,
+        player_name=player_name,
+        system=system,
+        portrait_asset_id=portrait_asset_id,
+        token_image_asset_id=token_image_asset_id,
+        identity_json=identity_json,
+        flavor_json=flavor_json,
+        attributes_json=attributes_json,
+        features_json=features_json,
+        spells_json=spells_json,
+        equipment_json=equipment_json,
+        extras_json=extras_json,
+        state_json=state_json,
+    )
+    return await room_characters_service.create_room_character(
+        db,
+        room_id=room_id,
+        user=current_user,
+        payload=payload,
+        file=file,
+    )
+
+
+@router.post(
+    "/{room_id}/characters/{character_id}/spawn-token",
+    response_model=RoomTokenResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def spawn_room_character_token(
+    room_id: int,
+    character_id: int,
+    payload: SpawnCharacterTokenRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> RoomTokenResponse:
+    token = await tabletop_service.spawn_character_token(
+        db,
+        room_id=room_id,
+        character_id=character_id,
+        user=current_user,
+        payload=payload,
+    )
+    await publisher.publish_token_created(
+        room_id=room_id,
+        token=token.model_dump(mode="json"),
+    )
+    return token
 
 
 @router.get("/{room_id}/join-requests", response_model=RoomJoinRequestListResponse)
