@@ -18,6 +18,7 @@ import {
 import { getBackendErrorMessage } from "@/infra/http/client";
 import { useAuthStore } from "@/stores/auth.store";
 import { useToastsStore } from "@/stores/toasts.store";
+import BaseTextarea from "@/ui/base/BaseTextarea.vue";
 import GitHubIcon from "@/ui/icons/GitHubIcon.vue";
 import QfacePenguinIcon from "@/ui/icons/QfacePenguinIcon.vue";
 
@@ -194,9 +195,10 @@ async function submitFeedback() {
 
           <label class="field">
             <span>{{ t("contact.feedback.form.description") }}<span class="requiredMark">*</span></span>
-            <textarea
+            <BaseTextarea
               v-model="feedbackDescription"
-              rows="6"
+              :rows="6"
+              min-height="132px"
               :placeholder="t('contact.feedback.form.descriptionPlaceholder')"
             />
           </label>
@@ -310,8 +312,7 @@ async function submitFeedback() {
   color: var(--c-danger);
 }
 
-.field input,
-.field textarea {
+.field input {
   width: 100%;
   min-width: 0;
   border: 1px solid var(--c-border);
@@ -339,13 +340,6 @@ async function submitFeedback() {
 
 .field :deep(.triggerLabel) {
   font-size: 13px;
-}
-
-.field textarea {
-  resize: vertical;
-  min-height: 132px;
-  padding: 10px 12px;
-  line-height: 1.5;
 }
 
 .formError {

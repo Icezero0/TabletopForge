@@ -6,7 +6,7 @@ import {
   abilityMod, fmtMod,
 } from "@/features/character/constants";
 import BaseInput from "@/ui/base/BaseInput.vue";
-import TagInput from "@/features/library/components/TagInput.vue";
+import BaseTagInput from "@/ui/base/BaseTagInput.vue";
 
 const props = defineProps<{
   modelValue: Record<string, unknown>;
@@ -337,7 +337,7 @@ const languages = computed(() => (props.modelValue.languages as string[]) ?? [])
     <div class="section">
       <div class="field">
         <label class="label">{{ t("character.attributes.weaponProficiencies") }}</label>
-        <TagInput
+        <BaseTagInput
           :model-value="weaponProfs"
           :placeholder="t('character.attributes.proficiencyPlaceholder')"
           @update:model-value="update('weapon_proficiencies', $event)"
@@ -345,7 +345,7 @@ const languages = computed(() => (props.modelValue.languages as string[]) ?? [])
       </div>
       <div class="field">
         <label class="label">{{ t("character.attributes.armorProficiencies") }}</label>
-        <TagInput
+        <BaseTagInput
           :model-value="armorProfs"
           :placeholder="t('character.attributes.proficiencyPlaceholder')"
           @update:model-value="update('armor_proficiencies', $event)"
@@ -353,7 +353,7 @@ const languages = computed(() => (props.modelValue.languages as string[]) ?? [])
       </div>
       <div class="field">
         <label class="label">{{ t("character.attributes.toolProficiencies") }}</label>
-        <TagInput
+        <BaseTagInput
           :model-value="toolProfs"
           :placeholder="t('character.attributes.proficiencyPlaceholder')"
           @update:model-value="update('tool_proficiencies', $event)"
@@ -365,7 +365,7 @@ const languages = computed(() => (props.modelValue.languages as string[]) ?? [])
     <div class="section">
       <div class="field">
         <label class="label">{{ t("character.attributes.languages") }}</label>
-        <TagInput
+        <BaseTagInput
           :model-value="languages"
           :placeholder="t('character.attributes.languagesPlaceholder')"
           @update:model-value="update('languages', $event)"

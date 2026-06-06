@@ -29,6 +29,8 @@ declare module 'vue' {
     BaseMenuItem: typeof import('./src/ui/base/BaseMenuItem.vue')['default']
     BasePill: typeof import('./src/ui/base/BasePill.vue')['default']
     BaseSelect: typeof import('./src/ui/base/BaseSelect.vue')['default']
+    BaseTagInput: typeof import('./src/ui/base/BaseTagInput.vue')['default']
+    BaseTextarea: typeof import('./src/ui/base/BaseTextarea.vue')['default']
     BaseToastViewport: typeof import('./src/ui/base/BaseToastViewport.vue')['default']
     GitHubIcon: typeof import('./src/ui/icons/GitHubIcon.vue')['default']
     PanelSectionHeader: typeof import('./src/ui/layout/PanelSectionHeader.vue')['default']

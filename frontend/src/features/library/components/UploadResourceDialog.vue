@@ -4,11 +4,13 @@ import { useI18n } from "vue-i18n";
 import { ArrowUpTrayIcon } from "@heroicons/vue/24/outline";
 import type { ResourceType } from "@/infra/api/library.api";
 import { RESOURCE_TYPE_OPTIONS, getResourceTypeMeta } from "@/features/library/constants";
-import TagInput from "./TagInput.vue";
+import BaseTagInput from "@/ui/base/BaseTagInput.vue";
 import BaseDialog from "@/ui/base/BaseDialog.vue";
 import BaseButton from "@/ui/base/BaseButton.vue";
 import BaseInput from "@/ui/base/BaseInput.vue";
 import BaseSelect from "@/ui/base/BaseSelect.vue";
+import BaseListItem from "@/ui/base/BaseListItem.vue";
+import BaseTextarea from "@/ui/base/BaseTextarea.vue";
 import AppIcon from "@/ui/base/AppIcon.vue";
 
 const props = defineProps<{ modelValue: boolean }>();
@@ -140,88 +142,91 @@ function close() {
 <template>
   <BaseDialog :model-value="modelValue" :max-width="480" @update:model-value="close">
     <div class="dialog-inner">
-      <div class="dialog-title">{{ t("library.upload.title") }}</div>
-
-      <div class="field">
-        <label class="label">{{ t("library.upload.typeLabel") }}<span class="required">*</span></label>
-        <BaseSelect
-          :model-value="type"
-          :options="typeOptions"
-          @update:model-value="type = $event as ResourceType"
-        />
-      </div>
-
-      <div class="field">
-        <label class="label">{{ t("library.upload.nameLabel") }}<span class="required">*</span></label>
-        <BaseInput
-          v-model="name"
-          :placeholder="t('library.upload.namePlaceholder')"
-        />
-      </div>
-
-      <template v-if="needsFile">
-        <div class="field">
-          <label class="label">{{ t("library.upload.fileLabel") }}<span class="required">*</span></label>
-          <div
-            class="drop-zone"
-            :class="{ active: dragOver, 'has-file': !!file }"
-            @dragover="onDragOver"
-            @dragleave="onDragLeave"
-            @drop="onDrop"
-            @click="fileInputRef?.click()"
-          >
-            <input
-              ref="fileInputRef"
-              type="file"
-              :accept="fileAccept"
-              class="hidden-input"
-              @change="onFileChange"
+      <BaseListItem :interactive="false">
+        <div class="fields">
+          <div class="dialog-title">{{ t("library.upload.title") }}</div>
+          <div class="field">
+            <label class="label">{{ t("library.upload.typeLabel") }}<span class="required">*</span></label>
+            <BaseSelect
+              :model-value="type"
+              :options="typeOptions"
+              @update:model-value="type = $event as ResourceType"
             />
-
-            <template v-if="file">
-              <div class="file-name">{{ file.name }}</div>
-              <button class="clear-btn" type="button" @click.stop="clearFile">
-                {{ t("library.upload.clearFile") }}
-              </button>
-            </template>
-            <template v-else>
-              <AppIcon :icon="ArrowUpTrayIcon" :size="24" />
-              <div class="drop-hint">{{ t("library.upload.dropHint") }}</div>
-              <div class="drop-sub">{{ t(dropSubKey) }}</div>
-            </template>
           </div>
-          <div v-if="validationError" class="error-text">{{ validationError }}</div>
+
+          <div class="field">
+            <label class="label">{{ t("library.upload.nameLabel") }}<span class="required">*</span></label>
+            <BaseInput
+              v-model="name"
+              :placeholder="t('library.upload.namePlaceholder')"
+            />
+          </div>
+
+          <template v-if="needsFile">
+            <div class="field">
+              <label class="label">{{ t("library.upload.fileLabel") }}<span class="required">*</span></label>
+              <div
+                class="drop-zone"
+                :class="{ active: dragOver, 'has-file': !!file }"
+                @dragover="onDragOver"
+                @dragleave="onDragLeave"
+                @drop="onDrop"
+                @click="fileInputRef?.click()"
+              >
+                <input
+                  ref="fileInputRef"
+                  type="file"
+                  :accept="fileAccept"
+                  class="hidden-input"
+                  @change="onFileChange"
+                />
+
+                <template v-if="file">
+                  <div class="file-name">{{ file.name }}</div>
+                  <button class="clear-btn" type="button" @click.stop="clearFile">
+                    {{ t("library.upload.clearFile") }}
+                  </button>
+                </template>
+                <template v-else>
+                  <AppIcon :icon="ArrowUpTrayIcon" :size="24" />
+                  <div class="drop-hint">{{ t("library.upload.dropHint") }}</div>
+                  <div class="drop-sub">{{ t(dropSubKey) }}</div>
+                </template>
+              </div>
+              <div v-if="validationError" class="error-text">{{ validationError }}</div>
+            </div>
+          </template>
+
+          <div v-if="currentMeta.hasTags" class="field">
+            <label class="label">{{ t("library.upload.tagsLabel") }}</label>
+            <BaseTagInput
+              v-model="tags"
+              :placeholder="t('library.upload.tagsPlaceholder')"
+            />
+          </div>
+
+          <div v-if="currentMeta.hasComment" class="field">
+            <label class="label">{{ t("library.upload.commentLabel") }}</label>
+            <BaseTextarea
+              v-model="comment"
+              resize="none"
+              min-height="72px"
+              :placeholder="t('library.upload.commentPlaceholder')"
+            />
+          </div>
+          <div class="actions">
+            <BaseButton variant="default" @click="close">{{ t("common.cancel") }}</BaseButton>
+            <BaseButton
+              variant="primary"
+              :disabled="!canSubmit"
+              :loading="submitting"
+              @click="handleSubmit"
+            >
+              {{ t("library.upload.submit") }}
+            </BaseButton>
+          </div>
         </div>
-      </template>
-
-      <div v-if="currentMeta.hasTags" class="field">
-        <label class="label">{{ t("library.upload.tagsLabel") }}</label>
-        <TagInput
-          v-model="tags"
-          :placeholder="t('library.upload.tagsPlaceholder')"
-        />
-      </div>
-
-      <div v-if="currentMeta.hasComment" class="field">
-        <label class="label">{{ t("library.upload.commentLabel") }}</label>
-        <textarea
-          v-model="comment"
-          class="comment-textarea"
-          :placeholder="t('library.upload.commentPlaceholder')"
-        />
-      </div>
-
-      <div class="actions">
-        <BaseButton variant="default" @click="close">{{ t("common.cancel") }}</BaseButton>
-        <BaseButton
-          variant="primary"
-          :disabled="!canSubmit"
-          :loading="submitting"
-          @click="handleSubmit"
-        >
-          {{ t("library.upload.submit") }}
-        </BaseButton>
-      </div>
+      </BaseListItem>
     </div>
   </BaseDialog>
 </template>
@@ -237,6 +242,11 @@ function close() {
   font-size: 18px;
   font-weight: 600;
   color: var(--c-text);
+}
+
+.fields {
+  display: grid;
+  gap: 16px;
 }
 
 .field {
@@ -263,7 +273,7 @@ function close() {
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  cursor: pointer;
+  cursor: pointer !important;
   transition: border-color 0.15s, background 0.15s;
   color: var(--c-text-muted);
 }
@@ -319,36 +329,6 @@ function close() {
 .error-text {
   font-size: 12px;
   color: var(--c-danger, #e53e3e);
-}
-
-.comment-textarea {
-  width: 100%;
-  box-sizing: border-box;
-  height: 72px;
-  padding: 8px 10px;
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-1);
-  background: var(--c-surface);
-  color: var(--c-text);
-  font-size: 13px;
-  font-family: inherit;
-  resize: none;
-  overflow-y: auto;
-  scrollbar-width: none;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.comment-textarea::-webkit-scrollbar {
-  display: none;
-}
-
-.comment-textarea:focus {
-  border-color: var(--c-accent);
-}
-
-.comment-textarea::placeholder {
-  color: var(--c-text-muted);
 }
 
 .actions {

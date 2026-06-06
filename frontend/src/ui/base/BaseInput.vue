@@ -31,6 +31,7 @@ defineEmits<{ (e: 'update:modelValue', v: string): void }>()
   outline: none;
 }
 .inp:focus {
-  border-color: rgba(127, 127, 127, 0.6);
+  border-color: var(--c-accent, var(--c-primary));
+  outline: none;
 }
 </style>
