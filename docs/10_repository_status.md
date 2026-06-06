@@ -2,7 +2,7 @@
 
 版本：v0.3  
 状态：Living Document  
-最后核对：2026-06-06（角色卡模块落地后同步）
+最后核对：2026-06-06（房间 Popover 全局库 link + GM 创建者展示后同步）
 仓库：`Icezero0/TabletopForge`（`main`）
 
 ---
@@ -104,9 +104,9 @@ ORM 模型导出（`backend/app/db/models.py`）：
 |---|---|
 | RP 消息 | `09_module_design/chat_and_rp.md`；`rp_messages` |
 | 地图桌面（MVP 扁平） | `rooms/tabletop`；`room_tabletop_settings`, `room_maps`, `room_drawings`, **`room_tokens`**（Phase 1）；地图/绘制/Token HTTP+WS 已落地 |
-| **房间角色库 / CharacterState** | **Phase 2–4 已落地**：`room_characters`、`character_states`；`characters.kind`（业务 `pc_main`/`pc_additional`/`npc`）；`kind=npc` 时 PL 仅 `damage_taken`（presenter）；`portrait_asset_id`→`token_image_asset_id` 回退；GM PATCH 降 HP 累计伤害；WS `state_summary_public` |
+| **房间角色库 / CharacterState** | **Phase 2–4 已落地**：`room_characters`、`character_states`；`GET/POST /rooms/{id}/characters` + **`POST .../characters/link`**（全局库关联）；`characters.kind`（`pc_main`/`pc_additional`/`npc`）；`kind=npc` 时 PL 仅 `damage_taken`（presenter）；GM PATCH 降 HP 累计伤害；WS `state_summary_public` |
 | Token | **Phase 1–4 已落地**：`room_tokens` CRUD、WS、`TokenLayer`；`linked_character_id`、`spawn-token`、`state_summary`（HP/AC/PP）、`character_state_updated` WS |
-| InfoPanel / 场上列表 | **Phase 3–5 已落地**：`InfoPanel`（六维 + State；不展示 `custom_fields`）；`InGameCharacterList`；`AddRoomCharacterDialog` + `MapSpawnPopover`（PL `pc_main`/`pc_additional`，GM `npc`）；Context Menu「查看信息」 |
+| InfoPanel / 场上列表 | **Phase 3–5 已落地**：`InfoPanel`（六维 + State；不展示 `custom_fields`）；`InGameCharacterList`；`AddRoomCharacterDialog` + `CharacterSpawnPopover`（合并全局库、`link` 上场、GM 创建者）+ `MapSpawnPopover`（地图切换）；Context Menu「查看信息」 |
 | 骰子 / DND5E 规则 | `09_module_design/dice.md`, `dnd5e_rules.md` |
 | 操作日志 | `09_module_design/operation_log.md` |
 | 战斗辅助 | `09_module_design/combat_assistant.md` |
@@ -115,7 +115,7 @@ ORM 模型导出（`backend/app/db/models.py`）：
 
 **身份说明**：`room_members.game_role`（`GM` | `PL` | `OB`）已落地，与 `room_role`（DB 列 `role`）分离；Tabletop 权限桩见 `game_permissions.py`（`08` §6.4，Step 4 起消费）。
 
-房间页（`frontend/src/pages/room/RoomPage.vue`）已实现 **全屏地图 + 悬浮可收起面板**（`features/table/`）：`TableStage` + `MapViewport` 铺满视口；地图/绘制/**Token** 协作；底栏 **`MapSpawnPopover`**（添加角色 / 上场）+ 左上 **InGameCharacterList**；Token **HP/AC/PP 预览**（`npc` 对 PL 仅伤害）；右侧 **InfoPanel** 单槽。
+房间页（`frontend/src/pages/room/RoomPage.vue`）已实现 **全屏地图 + 悬浮可收起面板**（`features/table/`）：`TableStage` + `MapViewport` 铺满视口；地图/绘制/**Token** 协作；底栏 **`CharacterSpawnPopover`**（房间库 + 全局库合并、未入库 `link` 上场、GM 显示创建者）与 **`MapSpawnPopover`**（地图列表切换）+ 左上 **InGameCharacterList**；Token **HP/AC/PP 预览**（`npc` 对 PL 仅伤害）；右侧 **InfoPanel** 单槽。
 
 ---
 
@@ -187,7 +187,7 @@ Client (Vue)
 | 文档阶段（`00_overview.md` §10） | 状态 |
 |---|---|
 | Phase 1：基础房间与权限 | **大部分完成**（Table 区未实现） |
-| 跑团桌面 MVP（`01` §4.2） | **Step 5 已完成**（Phase 1–4 + Phase 5 扩展：LLM 角色导入、熟练项/回房修复、玩家主色、地图 Popover，见 `working-note/05.5-charactor-info-import.md`） |
+| 跑团桌面 MVP（`01` §4.2） | **Step 5 已完成**（Phase 1–5 + `06-other-chore`：LLM 导入、玩家主色、地图 Popover、全局库 link 上场、GM Popover 创建者，见 `working-note/05.5`、`06-other-chore`） |
 | Phase 4：RP 与骰子 | **未开始**（普通聊天已具备；不在跑团桌面 MVP） |
 | Phase 5：战斗辅助 | **未开始** |
 
@@ -201,6 +201,7 @@ Client (Vue)
 4. 统一 initial schema（2026-06-04）
 5. 前端房间 / 聊天 / 实时会话打磨
 6. 角色卡模块落地（2026-06-06）：`characters` 表、CRUD API、6-Tab 编辑页（DnD 5e 结构化数据）、角色列表页、脏数据守卫
+7. 房间 Popover 增强（2026-06-06）：`POST /rooms/{id}/characters/link`；前端 `spawnCharacters.ts` 合并全局库；GM 创建者展示（`4730ec6`）
 
 ## 9.2 建议开发顺序
 

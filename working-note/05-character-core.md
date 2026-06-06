@@ -16,7 +16,8 @@
 | **2** | [05.2-room-characters-state.md](./05.2-room-characters-state.md) | `room_characters` + `character_states`、`characters.kind`/`token_image`、底栏添加角色（PL 主 PC/附加） | **已完成** |
 | **3** | [05.3-binding-infopanel.md](./05.3-binding-infopanel.md) | Token↔角色绑定、HP/AC/PP 预览、InfoPanel 单槽、InGameCharacterList 上场 | **已完成** |
 | **4** | [05.4-gm-monsters.md](./05.4-gm-monsters.md) | GM 角色创建并入统一添加面板（`additional`）；去除 monster 专轨；Step 5 总验收 | **已完成** |
-| **5** | [05.5-charactor-info-import.md](./05.5-charactor-info-import.md) | LLM 文本导入角色、熟练项/回房导航修复、角色主色、地图 Popover | **未开始** |
+| **5** | [05.5-charactor-info-import.md](./05.5-charactor-info-import.md) | LLM 文本导入角色、熟练项/回房导航修复、玩家主色、地图 Popover | **已完成** |
+| **+** | [06-other-chore.md](./06-other-chore.md) | 全局库 link 上场、GM Popover 创建者、文档同步 | **已完成** |
 
 各 Phase 验收清单见对应子文档；Phase 4 完成后勾选下方 **总验收清单**；Phase 5 为 Step 5 扩展，见 05.5 交接 Prompt。
 

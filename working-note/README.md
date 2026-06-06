@@ -43,4 +43,4 @@ Step 1  基础身份与房间治理 ──► Step 2  主界面空壳布局
 | 2 | 已完成 |
 | 3 | 已完成 |
 | 4 | 已完成（含 Phase 5 Pointer、文本再编辑） |
-| 5 | **已完成**（Phase 1–5，含 [05.5 导入与体验](./05.5-charactor-info-import.md)、[06 收尾](./06-other-chore.md)） |
+| 5 | **已完成**（Phase 1–5 + [06 收尾](./06-other-chore.md)：全局库 link 上场、GM 创建者展示） |

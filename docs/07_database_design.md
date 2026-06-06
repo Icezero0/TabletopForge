@@ -322,7 +322,7 @@ added_by_user_id   FK → users.id
 created_at
 ```
 
-API：`GET/POST /rooms/{id}/characters`；列表含 character 摘要 + state 摘要。
+API：`GET/POST /rooms/{id}/characters`；`POST /rooms/{id}/characters/link`（关联全局已有 `characters`，幂等，不复制定义）；列表含 character 摘要 + state 摘要。
 
 ---
 
