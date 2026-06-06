@@ -5,7 +5,7 @@ import Components from 'unplugin-vue-components/vite'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const apiOrigin = env.VITE_API_ORIGIN ?? 'http://localhost:8000'
+  const apiOrigin = env.VITE_API_ORIGIN ?? 'http://localhost:8001'
 
   return {
     plugins: [vue(),

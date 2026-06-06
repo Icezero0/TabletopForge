@@ -5,7 +5,7 @@ import {
   ABILITY_KEYS, ABILITY_LABEL_KEYS, DND5E_SKILLS,
   abilityMod, fmtMod,
 } from "@/features/character/constants";
-import TagInput from "@/features/library/components/TagInput.vue";
+import BaseTagInput from "@/ui/base/BaseTagInput.vue";
 
 const props = defineProps<{
   modelValue: Record<string, unknown>;
@@ -78,15 +78,15 @@ function setDerivedBoth(key: DerivedKey, value: number, breakdown: string) {
 }
 
 function autoCalcAC() {
-  const dex = abilityMod(scores.value.dexterity);
+  const dex = abilityMod(scores.value.dexterity ?? 10);
   setDerivedBoth("ac", 10 + dex, `10 + 敏捷 ${dex}`);
 }
 function autoCalcInitiative() {
-  const dex = abilityMod(scores.value.dexterity);
+  const dex = abilityMod(scores.value.dexterity ?? 10);
   setDerivedBoth("initiative", dex, `敏捷修正 ${dex}`);
 }
 function autoCalcPassivePerception() {
-  const wis = abilityMod(scores.value.wisdom);
+  const wis = abilityMod(scores.value.wisdom ?? 10);
   const profBonus = getDerived("proficiency_bonus").value ?? 2;
   const percVal = wis + profBonus;
   setDerivedBoth("passive_perception", 10 + percVal, `10 + 察觉 ${percVal}`);
@@ -99,7 +99,7 @@ function autoCalcProfBonus() {
 }
 function autoCalcMaxHP() {
   const classList = (identitySnapshot().classes as { name: string; level: number }[]) ?? [];
-  const con = abilityMod(scores.value.constitution);
+  const con = abilityMod(scores.value.constitution ?? 10);
   const totalLevel = classList.reduce((sum, c) => sum + (Number(c.level) || 0), 0);
   if (totalLevel === 0) return;
 
@@ -166,16 +166,16 @@ const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
         <div v-for="ability in ABILITY_KEYS" :key="ability" class="score-box">
           <div class="score-label">{{ t(ABILITY_LABEL_KEYS[ability]) }}</div>
           <div class="score-stepper">
-            <button class="score-step-btn" @click="setScore(ability, String(Math.max(1, scores[ability] - 1)))">−</button>
+            <button class="score-step-btn" @click="setScore(ability, String(Math.max(1, (scores[ability] ?? 10) - 1)))">−</button>
             <input
               type="number"
               class="score-input"
               :value="scores[ability]"
               @change="setScore(ability, ($event.target as HTMLInputElement).value)"
             />
-            <button class="score-step-btn" @click="setScore(ability, String(Math.min(30, scores[ability] + 1)))">+</button>
+            <button class="score-step-btn" @click="setScore(ability, String(Math.min(30, (scores[ability] ?? 10) + 1)))">+</button>
           </div>
-          <div class="score-mod">{{ fmtMod(abilityMod(scores[ability])) }}</div>
+          <div class="score-mod">{{ fmtMod(abilityMod(scores[ability] ?? 10)) }}</div>
         </div>
       </div>
     </div>
@@ -245,7 +245,7 @@ const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
     <div class="section">
       <div class="field">
         <label class="label">{{ t("character.attributes.weaponProficiencies") }}</label>
-        <TagInput
+        <BaseTagInput
           :model-value="weaponProfs"
           :placeholder="t('character.attributes.proficiencyPlaceholder')"
           @update:model-value="update('weapon_proficiencies', $event)"
@@ -253,7 +253,7 @@ const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
       </div>
       <div class="field">
         <label class="label">{{ t("character.attributes.armorProficiencies") }}</label>
-        <TagInput
+        <BaseTagInput
           :model-value="armorProfs"
           :placeholder="t('character.attributes.proficiencyPlaceholder')"
           @update:model-value="update('armor_proficiencies', $event)"
@@ -261,7 +261,7 @@ const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
       </div>
       <div class="field">
         <label class="label">{{ t("character.attributes.toolProficiencies") }}</label>
-        <TagInput
+        <BaseTagInput
           :model-value="toolProfs"
           :placeholder="t('character.attributes.proficiencyPlaceholder')"
           @update:model-value="update('tool_proficiencies', $event)"
@@ -273,7 +273,7 @@ const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
     <div class="section">
       <div class="field">
         <label class="label">{{ t("character.attributes.languages") }}</label>
-        <TagInput
+        <BaseTagInput
           :model-value="languages"
           :placeholder="t('character.attributes.languagesPlaceholder')"
           @update:model-value="update('languages', $event)"

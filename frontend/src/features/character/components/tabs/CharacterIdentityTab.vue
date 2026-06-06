@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, toRef } from "vue";
+import { computed, ref, toRef } from "vue";
 import { useI18n } from "vue-i18n";
 import { MagnifyingGlassPlusIcon, PlusIcon, TrashIcon, UserCircleIcon } from "@heroicons/vue/24/outline";
 import { DND5E_ALIGNMENT_OPTIONS, DND5E_CLASSES } from "@/features/character/constants";
@@ -7,6 +7,7 @@ import { uploadAsset } from "@/infra/api/assets.api";
 import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthenticatedAssetUrl";
 import AvatarCropDialog from "@/ui/domain/avatar/AvatarCropDialog.vue";
 import BaseInput from "@/ui/base/BaseInput.vue";
+import BaseTextarea from "@/ui/base/BaseTextarea.vue";
 import BaseSelect from "@/ui/base/BaseSelect.vue";
 import BaseButton from "@/ui/base/BaseButton.vue";
 import AppIcon from "@/ui/base/AppIcon.vue";
@@ -254,11 +255,10 @@ function closeViewer() { viewingUrl.value = null; }
       </div>
       <div class="field">
         <label class="label">{{ t("character.identity.appearance") }}</label>
-        <textarea
-          class="sheet-textarea"
-          rows="3"
-          :value="(modelValue.appearance as string) ?? ''"
-          @input="update('appearance', ($event.target as HTMLTextAreaElement).value)"
+        <BaseTextarea
+          :rows="3"
+          :model-value="(modelValue.appearance as string) ?? ''"
+          @update:model-value="update('appearance', $event)"
         />
       </div>
     </div>
@@ -298,22 +298,21 @@ function closeViewer() { viewingUrl.value = null; }
       <div class="section-title">{{ t("character.flavor.section") }}</div>
       <div v-for="field in ['personality', 'ideals', 'bonds', 'flaws']" :key="field" class="field">
         <label class="label">{{ t(`character.flavor.${field}`) }}</label>
-        <textarea
-          class="sheet-textarea"
-          rows="3"
+        <BaseTextarea
+          :rows="3"
           :placeholder="t(`character.flavor.${field}Placeholder`)"
-          :value="(flavor[field] as string) ?? ''"
-          @input="updateFlavor(field, ($event.target as HTMLTextAreaElement).value)"
+          :model-value="(flavor[field] as string) ?? ''"
+          @update:model-value="updateFlavor(field, $event)"
         />
       </div>
       <div class="field">
         <label class="label">{{ t("character.flavor.backstory") }}</label>
-        <textarea
-          class="sheet-textarea tall"
-          rows="8"
+        <BaseTextarea
+          :rows="8"
+          min-height="160px"
           :placeholder="t('character.flavor.backstoryPlaceholder')"
-          :value="(flavor.backstory as string) ?? ''"
-          @input="updateFlavor('backstory', ($event.target as HTMLTextAreaElement).value)"
+          :model-value="(flavor.backstory as string) ?? ''"
+          @update:model-value="updateFlavor('backstory', $event)"
         />
       </div>
     </div>
@@ -424,15 +423,6 @@ function closeViewer() { viewingUrl.value = null; }
 .del-btn:hover { color: var(--c-danger, #e53e3e); }
 .btn-icon-text { display: inline-flex; align-items: center; gap: 5px; }
 
-/* ── Flavor textareas ───────────────────────────────────────────────────── */
-.sheet-textarea {
-  width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--c-border);
-  border-radius: var(--r-1); background: var(--c-surface); color: var(--c-text);
-  font-size: 13px; font-family: inherit; resize: vertical; outline: none; transition: border-color 0.15s;
-}
-.sheet-textarea:focus { border-color: var(--c-accent); }
-.sheet-textarea::placeholder { color: var(--c-text-muted); }
-.sheet-textarea.tall { min-height: 160px; }
 
 /* ── Fullscreen viewer ──────────────────────────────────────────────────── */
 .hidden { display: none; }

@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { SPELLCASTING_ABILITY_OPTIONS, defaultSpells, abilityMod } from "@/features/character/constants";
 import BaseSelect from "@/ui/base/BaseSelect.vue";
-import TagInput from "@/features/library/components/TagInput.vue";
+import BaseTagInput from "@/ui/base/BaseTagInput.vue";
 
 const props = defineProps<{
   modelValue: Record<string, unknown> | null;
@@ -126,7 +126,7 @@ function setSlotMax(lvl: string, v: string) {
             <span class="chevron" :class="{ open: expandedLevels.has(lvl) }">▾</span>
           </button>
           <div v-if="expandedLevels.has(lvl)" class="spell-list">
-            <TagInput
+            <BaseTagInput
               :model-value="getSpellsForLevel(lvl)"
               :placeholder="t('character.spells.spellPlaceholder')"
               @update:model-value="updateSpellsForLevel(lvl, $event)"

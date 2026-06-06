@@ -54,11 +54,13 @@ const props = withDefaults(
 .item :deep([role="button"] *),
 .item :deep(a),
 .item :deep(a *),
-.item :deep(input),
-.item :deep(select),
-.item :deep(textarea),
-.item :deep(label) {
+.item :deep(select) {
   cursor: pointer;
+}
+
+.item :deep(input),
+.item :deep(textarea) {
+  cursor: text;
 }
 
 .item :deep(button:disabled),

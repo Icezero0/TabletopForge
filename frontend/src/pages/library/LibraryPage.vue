@@ -5,7 +5,8 @@ import { PlusIcon } from "@heroicons/vue/24/outline";
 import type { LibraryResource, ResourceType } from "@/infra/api/library.api";
 import { useLibraryResources } from "@/features/library/composables/useLibraryResources";
 import { RESOURCE_TYPE_OPTIONS, getResourceTypeMeta } from "@/features/library/constants";
-import TagInput from "@/features/library/components/TagInput.vue";
+import BaseTagInput from "@/ui/base/BaseTagInput.vue";
+import BaseTextarea from "@/ui/base/BaseTextarea.vue";
 import ResourceCard from "@/features/library/components/ResourceCard.vue";
 import UploadResourceDialog from "@/features/library/components/UploadResourceDialog.vue";
 import { usePageReturnTo } from "@/composables/useNavigationReturn";
@@ -207,15 +208,14 @@ onMounted(() => {
       </div>
       <div v-if="editTargetMeta?.hasTags" class="edit-field">
         <label class="edit-label">{{ t("library.upload.tagsLabel") }}</label>
-        <TagInput v-model="editTags" :placeholder="t('library.upload.tagsPlaceholder')" />
+        <BaseTagInput v-model="editTags" :placeholder="t('library.upload.tagsPlaceholder')" />
       </div>
       <div v-if="editTargetMeta?.hasComment" class="edit-field">
         <label class="edit-label">{{ t("library.upload.commentLabel") }}</label>
-        <textarea
+        <BaseTextarea
           v-model="editComment"
-          class="edit-textarea"
+          :rows="3"
           :placeholder="t('library.upload.commentPlaceholder')"
-          rows="3"
         />
       </div>
       <div class="edit-actions">
@@ -324,29 +324,6 @@ onMounted(() => {
 .edit-label {
   font-size: 13px;
   font-weight: 500;
-  color: var(--c-text-muted);
-}
-
-.edit-textarea {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 8px 10px;
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-1);
-  background: var(--c-surface);
-  color: var(--c-text);
-  font-size: 13px;
-  font-family: inherit;
-  resize: vertical;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-.edit-textarea:focus {
-  border-color: var(--c-accent);
-}
-
-.edit-textarea::placeholder {
   color: var(--c-text-muted);
 }
 

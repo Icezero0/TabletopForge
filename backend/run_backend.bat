@@ -10,6 +10,6 @@ if not exist "%VENV_PYTHON%" (
 )
 
 echo [INFO] Starting uvicorn...
-"%VENV_PYTHON%" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+"%VENV_PYTHON%" -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
 
 endlocal

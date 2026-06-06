@@ -20,6 +20,7 @@ import { useMediaViewerStore } from "@/stores/media-viewer.store";
 import { useToastsStore } from "@/stores/toasts.store";
 import { formatLocalDateTime } from "@/utils/datetime";
 import AppIcon from "@/ui/base/AppIcon.vue";
+import BaseTextarea from "@/ui/base/BaseTextarea.vue";
 
 const { t } = useI18n();
 const auth = useAuthStore();
@@ -315,7 +316,7 @@ onMounted(refresh);
 
                   <label class="noteField">
                     <span>{{ t("feedbackAdmin.edit.note") }}</span>
-                    <textarea v-model="draftNote" rows="3" />
+                    <BaseTextarea v-model="draftNote" :rows="3" />
                   </label>
 
                   <div class="itemActions">

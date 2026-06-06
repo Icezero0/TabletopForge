@@ -10,4 +10,4 @@ if [ ! -x "$VENV_PYTHON" ]; then
 fi
 
 echo "[INFO] Starting uvicorn..."
-exec "$VENV_PYTHON" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+exec "$VENV_PYTHON" -m uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
