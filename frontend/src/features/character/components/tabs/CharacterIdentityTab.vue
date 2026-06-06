@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, toRef } from "vue";
+import { computed, ref, toRef } from "vue";
 import { useI18n } from "vue-i18n";
 import { MagnifyingGlassPlusIcon, PlusIcon, TrashIcon, UserCircleIcon } from "@heroicons/vue/24/outline";
 import { DND5E_ALIGNMENT_OPTIONS, DND5E_CLASSES } from "@/features/character/constants";

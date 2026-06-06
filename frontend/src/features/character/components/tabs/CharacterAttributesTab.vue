@@ -5,7 +5,6 @@ import {
   ABILITY_KEYS, ABILITY_LABEL_KEYS, DND5E_SKILLS,
   abilityMod, fmtMod,
 } from "@/features/character/constants";
-import BaseInput from "@/ui/base/BaseInput.vue";
 import BaseTagInput from "@/ui/base/BaseTagInput.vue";
 
 const props = defineProps<{
@@ -61,15 +60,15 @@ function setDerivedBoth(key: DerivedKey, value: number, breakdown: string) {
 
 // Auto-calc functions
 function autoCalcAC() {
-  const dex = abilityMod(scores.value.dexterity);
+  const dex = abilityMod(scores.value.dexterity ?? 10);
   setDerivedBoth("ac", 10 + dex, `10 + 敏捷 ${dex}`);
 }
 function autoCalcInitiative() {
-  const dex = abilityMod(scores.value.dexterity);
+  const dex = abilityMod(scores.value.dexterity ?? 10);
   setDerivedBoth("initiative", dex, `敏捷修正 ${dex}`);
 }
 function autoCalcPassivePerception() {
-  const wis = abilityMod(scores.value.wisdom);
+  const wis = abilityMod(scores.value.wisdom ?? 10);
   const profBonus = getDerived("proficiency_bonus").value ?? 2;
   const percVal = wis + profBonus;
   setDerivedBoth("passive_perception", 10 + percVal, `10 + 察觉 ${percVal}`);
@@ -82,7 +81,7 @@ function autoCalcProfBonus() {
 }
 function autoCalcMaxHP() {
   const classList = (props.identityBlock.classes as { name: string; level: number }[]) ?? [];
-  const con = abilityMod(scores.value.constitution);
+  const con = abilityMod(scores.value.constitution ?? 10);
   const totalLevel = classList.reduce((sum, c) => sum + (Number(c.level) || 0), 0);
   if (totalLevel === 0) return;
 
@@ -152,7 +151,7 @@ const skillProfs = computed(
 const profBonus = computed(() => getDerived("proficiency_bonus").value || 2);
 
 function calcSaveValue(ability: string, proficient?: boolean): string {
-  const mod = abilityMod(scores.value[ability]);
+  const mod = abilityMod(scores.value[ability] ?? 10);
   const hasProf = proficient !== undefined ? proficient : !!saveProfs.value[ability];
   return fmtMod(mod + (hasProf ? profBonus.value : 0));
 }
@@ -160,7 +159,7 @@ function calcSaveValue(ability: string, proficient?: boolean): string {
 function calcSkillValue(key: string, prof?: SkillProf): string {
   const skill = DND5E_SKILLS.find(s => s.key === key);
   if (!skill) return "+0";
-  const mod = abilityMod(scores.value[skill.ability]);
+  const mod = abilityMod(scores.value[skill.ability] ?? 10);
   const p = prof !== undefined ? prof : (skillProfs.value[key] ?? "none");
   const bonus = p === "proficient" ? profBonus.value : p === "expert" ? profBonus.value * 2 : 0;
   return fmtMod(mod + bonus);
@@ -187,7 +186,7 @@ function skillDisplayValue(key: string): string {
 
 // Placeholder: always shows the computed reference value
 function savePlaceholder(ability: string): string { return calcSaveValue(ability); }
-function skillPlaceholder(skillKey: string, ability: string): string { return calcSkillValue(skillKey); }
+function skillPlaceholder(skillKey: string): string { return calcSkillValue(skillKey); }
 
 // ── Batch update helper ────────────────────────────────────────────────────
 function updateMultiple(patches: Record<string, unknown>) {
@@ -249,16 +248,16 @@ const languages = computed(() => (props.modelValue.languages as string[]) ?? [])
         <div v-for="ability in ABILITY_KEYS" :key="ability" class="score-box">
           <div class="score-label">{{ t(ABILITY_LABEL_KEYS[ability]) }}</div>
           <div class="score-stepper">
-            <button class="score-step-btn" @click="setScore(ability, String(Math.max(1, scores[ability] - 1)))">−</button>
+            <button class="score-step-btn" @click="setScore(ability, String(Math.max(1, (scores[ability] ?? 10) - 1)))">−</button>
             <input
               type="number"
               class="score-input"
               :value="scores[ability]"
               @change="setScore(ability, ($event.target as HTMLInputElement).value)"
             />
-            <button class="score-step-btn" @click="setScore(ability, String(Math.min(30, scores[ability] + 1)))">+</button>
+            <button class="score-step-btn" @click="setScore(ability, String(Math.min(30, (scores[ability] ?? 10) + 1)))">+</button>
           </div>
-          <div class="score-mod">{{ fmtMod(abilityMod(scores[ability])) }}</div>
+          <div class="score-mod">{{ fmtMod(abilityMod(scores[ability] ?? 10)) }}</div>
         </div>
       </div>
     </div>
@@ -326,7 +325,7 @@ const languages = computed(() => (props.modelValue.languages as string[]) ?? [])
             type="text"
             class="compact-input"
             :value="skillDisplayValue(skill.key)"
-            :placeholder="skillPlaceholder(skill.key, skill.ability)"
+            :placeholder="skillPlaceholder(skill.key)"
             @input="setSkill(skill.key, ($event.target as HTMLInputElement).value)"
           />
         </div>
