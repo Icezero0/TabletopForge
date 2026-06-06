@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, toRef } from "vue";
 import { useI18n } from "vue-i18n";
-import { PencilIcon, TrashIcon } from "@heroicons/vue/24/outline";
+import { MagnifyingGlassPlusIcon, PencilIcon, TrashIcon } from "@heroicons/vue/24/outline";
 import type { LibraryResource } from "@/infra/api/library.api";
 import { getResourceTypeMeta } from "@/features/library/constants";
+import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthenticatedAssetUrl";
+import ResourceCardThumbnail from "./ResourceCardThumbnail.vue";
+import BaseIconButton from "@/ui/base/BaseIconButton.vue";
+import AppIcon from "@/ui/base/AppIcon.vue";
 
 function resourceTags(resource: LibraryResource): string[] {
   const t = resource.meta?.tags;
@@ -14,9 +18,6 @@ function resourceComment(resource: LibraryResource): string {
   const c = resource.meta?.comment;
   return typeof c === "string" ? c : "";
 }
-import ResourceCardThumbnail from "./ResourceCardThumbnail.vue";
-import BaseIconButton from "@/ui/base/BaseIconButton.vue";
-import AppIcon from "@/ui/base/AppIcon.vue";
 
 const props = defineProps<{ resource: LibraryResource }>();
 const emit = defineEmits<{
@@ -26,7 +27,15 @@ const emit = defineEmits<{
 
 const { t } = useI18n();
 const hovered = ref(false);
+const showViewer = ref(false);
 const typeMeta = computed(() => getResourceTypeMeta(props.resource.type));
+
+const canZoom = computed(
+  () => (props.resource.type === "map_background" || props.resource.type === "token") && !!props.resource.primary_asset_id,
+);
+
+const assetId = toRef(props.resource, "primary_asset_id");
+const { url: imageUrl } = useAuthenticatedAssetUrl(assetId);
 </script>
 
 <template>
@@ -54,6 +63,14 @@ const typeMeta = computed(() => getResourceTypeMeta(props.resource.type));
     <Transition name="fade">
       <div v-if="hovered" class="overlay-actions">
         <BaseIconButton
+          v-if="canZoom && imageUrl"
+          :aria-label="t('common.preview')"
+          @click.stop="showViewer = true"
+        >
+          <AppIcon :icon="MagnifyingGlassPlusIcon" :size="16" />
+        </BaseIconButton>
+
+        <BaseIconButton
           :aria-label="t('common.rename')"
           @click.stop="emit('rename', resource)"
         >
@@ -73,6 +90,15 @@ const typeMeta = computed(() => getResourceTypeMeta(props.resource.type));
       {{ resource.usage_count }}
     </div>
   </div>
+
+  <!-- Fullscreen viewer -->
+  <Teleport to="body">
+    <Transition name="viewer-fade">
+      <div v-if="showViewer" class="viewer-overlay" @click="showViewer = false">
+        <img :src="imageUrl" alt="" class="viewer-img" />
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -167,6 +193,35 @@ const typeMeta = computed(() => getResourceTypeMeta(props.resource.type));
 }
 .fade-enter-from,
 .fade-leave-to {
+  opacity: 0;
+}
+
+/* Fullscreen viewer */
+.viewer-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgb(0 0 0 / 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+}
+
+.viewer-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: var(--r-1);
+  cursor: default;
+}
+
+.viewer-fade-enter-active,
+.viewer-fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+.viewer-fade-enter-from,
+.viewer-fade-leave-to {
   opacity: 0;
 }
 </style>

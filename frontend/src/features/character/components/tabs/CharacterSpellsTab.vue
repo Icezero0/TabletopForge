@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { SPELLCASTING_ABILITY_OPTIONS, defaultSpells } from "@/features/character/constants";
+import { SPELLCASTING_ABILITY_OPTIONS, defaultSpells, abilityMod } from "@/features/character/constants";
 import BaseSelect from "@/ui/base/BaseSelect.vue";
 import TagInput from "@/features/library/components/TagInput.vue";
 
@@ -37,6 +37,29 @@ function getDerivedValue(key: string): number {
 function setDerivedValue(key: string, raw: string) {
   update(key, { value: parseInt(raw) || 0, breakdown: "" });
 }
+function setDerivedBoth(key: string, value: number, breakdown: string) {
+  update(key, { value, breakdown });
+}
+
+function getProfBonus(): number {
+  const derived = (props.attributesBlock.derived as Record<string, { value: number }> | undefined) ?? {};
+  return derived.proficiency_bonus?.value ?? 2;
+}
+function getSpellAbilityMod(): number {
+  const ability = (spells.value.spellcasting_ability as string) ?? "intelligence";
+  const scores = (props.attributesBlock.ability_scores as Record<string, number> | undefined) ?? {};
+  return abilityMod(scores[ability] ?? 10);
+}
+function autoCalcSpellSaveDC() {
+  const prof = getProfBonus();
+  const mod = getSpellAbilityMod();
+  setDerivedBoth("spell_save_dc", 8 + prof + mod, `8 + 熟练 ${prof} + ${mod}`);
+}
+function autoCalcSpellAttackBonus() {
+  const prof = getProfBonus();
+  const mod = getSpellAbilityMod();
+  setDerivedBoth("spell_attack_bonus", prof + mod, `熟练 ${prof} + ${mod}`);
+}
 
 const SPELL_LEVELS = ["0","1","2","3","4","5","6","7","8","9"] as const;
 const expandedLevels = ref<Set<string>>(new Set());
@@ -67,23 +90,28 @@ function setSlotMax(lvl: string, v: string) {
 <template>
   <div class="tab-content">
     <!-- Spellcasting ability + derived -->
-    <div class="casting-stats">
-      <div class="stat-item">
-        <span class="stat-label">{{ t("character.spells.spellcastingAbility") }}</span>
-        <BaseSelect
-          :model-value="(spells.spellcasting_ability as string) ?? 'intelligence'"
-          :options="abilityOptions"
-          :width="130"
-          @update:model-value="update('spellcasting_ability', $event)"
-        />
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">{{ t("character.spells.spellSaveDC") }}</span>
-        <input type="number" class="derived-val no-spin" :value="getDerivedValue('spell_save_dc')" @change="setDerivedValue('spell_save_dc', ($event.target as HTMLInputElement).value)" />
-      </div>
-      <div class="stat-item">
-        <span class="stat-label">{{ t("character.spells.spellAttackBonus") }}</span>
-        <input type="number" class="derived-val no-spin" :value="getDerivedValue('spell_attack_bonus')" @change="setDerivedValue('spell_attack_bonus', ($event.target as HTMLInputElement).value)" />
+    <div class="section">
+      <div class="derived-hint">{{ t("character.attributes.autoCalcHint") }}</div>
+      <div class="casting-stats">
+        <div class="stat-item">
+          <span class="stat-label">{{ t("character.spells.spellcastingAbility") }}</span>
+          <BaseSelect
+            :model-value="(spells.spellcasting_ability as string) ?? 'intelligence'"
+            :options="abilityOptions"
+            :width="130"
+            @update:model-value="update('spellcasting_ability', $event)"
+          />
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">{{ t("character.spells.spellSaveDC") }}</span>
+          <input type="number" class="derived-val no-spin" :value="getDerivedValue('spell_save_dc')" @change="setDerivedValue('spell_save_dc', ($event.target as HTMLInputElement).value)" />
+          <button class="auto-btn" @click="autoCalcSpellSaveDC">{{ t("character.attributes.autoCalc") }}</button>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">{{ t("character.spells.spellAttackBonus") }}</span>
+          <input type="number" class="derived-val no-spin" :value="getDerivedValue('spell_attack_bonus')" @change="setDerivedValue('spell_attack_bonus', ($event.target as HTMLInputElement).value)" />
+          <button class="auto-btn" @click="autoCalcSpellAttackBonus">{{ t("character.attributes.autoCalc") }}</button>
+        </div>
       </div>
     </div>
 
@@ -112,9 +140,17 @@ function setSlotMax(lvl: string, v: string) {
 
 <style scoped>
 .tab-content { display: grid; gap: 24px; }
-.section { display: grid; gap: 12px; }
+.section { display: grid; gap: 8px; }
 .section-title { font-size: 14px; font-weight: 600; color: var(--c-text); }
+.derived-hint { font-size: 12px; color: var(--c-text-muted); }
 .casting-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.auto-btn {
+  white-space: nowrap; font-size: 11px; padding: 3px 6px; border-radius: var(--r-1);
+  border: 1px solid var(--c-border); background: var(--c-surface-raised);
+  color: var(--c-text-muted); cursor: pointer; transition: background 0.12s;
+  flex-shrink: 0;
+}
+.auto-btn:hover { background: var(--c-hover); color: var(--c-text); }
 .stat-item { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .stat-label { font-size: 13px; color: var(--c-text-muted); white-space: nowrap; flex-shrink: 0; }
 .derived-val {

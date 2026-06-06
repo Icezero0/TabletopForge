@@ -116,25 +116,121 @@ const AUTO_CALC: Partial<Record<DerivedKey, () => void>> = {
   passive_perception: autoCalcPassivePerception,
 };
 
-// ── Saving throws (manual text) ─────────────────────────────────────────────
+// ── Saving throws ───────────────────────────────────────────────────────────
 const savingThrows = computed(
   () => (props.modelValue.saving_throws ?? {}) as Record<string, string>,
 );
-function setSave(ability: string, v: string) {
-  update("saving_throws", { ...savingThrows.value, [ability]: v });
-}
+const saveAutos = computed(
+  () => (props.modelValue.saving_throw_autos ?? {}) as Record<string, boolean>,
+);
 
-// ── Skills (manual text) ────────────────────────────────────────────────────
+// ── Skills ──────────────────────────────────────────────────────────────────
 const skillValues = computed(
   () => (props.modelValue.skill_values ?? {}) as Record<string, string>,
 );
-function setSkill(key: string, v: string) {
-  update("skill_values", { ...skillValues.value, [key]: v });
-}
+const skillAutos = computed(
+  () => (props.modelValue.skill_value_autos ?? {}) as Record<string, boolean>,
+);
 
 // Ability short labels (first 2 chars)
 function abilityShort(ability: string) {
   return t(ABILITY_LABEL_KEYS[ability as keyof typeof ABILITY_LABEL_KEYS]).slice(0, 2);
+}
+
+// ── Saving throw proficiencies ─────────────────────────────────────────────
+const saveProfs = computed(
+  () => (props.modelValue.saving_throw_profs ?? {}) as Record<string, boolean>,
+);
+
+// ── Skill proficiencies ─────────────────────────────────────────────────────
+type SkillProf = "none" | "proficient" | "expert";
+const skillProfs = computed(
+  () => (props.modelValue.skill_profs ?? {}) as Record<string, SkillProf>,
+);
+
+// ── Computed placeholder values ────────────────────────────────────────────
+const profBonus = computed(() => getDerived("proficiency_bonus").value || 2);
+
+function calcSaveValue(ability: string, proficient?: boolean): string {
+  const mod = abilityMod(scores.value[ability]);
+  const hasProf = proficient !== undefined ? proficient : !!saveProfs.value[ability];
+  return fmtMod(mod + (hasProf ? profBonus.value : 0));
+}
+
+function calcSkillValue(key: string, prof?: SkillProf): string {
+  const skill = DND5E_SKILLS.find(s => s.key === key);
+  if (!skill) return "+0";
+  const mod = abilityMod(scores.value[skill.ability]);
+  const p = prof !== undefined ? prof : (skillProfs.value[key] ?? "none");
+  const bonus = p === "proficient" ? profBonus.value : p === "expert" ? profBonus.value * 2 : 0;
+  return fmtMod(mod + bonus);
+}
+
+// ── Auto flag helpers ──────────────────────────────────────────────────────
+// If flag is unset: treat as auto when the stored value is empty (backward compat)
+function isAutoSave(ability: string): boolean {
+  const flag = saveAutos.value[ability];
+  return flag !== undefined ? flag : !(savingThrows.value[ability]?.trim());
+}
+function isAutoSkill(key: string): boolean {
+  const flag = skillAutos.value[key];
+  return flag !== undefined ? flag : !(skillValues.value[key]?.trim());
+}
+
+// Display value: empty string when auto (lets placeholder show), stored value otherwise
+function saveDisplayValue(ability: string): string {
+  return isAutoSave(ability) ? "" : (savingThrows.value[ability] ?? "");
+}
+function skillDisplayValue(key: string): string {
+  return isAutoSkill(key) ? "" : (skillValues.value[key] ?? "");
+}
+
+// Placeholder: always shows the computed reference value
+function savePlaceholder(ability: string): string { return calcSaveValue(ability); }
+function skillPlaceholder(skillKey: string, ability: string): string { return calcSkillValue(skillKey); }
+
+// ── Batch update helper ────────────────────────────────────────────────────
+function updateMultiple(patches: Record<string, unknown>) {
+  emit("update:modelValue", { ...props.modelValue, ...patches });
+}
+
+// ── setSave / setSkill ─────────────────────────────────────────────────────
+function setSave(ability: string, v: string) {
+  const isAuto = v.trim() === "";
+  updateMultiple({
+    saving_throws: { ...savingThrows.value, [ability]: isAuto ? calcSaveValue(ability) : v },
+    saving_throw_autos: { ...saveAutos.value, [ability]: isAuto },
+  });
+}
+function setSkill(key: string, v: string) {
+  const isAuto = v.trim() === "";
+  updateMultiple({
+    skill_values: { ...skillValues.value, [key]: isAuto ? calcSkillValue(key) : v },
+    skill_value_autos: { ...skillAutos.value, [key]: isAuto },
+  });
+}
+
+// ── Prof toggles — also refresh stored value when field is in auto state ───
+function toggleSaveProf(ability: string) {
+  const newProf = !saveProfs.value[ability];
+  const patches: Record<string, unknown> = {
+    saving_throw_profs: { ...saveProfs.value, [ability]: newProf },
+  };
+  if (isAutoSave(ability)) {
+    patches.saving_throws = { ...savingThrows.value, [ability]: calcSaveValue(ability, newProf) };
+  }
+  updateMultiple(patches);
+}
+function cycleSkillProf(key: string) {
+  const cur = skillProfs.value[key] ?? "none";
+  const next: SkillProf = cur === "none" ? "proficient" : cur === "proficient" ? "expert" : "none";
+  const patches: Record<string, unknown> = {
+    skill_profs: { ...skillProfs.value, [key]: next },
+  };
+  if (isAutoSkill(key)) {
+    patches.skill_values = { ...skillValues.value, [key]: calcSkillValue(key, next) };
+  }
+  updateMultiple(patches);
 }
 
 // ── Proficiencies ────────────────────────────────────────────────────────────
@@ -201,12 +297,13 @@ const languages = computed(() => (props.modelValue.languages as string[]) ?? [])
       <div class="section-title">{{ t("character.attributes.savingThrows") }}</div>
       <div class="saves-grid">
         <div v-for="ability in ABILITY_KEYS" :key="ability" class="save-item">
+          <button class="prof-dot" :class="{ proficient: !!saveProfs[ability] }" :title="saveProfs[ability] ? '熟练' : ''" @click="toggleSaveProf(ability)" />
           <span class="save-label">{{ abilityShort(ability) }}</span>
           <input
             type="text"
             class="compact-input"
-            :value="savingThrows[ability] ?? ''"
-            :placeholder="fmtMod(abilityMod(scores[ability]))"
+            :value="saveDisplayValue(ability)"
+            :placeholder="savePlaceholder(ability)"
             @input="setSave(ability, ($event.target as HTMLInputElement).value)"
           />
         </div>
@@ -218,12 +315,18 @@ const languages = computed(() => (props.modelValue.languages as string[]) ?? [])
       <div class="section-title">{{ t("character.attributes.skills") }}</div>
       <div class="skills-grid">
         <div v-for="skill in DND5E_SKILLS" :key="skill.key" class="skill-item">
+          <button
+            class="prof-dot"
+            :class="skillProfs[skill.key] ?? 'none'"
+            :title="skillProfs[skill.key] === 'proficient' ? '熟练' : skillProfs[skill.key] === 'expert' ? '专精' : ''"
+            @click="cycleSkillProf(skill.key)"
+          />
           <span class="skill-name">{{ t(skill.labelKey) }}</span>
           <input
             type="text"
             class="compact-input"
-            :value="skillValues[skill.key] ?? ''"
-            :placeholder="fmtMod(abilityMod(scores[skill.ability]))"
+            :value="skillDisplayValue(skill.key)"
+            :placeholder="skillPlaceholder(skill.key, skill.ability)"
             @input="setSkill(skill.key, ($event.target as HTMLInputElement).value)"
           />
         </div>
@@ -341,6 +444,32 @@ const languages = computed(() => (props.modelValue.languages as string[]) ?? [])
 .skills-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 10px; }
 .skill-item { display: flex; align-items: center; gap: 5px; }
 .skill-name { font-size: 12px; color: var(--c-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 0; }
+
+/* Prof dots — 三态: 空心 / 圆环 / 圆环+内部圆 */
+.prof-dot {
+  position: relative;
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid var(--c-border); background: transparent;
+  cursor: pointer; flex-shrink: 0; padding: 0;
+  transition: border-color 0.12s, border-width 0.12s;
+}
+.prof-dot.proficient {
+  border: 3px solid var(--c-primary);
+  background: transparent;
+}
+.prof-dot.expert {
+  border: 3px solid var(--c-primary);
+  background: transparent;
+}
+.prof-dot.expert::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--c-primary);
+  transform: translate(-50%, -50%);
+}
 
 /* Shared compact input */
 .compact-input {
