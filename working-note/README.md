@@ -27,7 +27,7 @@ Step 1  基础身份与房间治理 ──► Step 2  主界面空壳布局
 | 2 | [02-table-layout-shell.md](./02-table-layout-shell.md) | 全屏地图、悬浮可收起面板、治理/聊天/比例尺 |
 | 3 | [03-integrate-existing.md](./03-integrate-existing.md) | 验收收尾、备忘录 API、场上角色占位 |
 | 4 | [04-map-core.md](./04-map-core.md) | 地图导入、网格、锁定、图层、绘制 |
-| 5 | [05-character-core.md](./05-character-core.md) | 角色库、稳定层/状态层、Token 上场（[05.1](./05.1-token-foundation.md)–[05.4](./05.4-gm-monsters.md)） |
+| 5 | [05-character-core.md](./05-character-core.md) | 角色库、稳定层/状态层、Token 上场（[05.1](./05.1-token-foundation.md)–[05.5](./05.5-charactor-info-import.md)） |
 
 ## 原则
 
@@ -43,4 +43,4 @@ Step 1  基础身份与房间治理 ──► Step 2  主界面空壳布局
 | 2 | 已完成 |
 | 3 | 已完成 |
 | 4 | 已完成（含 Phase 5 Pointer、文本再编辑） |
-| 5 | 已完成（Phase 1–4，见 [05-character-core.md](./05-character-core.md)） |
+| 5 | **已完成**（Phase 1–5，含 [05.5 导入与体验](./05.5-charactor-info-import.md)、[06 收尾](./06-other-chore.md)） |

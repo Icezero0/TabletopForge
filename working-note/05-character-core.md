@@ -16,14 +16,15 @@
 | **2** | [05.2-room-characters-state.md](./05.2-room-characters-state.md) | `room_characters` + `character_states`、`characters.kind`/`token_image`、底栏添加角色（PL 主 PC/附加） | **已完成** |
 | **3** | [05.3-binding-infopanel.md](./05.3-binding-infopanel.md) | Token↔角色绑定、HP/AC/PP 预览、InfoPanel 单槽、InGameCharacterList 上场 | **已完成** |
 | **4** | [05.4-gm-monsters.md](./05.4-gm-monsters.md) | GM 角色创建并入统一添加面板（`additional`）；去除 monster 专轨；Step 5 总验收 | **已完成** |
+| **5** | [05.5-charactor-info-import.md](./05.5-charactor-info-import.md) | LLM 文本导入角色、熟练项/回房导航修复、角色主色、地图 Popover | **未开始** |
 
-各 Phase 验收清单见对应子文档；Phase 4 完成后勾选下方 **总验收清单**。
+各 Phase 验收清单见对应子文档；Phase 4 完成后勾选下方 **总验收清单**；Phase 5 为 Step 5 扩展，见 05.5 交接 Prompt。
 
 ---
 
 ## 数据与 API（概要）
 
-- `characters`（稳定层，`owner_id`）+ `room_characters`（房间库，`kind`: pc / additional / monster）+ `character_states`（实时层，1:1）。
+- `characters`（稳定层，`owner_id`）+ `room_characters`（房间库，`kind`: pc_main / pc_additional / npc）+ `character_states`（实时层，1:1）。
 - 自定义 key/value：`features.custom_fields` / `extras` JSON。
 - Token：`room_tokens` 绑定 `linked_character_id`；位置/缩放/**Token 类内** z-index（band 基准 100）/实例名 `name`。
 - 业务 asset：`token_image`；无图 → **名称首字**。

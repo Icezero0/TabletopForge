@@ -61,14 +61,15 @@ TabletopForge/
 | 注册 / 登录 / JWT | `auth`, `users` | `/auth/login`, `/auth/register` | `users` |
 | 站点身份 `site_role` | `site/permissions` | 反馈管理页等 | `users.site_role` |
 | 房间 CRUD / 可见性 | `rooms/room` | 首页创建房间、公开房间列表 | `rooms` |
-| 成员与 `room_role` + `game_role` | `rooms/membership`, `rooms/permissions`, `rooms/game_permissions` | 房间成员 Tab、双身份展示与改 game_role | `room_members`（`role` + `game_role`） |
+| 成员与 `room_role` + `game_role` | `rooms/membership`, `rooms/permissions`, `rooms/game_permissions` | 房间成员 Tab、双身份展示与改 game_role、`PlayerColorPicker` | `room_members`（`role` + `game_role` + `player_color`） |
 | 入房审批 | `rooms/join_request` | `JoinRequestsPage`、房间 Requests Tab | `room_join_requests` |
 | 站内通知 | `notifications` | `NotificationsPage` | `notifications` |
 | 房间普通聊天 | `messages` + realtime 广播 | `RoomChatTab`, `ChatPanel` | `messages` |
 | 头像 / 头像历史 / 反馈截图 / 底层 image/audio | `assets`, `users` | 资料编辑、联系页截图上传；资源库页面 | `assets`, `user_avatar_history` |
 | 用户反馈 | `feedback` | `ContactPage`, `FeedbackAdminPage` | `feedbacks` |
 | 个人资源库（image / audio / map_background） | `library` | `LibraryPage` | `library_resources` |
-| 角色卡（DnD 5e） | `characters` | `CharactersPage`（列表）、`CharacterEditPage`（新建/编辑，6 Tab） | `characters` |
+| 角色卡（DnD 5e） | `characters` | `CharactersPage`（列表）、`CharacterEditPage`（新建/编辑，6 Tab）、`CharacterImportDialog` | `characters`, `character_states` |
+| AI 角色导入预览 | `characters/import_service` | 编辑页「AI 导入」；`POST /characters/import-preview` | — |
 | WebSocket 实时 | `realtime/*` | `useRoomRealtimeSession` | — |
 | 个人备忘录（按房间） | `rooms/personal_memo` | `PersonalMemo` | `room_personal_memos` |
 
@@ -93,7 +94,9 @@ ORM 模型导出（`backend/app/db/models.py`）：
 - `20260606_0007_add_room_tokens`
 - `20260606_0008_extend_characters_kind_token_image`
 - `20260606_0009_add_character_states`
-- `20260606_0010_add_room_characters`（current head）
+- `20260606_0010_add_room_characters`
+- `20260606_0011_add_room_member_player_color`
+- `20260606_0012_migrate_character_kinds`（current head）
 
 ## 4.2 文档已规划、代码未落地
 
@@ -101,9 +104,9 @@ ORM 模型导出（`backend/app/db/models.py`）：
 |---|---|
 | RP 消息 | `09_module_design/chat_and_rp.md`；`rp_messages` |
 | 地图桌面（MVP 扁平） | `rooms/tabletop`；`room_tabletop_settings`, `room_maps`, `room_drawings`, **`room_tokens`**（Phase 1）；地图/绘制/Token HTTP+WS 已落地 |
-| **房间角色库 / CharacterState** | **Phase 2–4 已落地**：`room_characters`、`character_states`；`characters.kind`（业务 `pc`/`additional`）；GM-owned 角色 PL 仅 `damage_taken`（presenter）；`portrait_asset_id`→`token_image_asset_id` 回退；GM PATCH 降 HP 累计伤害；WS `state_summary_public` |
+| **房间角色库 / CharacterState** | **Phase 2–4 已落地**：`room_characters`、`character_states`；`characters.kind`（业务 `pc_main`/`pc_additional`/`npc`）；`kind=npc` 时 PL 仅 `damage_taken`（presenter）；`portrait_asset_id`→`token_image_asset_id` 回退；GM PATCH 降 HP 累计伤害；WS `state_summary_public` |
 | Token | **Phase 1–4 已落地**：`room_tokens` CRUD、WS、`TokenLayer`；`linked_character_id`、`spawn-token`、`state_summary`（HP/AC/PP）、`character_state_updated` WS |
-| InfoPanel / 场上列表 | **Phase 3–4 已落地**：统一 `InfoPanel`（PC/additional State 编辑）；`InGameCharacterList`；统一 `AddRoomCharacterDialog`（PL/GM 分支）；Context Menu「查看信息」 |
+| InfoPanel / 场上列表 | **Phase 3–5 已落地**：`InfoPanel`（六维 + State；不展示 `custom_fields`）；`InGameCharacterList`；`AddRoomCharacterDialog` + `MapSpawnPopover`（PL `pc_main`/`pc_additional`，GM `npc`）；Context Menu「查看信息」 |
 | 骰子 / DND5E 规则 | `09_module_design/dice.md`, `dnd5e_rules.md` |
 | 操作日志 | `09_module_design/operation_log.md` |
 | 战斗辅助 | `09_module_design/combat_assistant.md` |
@@ -112,7 +115,7 @@ ORM 模型导出（`backend/app/db/models.py`）：
 
 **身份说明**：`room_members.game_role`（`GM` | `PL` | `OB`）已落地，与 `room_role`（DB 列 `role`）分离；Tabletop 权限桩见 `game_permissions.py`（`08` §6.4，Step 4 起消费）。
 
-房间页（`frontend/src/pages/room/RoomPage.vue`）已实现 **全屏地图 + 悬浮可收起面板**（`features/table/`）：`TableStage` + `MapViewport` 铺满视口；地图/绘制/**Token** 协作；底栏房间库 + 左上 **InGameCharacterList** 上场；Token **HP/AC/PP 预览**；右侧 **InfoPanel** 单槽；仍保留 Phase 1 独立 Token 放置。
+房间页（`frontend/src/pages/room/RoomPage.vue`）已实现 **全屏地图 + 悬浮可收起面板**（`features/table/`）：`TableStage` + `MapViewport` 铺满视口；地图/绘制/**Token** 协作；底栏 **`MapSpawnPopover`**（添加角色 / 上场）+ 左上 **InGameCharacterList**；Token **HP/AC/PP 预览**（`npc` 对 PL 仅伤害）；右侧 **InfoPanel** 单槽。
 
 ---
 
@@ -184,7 +187,7 @@ Client (Vue)
 | 文档阶段（`00_overview.md` §10） | 状态 |
 |---|---|
 | Phase 1：基础房间与权限 | **大部分完成**（Table 区未实现） |
-| 跑团桌面 MVP（`01` §4.2） | **Step 5 已完成**（Phase 1–4：Token、房间角色库、绑定/InfoPanel、GM 怪物与伤害可见性，见 `working-note/05-character-core.md`） |
+| 跑团桌面 MVP（`01` §4.2） | **Step 5 已完成**（Phase 1–4 + Phase 5 扩展：LLM 角色导入、熟练项/回房修复、玩家主色、地图 Popover，见 `working-note/05.5-charactor-info-import.md`） |
 | Phase 4：RP 与骰子 | **未开始**（普通聊天已具备；不在跑团桌面 MVP） |
 | Phase 5：战斗辅助 | **未开始** |
 
