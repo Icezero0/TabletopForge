@@ -14,6 +14,7 @@
 - **编辑页**：无改动也可点保存（仅 `isSaving` 时禁用）
 - **成员主色**：`room_members.player_color`；`PlayerColorPicker`；Pointer/绘制默认色
 - **地图底栏**：`MapSpawnPopover` 统一添加角色 / 上场入口
+- **房间 Popover**：合并全局角色库；未入库卡显示「未入库」标签，点击自动 `POST /rooms/{id}/characters/link` 后上场
 
 ## 关键迁移
 
