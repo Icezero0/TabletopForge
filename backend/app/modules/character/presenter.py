@@ -1,6 +1,7 @@
 from typing import Any
 
 from app.modules.character.attributes import derived_int
+from app.modules.character.constants import CharacterKind
 from app.modules.character.models import Character, CharacterState
 from app.modules.character.schemas import CharacterStateResponse, CharacterStateSummary
 from app.modules.rooms.constants import GamePermission, GameRole
@@ -19,13 +20,12 @@ def viewer_sees_exact_hp(
     *,
     game_role: GameRole | None,
     viewer_user_id: int | None,
-    owner_is_gm_in_room: bool,
 ) -> bool:
     if viewer_user_id is not None and character.owner_id == viewer_user_id:
         return True
     if _can_view_exact_hp(game_role):
         return True
-    if owner_is_gm_in_room:
+    if character.kind == CharacterKind.NPC.value:
         return False
     return True
 
@@ -46,13 +46,11 @@ def present_character_state(
     *,
     game_role: GameRole | None,
     viewer_user_id: int | None,
-    owner_is_gm_in_room: bool,
 ) -> CharacterStateResponse:
     exact_hp = viewer_sees_exact_hp(
         character,
         game_role=game_role,
         viewer_user_id=viewer_user_id,
-        owner_is_gm_in_room=owner_is_gm_in_room,
     )
     if not exact_hp:
         conditions = _filtered_conditions(state, exact_hp=False)
@@ -75,7 +73,6 @@ def present_character_state_summary(
     *,
     game_role: GameRole | None,
     viewer_user_id: int | None,
-    owner_is_gm_in_room: bool,
 ) -> CharacterStateSummary:
     if state is None:
         return CharacterStateSummary(
@@ -88,7 +85,6 @@ def present_character_state_summary(
         character,
         game_role=game_role,
         viewer_user_id=viewer_user_id,
-        owner_is_gm_in_room=owner_is_gm_in_room,
     )
     if not exact_hp:
         return CharacterStateSummary(
@@ -111,7 +107,6 @@ def present_token_state_summary(
     *,
     game_role: GameRole | None,
     viewer_user_id: int | None,
-    owner_is_gm_in_room: bool,
 ) -> TokenStateSummary:
     if state is None:
         return TokenStateSummary(
@@ -125,7 +120,6 @@ def present_token_state_summary(
         character,
         game_role=game_role,
         viewer_user_id=viewer_user_id,
-        owner_is_gm_in_room=owner_is_gm_in_room,
     )
     if not exact_hp:
         return TokenStateSummary(
@@ -147,8 +141,6 @@ def present_token_state_summary(
 def build_character_state_broadcast(
     character: Character,
     state: CharacterState | None,
-    *,
-    owner_is_gm_in_room: bool,
 ) -> dict[str, Any]:
     if state is None:
         return {
@@ -160,21 +152,20 @@ def build_character_state_broadcast(
         state,
         game_role=GameRole.GM,
         viewer_user_id=character.owner_id,
-        owner_is_gm_in_room=owner_is_gm_in_room,
     )
-    if owner_is_gm_in_room:
+    is_npc = character.kind == CharacterKind.NPC.value
+    if is_npc:
         public_summary = present_token_state_summary(
             character,
             state,
             game_role=GameRole.PL,
             viewer_user_id=None,
-            owner_is_gm_in_room=True,
         )
     else:
         public_summary = gm_summary
     result: dict[str, Any] = {
         "state_summary": gm_summary.model_dump(mode="json"),
     }
-    if owner_is_gm_in_room:
+    if is_npc:
         result["state_summary_public"] = public_summary.model_dump(mode="json")
     return result

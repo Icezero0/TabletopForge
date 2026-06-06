@@ -8,7 +8,7 @@ from app.core.error_reasons import ErrorReason
 from app.core.exceptions import BadRequestError, ForbiddenError
 from app.modules.assets.constants import AssetType
 from app.modules.assets.service import AssetService
-from app.modules.character.constants import CharacterKind
+from app.modules.character.constants import CharacterKind, assert_room_character_kind, kind_value
 from app.modules.character.models import CharacterState
 from app.modules.character.presenter import present_character_state_summary
 from app.modules.character.schemas import CharacterStateCreate
@@ -68,7 +68,6 @@ class RoomCharacterService:
         *,
         game_role: GameRole,
         viewer_user_id: int,
-        owner_is_gm_in_room: bool,
     ) -> RoomCharacterEntryResponse:
         character = entry.character
         state_summary = present_character_state_summary(
@@ -76,7 +75,6 @@ class RoomCharacterService:
             state,
             game_role=game_role,
             viewer_user_id=viewer_user_id,
-            owner_is_gm_in_room=owner_is_gm_in_room,
         )
         return RoomCharacterEntryResponse(
             room_character_id=entry.id,
@@ -98,23 +96,15 @@ class RoomCharacterService:
     ) -> list[RoomCharacterEntryResponse]:
         game_role = await self._require_member_game_role(db, room_id=room_id, user=user)
         entries = await self.repo.list_by_room(db, room_id=room_id)
-        responses: list[RoomCharacterEntryResponse] = []
-        for entry in entries:
-            owner_is_gm = await self.repo.is_owner_gm_in_room(
-                db,
-                room_id=room_id,
-                owner_id=entry.character.owner_id,
+        return [
+            self._entry_response(
+                entry,
+                entry.character.state,
+                game_role=game_role,
+                viewer_user_id=user.id,
             )
-            responses.append(
-                self._entry_response(
-                    entry,
-                    entry.character.state,
-                    game_role=game_role,
-                    viewer_user_id=user.id,
-                    owner_is_gm_in_room=owner_is_gm,
-                )
-            )
-        return responses
+            for entry in entries
+        ]
 
     async def create_room_character(
         self,
@@ -141,21 +131,15 @@ class RoomCharacterService:
         if token_image_asset_id is None and payload.portrait_asset_id is not None:
             token_image_asset_id = payload.portrait_asset_id
 
-        kind_value = payload.kind.value if isinstance(payload.kind, CharacterKind) else payload.kind
-
-        if kind_value == CharacterKind.MONSTER.value:
-            raise BadRequestError(
-                "Character kind 'monster' is not supported",
-                reason=ErrorReason.REQUEST_VALIDATION_FAILED,
-                details={"kind": kind_value},
-            )
+        kind_value_str = kind_value(payload.kind)
+        assert_room_character_kind(game_role, kind_value_str)
 
         character = await self.character_service._create_character_record(
             db,
             owner_id=user.id,
             name=payload.name.strip(),
             player_name=payload.player_name,
-            kind=kind_value,
+            kind=kind_value_str,
             system=payload.system,
             portrait_asset_id=payload.portrait_asset_id,
             token_image_asset_id=token_image_asset_id,
@@ -177,22 +161,16 @@ class RoomCharacterService:
             db,
             room_id=room_id,
             character_id=character.id,
-            kind=kind_value,
+            kind=kind_value_str,
             added_by_user_id=user.id,
         )
         await db.commit()
         await db.refresh(character)
-        owner_is_gm = await self.repo.is_owner_gm_in_room(
-            db,
-            room_id=room_id,
-            owner_id=character.owner_id,
-        )
         return self._entry_response(
             entry,
             state,
             game_role=game_role,
             viewer_user_id=user.id,
-            owner_is_gm_in_room=owner_is_gm,
         )
 
     @staticmethod

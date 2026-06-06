@@ -12,7 +12,7 @@ class CharacterRepository:
         owner_id: int,
         name: str,
         player_name: str = "",
-        kind: str = "pc",
+        kind: str = "pc_main",
         system: str = "dnd5e",
         portrait_asset_id: int | None = None,
         token_image_asset_id: int | None = None,

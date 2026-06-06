@@ -145,14 +145,12 @@ class RoomTabletopService:
         state: CharacterState | None,
         game_role: GameRole,
         viewer_user_id: int,
-        owner_is_gm_in_room: bool,
     ) -> TokenStateSummary:
         return present_token_state_summary(
             character,
             state,
             game_role=game_role,
             viewer_user_id=viewer_user_id,
-            owner_is_gm_in_room=owner_is_gm_in_room,
         )
 
     async def _token_responses(
@@ -181,17 +179,11 @@ class RoomTabletopService:
             if character is None:
                 responses.append(base.model_copy(update={"state_summary": None}))
                 continue
-            owner_is_gm = await self.room_character_repo.is_owner_gm_in_room(
-                db,
-                room_id=room_id,
-                owner_id=character.owner_id,
-            )
             summary = self._build_state_summary(
                 character=character,
                 state=states.get(token.linked_character_id),
                 game_role=game_role,
                 viewer_user_id=viewer_user_id,
-                owner_is_gm_in_room=owner_is_gm,
             )
             responses.append(
                 base.model_copy(
@@ -717,16 +709,7 @@ class RoomTabletopService:
         )
         if state is None:
             return None
-        owner_is_gm = await self.room_character_repo.character_owner_is_gm_in_any_room(
-            db,
-            character_id=character_id,
-            owner_id=character.owner_id,
-        )
-        return build_character_state_broadcast(
-            character,
-            state,
-            owner_is_gm_in_room=owner_is_gm,
-        )
+        return build_character_state_broadcast(character, state)
 
     async def build_token_state_summary_for_character(
         self,
@@ -741,15 +724,9 @@ class RoomTabletopService:
             db,
             character_id=character_id,
         )
-        owner_is_gm = await self.room_character_repo.character_owner_is_gm_in_any_room(
-            db,
-            character_id=character_id,
-            owner_id=character.owner_id,
-        )
         return self._build_state_summary(
             character=character,
             state=state,
             game_role=GameRole.GM,
             viewer_user_id=character.owner_id,
-            owner_is_gm_in_room=owner_is_gm,
         )

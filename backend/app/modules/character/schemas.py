@@ -74,10 +74,29 @@ class CharacterListResponse(BaseModel):
     total_pages: int
 
 
+class CharacterImportPreviewRequest(BaseModel):
+    raw_text: str = Field(min_length=1, max_length=50000)
+
+
+class CharacterImportPreviewResponse(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+    player_name: str = Field(default="", max_length=255)
+    kind: CharacterKind = CharacterKind.PC_MAIN
+    system: str = Field(default="dnd5e", max_length=50)
+    identity: dict[str, Any] = Field(default_factory=dict)
+    flavor: dict[str, Any] = Field(default_factory=dict)
+    attributes: dict[str, Any] = Field(default_factory=dict)
+    features: dict[str, Any] = Field(default_factory=dict)
+    spells: dict[str, Any] | None = None
+    equipment: dict[str, Any] = Field(default_factory=dict)
+    extras: dict[str, Any] = Field(default_factory=dict)
+    state: CharacterStateCreate | None = None
+
+
 class CharacterCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     player_name: str = Field(default="", max_length=255)
-    kind: CharacterKind = CharacterKind.PC
+    kind: CharacterKind = CharacterKind.PC_MAIN
     system: str = Field(default="dnd5e", max_length=50)
     portrait_asset_id: int | None = None
     token_image_asset_id: int | None = None

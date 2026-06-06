@@ -19,7 +19,7 @@ async def test_spawn_token_links_character_and_includes_state_summary(
         f"/api/v1/rooms/{room.id}/characters",
         headers=auth_headers(pl),
         data={
-            "kind": "pc",
+            "kind": "pc_main",
             "name": "战士",
             "state_json": '{"max_hp": 20, "current_hp": 18, "armor_class": 16}',
             "attributes_json": (
@@ -69,7 +69,7 @@ async def test_same_character_can_spawn_multiple_tokens(
     create_response = await api_client.post(
         f"/api/v1/rooms/{room.id}/characters",
         headers=auth_headers(pl),
-        data={"kind": "pc", "name": "Dup"},
+        data={"kind": "pc_main", "name": "Dup"},
     )
     character_id = create_response.json()["character_id"]
 
@@ -106,7 +106,7 @@ async def test_spawn_token_rejects_character_not_in_room(
     other_character = await api_client.post(
         f"/api/v1/rooms/{other_room.id}/characters",
         headers=auth_headers(owner),
-        data={"kind": "pc", "name": "Elsewhere"},
+        data={"kind": "npc", "name": "Elsewhere"},
     )
     character_id = other_character.json()["character_id"]
 
@@ -134,7 +134,7 @@ async def test_pl_cannot_spawn_other_players_character(
     create_response = await api_client.post(
         f"/api/v1/rooms/{room.id}/characters",
         headers=auth_headers(pl_b),
-        data={"kind": "pc", "name": "B Hero"},
+        data={"kind": "pc_main", "name": "B Hero"},
     )
     character_id = create_response.json()["character_id"]
 
@@ -161,7 +161,7 @@ async def test_gm_spawned_token_can_be_patched_by_pl_owner(
     create_response = await api_client.post(
         f"/api/v1/rooms/{room.id}/characters",
         headers=auth_headers(pl),
-        data={"kind": "pc", "name": "PL Hero"},
+        data={"kind": "pc_main", "name": "PL Hero"},
     )
     character_id = create_response.json()["character_id"]
 
@@ -200,7 +200,7 @@ async def test_pl_cannot_patch_bound_token_for_other_character(
     create_response = await api_client.post(
         f"/api/v1/rooms/{room.id}/characters",
         headers=auth_headers(pl_b),
-        data={"kind": "pc", "name": "B"},
+        data={"kind": "pc_main", "name": "B"},
     )
     character_id = create_response.json()["character_id"]
 
@@ -232,7 +232,7 @@ async def test_snapshot_includes_state_summary_on_linked_tokens(
         f"/api/v1/rooms/{room.id}/characters",
         headers=auth_headers(owner),
         data={
-            "kind": "pc",
+            "kind": "npc",
             "name": "Snap",
             "state_json": '{"max_hp": 10, "current_hp": 8, "armor_class": 12}',
         },
@@ -290,7 +290,7 @@ async def test_state_patch_broadcasts_character_state_updated(
         f"/api/v1/rooms/{room.id}/characters",
         headers=auth_headers(pl),
         data={
-            "kind": "pc",
+            "kind": "pc_main",
             "name": "WS Hero",
             "state_json": '{"max_hp": 20, "current_hp": 20, "armor_class": 15}',
         },

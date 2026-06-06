@@ -26,8 +26,8 @@ class Character(Base):
     kind: Mapped[str] = mapped_column(
         String(16),
         nullable=False,
-        default=CharacterKind.PC.value,
-        server_default=CharacterKind.PC.value,
+        default=CharacterKind.PC_MAIN.value,
+        server_default=CharacterKind.PC_MAIN.value,
     )
     portrait_asset_id: Mapped[int | None] = mapped_column(
         Integer,

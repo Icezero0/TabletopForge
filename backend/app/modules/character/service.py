@@ -6,7 +6,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.error_reasons import ErrorReason
 from app.core.exceptions import ForbiddenError, NotFoundError
 from app.modules.character.attributes import derived_int
-from app.modules.character.constants import CharacterKind
+from app.modules.character.constants import (
+    CharacterKind,
+    assert_global_character_kind,
+    kind_value,
+)
 from app.modules.character.models import Character, CharacterState
 from app.modules.character.presenter import present_character_state
 from app.modules.character.repository import CharacterRepository
@@ -21,6 +25,7 @@ from app.modules.character.state_repository import CharacterStateRepository
 from app.modules.rooms.characters.repository import RoomCharacterRepository
 from app.modules.rooms.constants import GamePermission, GameRole
 from app.modules.rooms.game_permissions import require_game_permission
+from app.modules.rooms.membership.repository import RoomMembershipRepository
 from app.modules.users.models import User
 
 
@@ -29,6 +34,7 @@ class CharacterService:
         self.repo = CharacterRepository()
         self.state_repo = CharacterStateRepository()
         self.room_character_repo = RoomCharacterRepository()
+        self.membership_repo = RoomMembershipRepository()
 
     def _require_owner(self, character: Character, user: User) -> None:
         if character.owner_id != user.id:
@@ -55,7 +61,7 @@ class CharacterService:
         owner_id: int,
         name: str,
         player_name: str = "",
-        kind: str = CharacterKind.PC.value,
+        kind: str = CharacterKind.PC_MAIN.value,
         system: str = "dnd5e",
         portrait_asset_id: int | None = None,
         token_image_asset_id: int | None = None,
@@ -123,7 +129,7 @@ class CharacterService:
         user: User,
         name: str,
         player_name: str = "",
-        kind: str = CharacterKind.PC.value,
+        kind: str = CharacterKind.PC_MAIN.value,
         system: str = "dnd5e",
         portrait_asset_id: int | None = None,
         token_image_asset_id: int | None = None,
@@ -136,6 +142,12 @@ class CharacterService:
         extras: dict | None = None,
         state: CharacterStateCreate | None = None,
     ) -> Character:
+        user_is_gm = await self.membership_repo.user_is_gm_in_any_room(
+            db,
+            user_id=user.id,
+        )
+        assert_global_character_kind(kind_value(kind), user_is_gm=user_is_gm)
+
         character = await self._create_character_record(
             db,
             owner_id=user.id,
@@ -319,17 +331,11 @@ class CharacterService:
                 reason=ErrorReason.CHARACTER_NOT_FOUND,
                 details={"character_id": character_id},
             )
-        owner_is_gm = await self.room_character_repo.character_owner_is_gm_in_any_room(
-            db,
-            character_id=character_id,
-            owner_id=character.owner_id,
-        )
         return present_character_state(
             character,
             state,
             game_role=game_role,
             viewer_user_id=user.id,
-            owner_is_gm_in_room=owner_is_gm,
         )
 
     async def patch_character_state(
@@ -357,13 +363,9 @@ class CharacterService:
 
         patch_fields = dict(patch_fields)
         if "current_hp" in patch_fields:
-            owner_is_gm = await self.room_character_repo.character_owner_is_gm_in_any_room(
-                db,
-                character_id=character_id,
-                owner_id=character.owner_id,
-            )
             can_track_damage = game_role == GameRole.GM or (
-                character.owner_id == user.id and owner_is_gm
+                character.owner_id == user.id
+                and character.kind == CharacterKind.NPC.value
             )
             if can_track_damage:
                 old_hp = state.current_hp or 0
@@ -382,15 +384,9 @@ class CharacterService:
 
         updated = await self.state_repo.update(db, state=state, **patch_fields)
         await db.commit()
-        owner_is_gm = await self.room_character_repo.character_owner_is_gm_in_any_room(
-            db,
-            character_id=character_id,
-            owner_id=character.owner_id,
-        )
         return present_character_state(
             character,
             updated,
             game_role=game_role,
             viewer_user_id=user.id,
-            owner_is_gm_in_room=owner_is_gm,
         )

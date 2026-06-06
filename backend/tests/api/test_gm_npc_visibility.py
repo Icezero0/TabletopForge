@@ -6,7 +6,7 @@ async def _create_gm_npc(api_client, room_id, gm, auth_headers):
         f"/api/v1/rooms/{room_id}/characters",
         headers=auth_headers(gm),
         data={
-            "kind": "additional",
+            "kind": "npc",
             "name": "Goblin",
             "state_json": '{"max_hp": 7, "current_hp": 7, "armor_class": 15}',
         },
@@ -140,7 +140,7 @@ async def test_portrait_falls_back_to_token_image(
         f"/api/v1/rooms/{room.id}/characters",
         headers=auth_headers(owner),
         data={
-            "kind": "additional",
+            "kind": "npc",
             "name": "NPC",
             "portrait_asset_id": str(portrait_id),
         },
