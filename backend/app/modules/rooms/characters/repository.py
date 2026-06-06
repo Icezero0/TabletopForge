@@ -48,6 +48,25 @@ class RoomCharacterRepository:
         )
         return list(result.scalars().all())
 
+    async def get_by_room_and_character(
+        self,
+        db: AsyncSession,
+        *,
+        room_id: int,
+        character_id: int,
+    ) -> RoomCharacter | None:
+        result = await db.execute(
+            select(RoomCharacter)
+            .where(
+                RoomCharacter.room_id == room_id,
+                RoomCharacter.character_id == character_id,
+            )
+            .options(
+                selectinload(RoomCharacter.character).selectinload(Character.state)
+            )
+        )
+        return result.scalar_one_or_none()
+
     async def is_character_in_room(
         self,
         db: AsyncSession,

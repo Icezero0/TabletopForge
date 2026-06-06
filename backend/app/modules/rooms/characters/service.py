@@ -14,7 +14,10 @@ from app.modules.character.presenter import present_character_state_summary
 from app.modules.character.schemas import CharacterStateCreate
 from app.modules.character.service import CharacterService
 from app.modules.rooms.characters.repository import RoomCharacterRepository
-from app.modules.rooms.characters.schemas import RoomCharacterCreate, RoomCharacterEntryResponse
+from app.modules.rooms.characters.schemas import (
+    RoomCharacterCreate,
+    RoomCharacterEntryResponse,
+)
 from app.modules.rooms.constants import GamePermission, GameRole
 from app.modules.rooms.game_permissions import require_game_permission
 from app.modules.rooms.membership.service import RoomMembershipService
@@ -169,6 +172,81 @@ class RoomCharacterService:
         return self._entry_response(
             entry,
             state,
+            game_role=game_role,
+            viewer_user_id=user.id,
+        )
+
+    async def link_room_character(
+        self,
+        db: AsyncSession,
+        *,
+        room_id: int,
+        user: User,
+        character_id: int,
+    ) -> RoomCharacterEntryResponse:
+        game_role = await self._require_member_game_role(db, room_id=room_id, user=user)
+        require_game_permission(game_role, GamePermission.CREATE_CHARACTER_DEFINITION)
+
+        character = await self.character_service._get_or_404(
+            db,
+            character_id=character_id,
+        )
+        if character.owner_id != user.id:
+            raise ForbiddenError(
+                "You do not have permission to link this character",
+                reason=ErrorReason.CHARACTER_PERMISSION_DENIED,
+                details={"character_id": character_id},
+            )
+
+        assert_room_character_kind(game_role, character.kind)
+
+        existing = await self.repo.get_by_room_and_character(
+            db,
+            room_id=room_id,
+            character_id=character_id,
+        )
+        if existing is not None:
+            return self._entry_response(
+                existing,
+                existing.character.state,
+                game_role=game_role,
+                viewer_user_id=user.id,
+            )
+
+        state = await self.character_service.state_repo.get_by_character_id(
+            db,
+            character_id=character_id,
+        )
+        if state is None:
+            state = await self.character_service._create_default_state(
+                db,
+                character_id=character_id,
+                attributes=character.attributes,
+            )
+
+        entry = await self.repo.create(
+            db,
+            room_id=room_id,
+            character_id=character_id,
+            kind=character.kind,
+            added_by_user_id=user.id,
+        )
+        await db.commit()
+
+        linked = await self.repo.get_by_room_and_character(
+            db,
+            room_id=room_id,
+            character_id=character_id,
+        )
+        if linked is None:
+            raise BadRequestError(
+                "Failed to link character to room",
+                reason=ErrorReason.REQUEST_VALIDATION_FAILED,
+                details={"character_id": character_id, "room_id": room_id},
+            )
+        return self._entry_response(
+            linked,
+            linked.character.state or state,
             game_role=game_role,
             viewer_user_id=user.id,
         )

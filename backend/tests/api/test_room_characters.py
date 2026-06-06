@@ -1,4 +1,16 @@
+from app.modules.character.constants import CharacterKind
+from app.modules.character.models import Character, CharacterState
 from app.modules.rooms.constants import GameRole
+
+
+async def _create_global_character_via_api(api_client, auth_headers, user, *, kind: str, name: str):
+    response = await api_client.post(
+        "/api/v1/characters",
+        headers=auth_headers(user),
+        json={"name": name, "kind": kind},
+    )
+    assert response.status_code == 201
+    return response.json()["id"]
 
 
 async def test_pl_can_create_pc_and_additional_in_room(
@@ -260,3 +272,192 @@ async def test_gm_cannot_create_pc_main_in_room(
         data={"kind": "pc_main", "name": "Blocked PC"},
     )
     assert response.status_code == 400
+
+
+async def test_pl_links_global_pc_main_to_room(
+    api_client,
+    factories,
+    auth_headers,
+) -> None:
+    owner = await factories.create_user()
+    pl = await factories.create_user()
+    room = await factories.create_room(owner=owner)
+    await factories.add_member(room=room, user=pl, game_role=GameRole.PL)
+    await factories.commit()
+
+    character_id = await _create_global_character_via_api(
+        api_client, auth_headers, pl, kind="pc_main", name="Library Hero"
+    )
+
+    link_response = await api_client.post(
+        f"/api/v1/rooms/{room.id}/characters/link",
+        headers=auth_headers(pl),
+        json={"character_id": character_id},
+    )
+    assert link_response.status_code == 200
+    body = link_response.json()
+    assert body["character_id"] == character_id
+    assert body["kind"] == "pc_main"
+    assert body["name"] == "Library Hero"
+
+    list_response = await api_client.get(
+        f"/api/v1/rooms/{room.id}/characters",
+        headers=auth_headers(pl),
+    )
+    assert len(list_response.json()) == 1
+
+
+async def test_pl_cannot_link_other_players_character(
+    api_client,
+    factories,
+    auth_headers,
+) -> None:
+    owner = await factories.create_user()
+    pl_a = await factories.create_user()
+    pl_b = await factories.create_user()
+    room = await factories.create_room(owner=owner)
+    await factories.add_member(room=room, user=pl_a, game_role=GameRole.PL)
+    await factories.add_member(room=room, user=pl_b, game_role=GameRole.PL)
+    await factories.commit()
+
+    character_id = await _create_global_character_via_api(
+        api_client, auth_headers, pl_b, kind="pc_main", name="B Hero"
+    )
+
+    link_response = await api_client.post(
+        f"/api/v1/rooms/{room.id}/characters/link",
+        headers=auth_headers(pl_a),
+        json={"character_id": character_id},
+    )
+    assert link_response.status_code == 403
+
+
+async def test_pl_cannot_link_npc_kind(
+    api_client,
+    factories,
+    auth_headers,
+    db_session,
+) -> None:
+    owner = await factories.create_user()
+    pl = await factories.create_user()
+    room = await factories.create_room(owner=owner)
+    await factories.add_member(room=room, user=pl, game_role=GameRole.PL)
+    character = Character(
+        owner_id=pl.id,
+        name="Odd NPC",
+        kind=CharacterKind.NPC.value,
+    )
+    db_session.add(character)
+    await db_session.flush()
+    db_session.add(CharacterState(character_id=character.id))
+    await factories.commit()
+
+    link_response = await api_client.post(
+        f"/api/v1/rooms/{room.id}/characters/link",
+        headers=auth_headers(pl),
+        json={"character_id": character.id},
+    )
+    assert link_response.status_code == 400
+
+
+async def test_gm_links_global_npc_to_room(
+    api_client,
+    factories,
+    auth_headers,
+) -> None:
+    owner = await factories.create_user()
+    room = await factories.create_room(owner=owner)
+    await factories.commit()
+
+    character_id = await _create_global_character_via_api(
+        api_client, auth_headers, owner, kind="npc", name="Goblin"
+    )
+
+    link_response = await api_client.post(
+        f"/api/v1/rooms/{room.id}/characters/link",
+        headers=auth_headers(owner),
+        json={"character_id": character_id},
+    )
+    assert link_response.status_code == 200
+    assert link_response.json()["kind"] == "npc"
+
+
+async def test_gm_cannot_link_pc_main(
+    api_client,
+    factories,
+    auth_headers,
+) -> None:
+    owner = await factories.create_user()
+    room = await factories.create_room(owner=owner)
+    await factories.commit()
+
+    character_id = await _create_global_character_via_api(
+        api_client, auth_headers, owner, kind="pc_main", name="Wrong Kind"
+    )
+
+    link_response = await api_client.post(
+        f"/api/v1/rooms/{room.id}/characters/link",
+        headers=auth_headers(owner),
+        json={"character_id": character_id},
+    )
+    assert link_response.status_code == 400
+
+
+async def test_link_room_character_is_idempotent(
+    api_client,
+    factories,
+    auth_headers,
+) -> None:
+    owner = await factories.create_user()
+    pl = await factories.create_user()
+    room = await factories.create_room(owner=owner)
+    await factories.add_member(room=room, user=pl, game_role=GameRole.PL)
+    await factories.commit()
+
+    character_id = await _create_global_character_via_api(
+        api_client, auth_headers, pl, kind="pc_main", name="Dup Link"
+    )
+
+    first = await api_client.post(
+        f"/api/v1/rooms/{room.id}/characters/link",
+        headers=auth_headers(pl),
+        json={"character_id": character_id},
+    )
+    second = await api_client.post(
+        f"/api/v1/rooms/{room.id}/characters/link",
+        headers=auth_headers(pl),
+        json={"character_id": character_id},
+    )
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert first.json()["room_character_id"] == second.json()["room_character_id"]
+
+
+async def test_link_then_spawn_token(
+    api_client,
+    factories,
+    auth_headers,
+) -> None:
+    owner = await factories.create_user()
+    pl = await factories.create_user()
+    room = await factories.create_room(owner=owner)
+    await factories.add_member(room=room, user=pl, game_role=GameRole.PL)
+    await factories.commit()
+
+    character_id = await _create_global_character_via_api(
+        api_client, auth_headers, pl, kind="pc_main", name="Spawn Me"
+    )
+
+    link_response = await api_client.post(
+        f"/api/v1/rooms/{room.id}/characters/link",
+        headers=auth_headers(pl),
+        json={"character_id": character_id},
+    )
+    assert link_response.status_code == 200
+
+    spawn_response = await api_client.post(
+        f"/api/v1/rooms/{room.id}/characters/{character_id}/spawn-token",
+        headers=auth_headers(pl),
+        json={"x": 0, "y": 0},
+    )
+    assert spawn_response.status_code == 201

@@ -46,7 +46,10 @@ from app.modules.rooms.tabletop.schemas import (
     SpawnCharacterTokenRequest,
 )
 from app.modules.rooms.tabletop.service import RoomTabletopService
-from app.modules.rooms.characters.schemas import RoomCharacterEntryResponse
+from app.modules.rooms.characters.schemas import (
+    RoomCharacterEntryResponse,
+    RoomCharacterLinkRequest,
+)
 from app.modules.rooms.characters.service import RoomCharacterService
 from app.modules.rooms.room.schemas import (
     RoomCreate,
@@ -522,6 +525,24 @@ async def create_room_character(
         user=current_user,
         payload=payload,
         file=file,
+    )
+
+
+@router.post(
+    "/{room_id}/characters/link",
+    response_model=RoomCharacterEntryResponse,
+)
+async def link_room_character(
+    room_id: int,
+    payload: RoomCharacterLinkRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RoomCharacterEntryResponse:
+    return await room_characters_service.link_room_character(
+        db,
+        room_id=room_id,
+        user=current_user,
+        character_id=payload.character_id,
     )
 
 

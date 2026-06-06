@@ -23,6 +23,10 @@ class RoomCharacterEntryResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class RoomCharacterLinkRequest(BaseModel):
+    character_id: int
+
+
 class RoomCharacterCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     player_name: str = Field(default="", max_length=255)
