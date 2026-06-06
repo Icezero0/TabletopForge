@@ -4,6 +4,7 @@ import type { GameRole } from "@/features/room/types";
 import type { TableToolMode, TabletopSelection } from "@/features/table/types";
 import type { RoomDrawing, RoomMap } from "@/infra/api/rooms.api";
 import type { DrawPreview, TextPlacementRequest } from "@/features/table/composables/useDrawingTools";
+import type { MeasureState } from "@/features/table/composables/useMeasureTool";
 import type { TextEditRequest } from "@/features/table/composables/useTextDrawingEdit";
 import { SCENE_GRID_HALF_EXTENT } from "@/features/table/constants";
 import { useTabletopViewport } from "@/features/table/composables/useTabletopViewport";
@@ -12,6 +13,7 @@ import DrawingLayer from "@/features/table/components/DrawingLayer.vue";
 import DrawingSelectionOverlay from "@/features/table/components/DrawingSelectionOverlay.vue";
 import DrawTextBoxEditor from "@/features/table/components/DrawTextBoxEditor.vue";
 import SelectionOverlay from "@/features/table/components/SelectionOverlay.vue";
+import MeasureOverlay from "@/features/table/components/MeasureOverlay.vue";
 import PointerOverlay from "@/features/table/components/PointerOverlay.vue";
 import SceneCanvas from "@/features/table/components/SceneCanvas.vue";
 import type { RemoteCursor, RemoteLaser } from "@/features/table/composables/useTabletopPointer";
@@ -35,6 +37,7 @@ const props = withDefaults(
     drawFontSize?: number;
     remoteCursors?: RemoteCursor[];
     remoteLasers?: RemoteLaser[];
+    measureState?: MeasureState | null;
   }>(),
   {
     maps: () => [],
@@ -54,6 +57,7 @@ const props = withDefaults(
     drawFontSize: 16,
     remoteCursors: () => [],
     remoteLasers: () => [],
+    measureState: null,
   },
 );
 
@@ -81,6 +85,9 @@ const emit = defineEmits<{
   viewportPointerMove: [event: PointerEvent];
   viewportPointerDown: [event: PointerEvent];
   viewportPointerUp: [event: PointerEvent];
+  measurePointerDown: [x: number, y: number, event: PointerEvent];
+  measurePointerMove: [x: number, y: number, event: PointerEvent];
+  measurePointerUp: [x: number, y: number, event: PointerEvent];
 }>();
 
 const toolModeRef = computed(() => props.toolMode);
@@ -109,24 +116,44 @@ onUnmounted(() => {
 
 const sceneInteractive = computed(() => props.toolMode === "hand");
 const pointerMode = computed(() => props.toolMode === "pointer");
+const measureMode = computed(() => props.toolMode === "measure");
 
 function scenePointFromClient(clientX: number, clientY: number) {
   return drawingLayerRef.value?.scenePointFromClient(clientX, clientY) ?? { x: 0, y: 0 };
 }
 
 function onViewportPointerMove(event: PointerEvent) {
-  if (!pointerMode.value) return;
-  emit("viewportPointerMove", event);
+  if (pointerMode.value) {
+    emit("viewportPointerMove", event);
+    return;
+  }
+  if (measureMode.value) {
+    const pt = scenePointFromClient(event.clientX, event.clientY);
+    emit("measurePointerMove", pt.x, pt.y, event);
+  }
 }
 
 function onViewportPointerDown(event: PointerEvent) {
-  if (!pointerMode.value || event.button !== 0) return;
-  emit("viewportPointerDown", event);
+  if (pointerMode.value && event.button === 0) {
+    emit("viewportPointerDown", event);
+    return;
+  }
+  if (measureMode.value && event.button === 0) {
+    event.preventDefault();
+    const pt = scenePointFromClient(event.clientX, event.clientY);
+    emit("measurePointerDown", pt.x, pt.y, event);
+  }
 }
 
 function onViewportPointerUp(event: PointerEvent) {
-  if (!pointerMode.value) return;
-  emit("viewportPointerUp", event);
+  if (pointerMode.value) {
+    emit("viewportPointerUp", event);
+    return;
+  }
+  if (measureMode.value) {
+    const pt = scenePointFromClient(event.clientX, event.clientY);
+    emit("measurePointerUp", pt.x, pt.y, event);
+  }
 }
 
 const selectedDrawingId = computed(() =>
@@ -134,14 +161,14 @@ const selectedDrawingId = computed(() =>
 );
 
 function onContextMenu(event: MouseEvent) {
-  if (props.toolMode === "draw") return;
+  if (props.toolMode === "draw" || props.toolMode === "measure") return;
   if ((event.target as Element).closest(".mapItem")) return;
   event.preventDefault();
   emit("contextMenu", event);
 }
 
 function onViewportClick(event: MouseEvent) {
-  if (props.toolMode === "draw" || props.toolMode === "pointer") return;
+  if (props.toolMode === "draw" || props.toolMode === "pointer" || props.toolMode === "measure") return;
   const target = event.target as Element;
   if (
     target.closest(
@@ -164,7 +191,7 @@ defineExpose({ getViewportWidth, scenePointFromClient });
   <div
     ref="rootRef"
     class="mapViewport"
-    :class="{ handMode: sceneInteractive, pointerMode }"
+    :class="{ handMode: sceneInteractive, pointerMode, measureMode }"
     @contextmenu="onContextMenu"
     @click="onViewportClick"
     @pointermove="onViewportPointerMove"
@@ -272,6 +299,7 @@ defineExpose({ getViewportWidth, scenePointFromClient });
         @confirm="emit('confirmTextEdit', $event)"
         @cancel="emit('cancelTextEdit')"
       />
+      <MeasureOverlay :state="measureState" />
       <PointerOverlay
         :cursors="remoteCursors"
         :lasers="remoteLasers"
@@ -298,7 +326,8 @@ defineExpose({ getViewportWidth, scenePointFromClient });
   cursor: grabbing;
 }
 
-.mapViewport.pointerMode {
+.mapViewport.pointerMode,
+.mapViewport.measureMode {
   cursor: crosshair;
 }
 

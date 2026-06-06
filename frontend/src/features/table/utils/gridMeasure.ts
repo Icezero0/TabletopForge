@@ -18,3 +18,15 @@ export function snapSideToFt(
   if (!p) return px;
   return Math.max(minFt, Math.round(px / p)) * p;
 }
+
+/** 线段像素长度 → 按整格取整的 ft 标签（线段本身不吸附） */
+export function measureLineLabelFt(
+  pxDistance: number,
+  gridCellPx: number,
+  gridCellFt: number,
+) {
+  if (!gridCellPx || !gridCellFt || pxDistance < 1) return 0;
+  const gridCells = Math.round(pxDistance / gridCellPx);
+  if (gridCells < 1) return 0;
+  return gridCells * gridCellFt;
+}

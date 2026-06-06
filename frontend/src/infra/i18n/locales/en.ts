@@ -629,7 +629,7 @@ export default {
       draw: "Draw",
       pointer: "Pointer",
       measure: "Measure",
-      measureDisabledHint: "Measuring is not in the MVP scope",
+      measureHint: "Drag to measure; line follows cursor, distance rounds to grid cells",
       gridScale: "Scale",
       gridScaleValue: "{ft} ft/cell · {px}px",
       gridScaleIncrease: "Zoom grid in",

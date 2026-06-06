@@ -30,6 +30,7 @@ import TopToolBar from "@/features/table/components/TopToolBar.vue";
 import { useDrawingTools } from "@/features/table/composables/useDrawingTools";
 import { useTextDrawingEdit } from "@/features/table/composables/useTextDrawingEdit";
 import { useGridScale } from "@/features/table/composables/useGridScale";
+import { useMeasureTool } from "@/features/table/composables/useMeasureTool";
 import { useTabletopSelection } from "@/features/table/composables/useTabletopSelection";
 import { useTableToolMode } from "@/features/table/composables/useTableToolMode";
 import { useTabletopPointer } from "@/features/table/composables/useTabletopPointer";
@@ -92,6 +93,18 @@ const {
   increase: increaseGrid,
   decrease: decreaseGrid,
 } = useGridScale(roomId, { canEdit: canEditGrid });
+
+const {
+  measureState,
+  measurePointerDown,
+  measurePointerMove,
+  measurePointerUp,
+  clearMeasure,
+} = useMeasureTool({ gridCellPx, gridCellFt });
+
+watch(toolMode, (mode) => {
+  if (mode !== "measure") clearMeasure();
+});
 
 const tabletopMaps = computed(() => tabletopStore.getMaps(roomId.value));
 const tabletopDrawings = computed(() => tabletopStore.getDrawings(roomId.value));
@@ -251,7 +264,7 @@ function handleSelectMap(mapId: number) {
 }
 
 function handleMapContextMenu(mapId: number, event: MouseEvent) {
-  if (toolMode.value === "draw") return;
+  if (toolMode.value === "draw" || toolMode.value === "measure") return;
   if (currentUserGameRole.value !== "GM") return;
   selectMap(mapId);
   contextMenuX.value = event.clientX;
@@ -341,7 +354,7 @@ function handleMapNaturalSize(payload: { mapId: number; w: number; h: number }) 
 }
 
 function handleContextMenu(event: MouseEvent) {
-  if (toolMode.value === "draw") return;
+  if (toolMode.value === "draw" || toolMode.value === "measure") return;
   if (currentUserGameRole.value !== "GM") return;
   contextMenuX.value = event.clientX;
   contextMenuY.value = event.clientY;
@@ -825,6 +838,7 @@ watch([roomId, currentUserRoomRole], () => {
             :draw-font-size="fontSize"
             :remote-cursors="remoteCursors"
             :remote-lasers="remoteLasers"
+            :measure-state="measureState"
             @select-map="handleSelectMap"
             @map-context-menu="handleMapContextMenu"
             @select-drawing="handleSelectDrawing"
@@ -845,6 +859,9 @@ watch([roomId, currentUserRoomRole], () => {
             @viewport-pointer-move="onViewportPointerMove"
             @viewport-pointer-down="onViewportPointerDown"
             @viewport-pointer-up="onViewportPointerUp"
+            @measure-pointer-down="measurePointerDown"
+            @measure-pointer-move="measurePointerMove"
+            @measure-pointer-up="measurePointerUp"
           />
           <ContextMenu
             :open="contextMenuOpen"
