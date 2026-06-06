@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -42,6 +42,18 @@ class Settings(BaseSettings):
         alias="CORS_ORIGINS",
     )
     cors_allow_credentials: bool = Field(False, alias="CORS_ALLOW_CREDENTIALS")
+
+    # LLM（OpenAI 兼容 API，仅后端调用）
+    llm_api_key: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("LLM_API_KEY", "DASHSCOPE_API_KEY"),
+    )
+    llm_base_url: str = Field(
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        alias="LLM_BASE_URL",
+    )
+    llm_model: str = Field("qwen-max", alias="LLM_MODEL")
+    llm_log_verbose: bool = Field(True, alias="LLM_LOG_VERBOSE")
 
     model_config = SettingsConfigDict(
         env_file=".env",
