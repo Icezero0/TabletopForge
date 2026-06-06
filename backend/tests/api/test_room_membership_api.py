@@ -252,3 +252,59 @@ async def test_manager_can_patch_owner_game_role(
     assert response.status_code == 200
     assert response.json()["room_role"] == RoomRole.OWNER
     assert response.json()["game_role"] == GameRole.PL
+
+
+async def test_list_members_auto_assigns_player_color(
+    api_client,
+    factories,
+    auth_headers,
+) -> None:
+    owner = await factories.create_user()
+    member = await factories.create_user()
+    room = await factories.create_room(owner=owner)
+    await factories.add_member(room=room, user=member, role=RoomRole.MEMBER)
+    await factories.commit()
+
+    response = await api_client.get(
+        f"/api/v1/rooms/{room.id}/members",
+        headers=auth_headers(member),
+    )
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    colors = {item["player_color"] for item in items}
+    assert all(color and color.startswith("#") for color in colors)
+    assert len(colors) == len(items)
+
+
+async def test_patch_my_player_color_rejects_taken_color(
+    app,
+    api_client,
+    factories,
+    auth_headers,
+) -> None:
+    owner = await factories.create_user()
+    member = await factories.create_user()
+    room = await factories.create_room(owner=owner)
+    await factories.add_member(room=room, user=member, role=RoomRole.MEMBER)
+    await factories.commit()
+
+    list_response = await api_client.get(
+        f"/api/v1/rooms/{room.id}/members",
+        headers=auth_headers(member),
+    )
+    owner_color = next(
+        item["player_color"]
+        for item in list_response.json()["items"]
+        if item["user_id"] == owner.id
+    )
+
+    app.state.realtime_publisher.publish_room_members = AsyncMock()
+
+    response = await api_client.patch(
+        f"/api/v1/rooms/{room.id}/members/me/player-color",
+        headers=auth_headers(member),
+        json={"player_color": owner_color},
+    )
+
+    assert response.status_code == 409

@@ -82,6 +82,7 @@ class RoomMember(Base):
         default=GameRole.PL.value,
         server_default=GameRole.PL.value,
     )
+    player_color: Mapped[str | None] = mapped_column(String(7), nullable=True)
 
     room: Mapped["Room"] = relationship("Room", back_populates="members")
     user: Mapped["User"] = relationship("User")

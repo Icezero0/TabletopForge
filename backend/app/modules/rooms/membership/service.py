@@ -1,7 +1,11 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_reasons import ErrorReason
-from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
+from app.core.exceptions import BadRequestError, ConflictError, ForbiddenError, NotFoundError
+from app.modules.rooms.membership.player_colors import (
+    is_valid_player_color,
+    pick_player_color,
+)
 from app.modules.rooms.constants import GameRole, RoomPermission, RoomRole
 from app.modules.rooms.models import RoomMember
 from app.modules.rooms.membership.repository import RoomMembershipRepository
@@ -56,10 +60,66 @@ class RoomMembershipService:
         require_room_permission(role, RoomPermission.VIEW_MEMBERS)
 
         items = await self.repo.get_members_by_room_id(db, room_id=room_id)
+        await self._ensure_member_player_colors(db, items)
         return {
             "items": items,
             "total": len(items),
         }
+
+    async def _ensure_member_player_colors(
+        self,
+        db: AsyncSession,
+        members: list[RoomMember],
+    ) -> None:
+        used = {member.player_color for member in members if member.player_color}
+        changed = False
+        for member in members:
+            if member.player_color:
+                continue
+            member.player_color = pick_player_color(used, member.user_id)
+            used.add(member.player_color)
+            changed = True
+        if changed:
+            await db.flush()
+
+    async def patch_my_player_color(
+        self,
+        db: AsyncSession,
+        *,
+        room_id: int,
+        user: User,
+        player_color: str,
+    ) -> RoomMember:
+        if not is_valid_player_color(player_color):
+            raise BadRequestError(
+                "Invalid player color",
+                reason="invalid_player_color",
+            )
+
+        member = await self.find_room_member(db, room_id=room_id, user_id=user.id)
+        if member is None:
+            raise ForbiddenError(
+                "You do not have permission to perform this action",
+                reason=ErrorReason.ROOM_PERMISSION_DENIED,
+            )
+
+        members = await self.repo.get_members_by_room_id(db, room_id=room_id)
+        for other in members:
+            if other.user_id != user.id and other.player_color == player_color:
+                raise ConflictError(
+                    "This color is already taken in the room",
+                    reason="player_color_taken",
+                )
+
+        updated = await self.repo.update_member_player_color(
+            db,
+            room_id=room_id,
+            user_id=user.id,
+            player_color=player_color,
+        )
+        if updated is None:
+            raise NotFoundError("Room member not found")
+        return updated
 
     async def find_game_role(
         self,

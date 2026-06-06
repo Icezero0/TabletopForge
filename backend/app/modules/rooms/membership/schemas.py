@@ -14,6 +14,7 @@ class RoomMemberResponse(BaseModel):
     joined_at: datetime | None
     room_role: RoomRole = Field(validation_alias="role")
     game_role: GameRole
+    player_color: str | None = None
     user: UserBriefResponse | None = None
 
 
@@ -24,3 +25,7 @@ class RoomMemberListResponse(BaseModel):
 
 class RoomMemberGameRolePatch(BaseModel):
     game_role: GameRole
+
+
+class RoomMemberPlayerColorPatch(BaseModel):
+    player_color: str

@@ -22,6 +22,7 @@ from app.modules.rooms.join_request.service import RoomJoinRequestService
 from app.modules.rooms.membership.schemas import (
     RoomMemberGameRolePatch,
     RoomMemberListResponse,
+    RoomMemberPlayerColorPatch,
     RoomMemberResponse,
 )
 from app.modules.rooms.membership.service import RoomMembershipService
@@ -174,6 +175,7 @@ async def get_room_members(
         room_id=room_id,
         user=current_user,
     )
+    await db.commit()
     return RoomMemberListResponse(
         items=[RoomMemberResponse.model_validate(member) for member in data["items"]],
         total=data["total"],
@@ -719,6 +721,28 @@ async def unset_room_member_manager(
         is_manager=False,
         current_user=current_user,
     )
+    await publisher.publish_room_members(room_id=room_id)
+    return RoomMemberResponse.model_validate(member)
+
+
+@router.patch(
+    "/{room_id}/members/me/player-color",
+    response_model=RoomMemberResponse,
+)
+async def patch_my_player_color(
+    room_id: int,
+    payload: RoomMemberPlayerColorPatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> RoomMemberResponse:
+    member = await membership_service.patch_my_player_color(
+        db,
+        room_id=room_id,
+        user=current_user,
+        player_color=payload.player_color,
+    )
+    await db.commit()
     await publisher.publish_room_members(room_id=room_id)
     return RoomMemberResponse.model_validate(member)
 
