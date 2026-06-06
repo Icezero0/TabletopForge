@@ -30,6 +30,10 @@ function update(key: string, value: unknown) {
   emit("update:modelValue", { ...modelSnapshot(), [key]: value });
 }
 
+function updateMultiple(patches: Record<string, unknown>) {
+  emit("update:modelValue", { ...modelSnapshot(), ...patches });
+}
+
 // ── Ability scores ──────────────────────────────────────────────────────────
 const scores = computed(() => {
   const s = (modelSnapshot().ability_scores ?? {}) as Record<string, number>;
@@ -87,8 +91,8 @@ function autoCalcInitiative() {
 }
 function autoCalcPassivePerception() {
   const wis = abilityMod(scores.value.wisdom ?? 10);
-  const profBonus = getDerived("proficiency_bonus").value ?? 2;
-  const percVal = wis + profBonus;
+  const profBonusVal = getDerived("proficiency_bonus").value ?? 2;
+  const percVal = wis + profBonusVal;
   setDerivedBoth("passive_perception", 10 + percVal, `10 + 察觉 ${percVal}`);
 }
 function autoCalcProfBonus() {
@@ -131,23 +135,109 @@ const AUTO_CALC: Partial<Record<DerivedKey, () => void>> = {
   passive_perception: autoCalcPassivePerception,
 };
 
-// ── Saving throws & skills (manual text modifiers) ─────────────────────────
+// ── Saving throws ───────────────────────────────────────────────────────────
 const savingThrows = computed(
   () => (modelSnapshot().saving_throws ?? {}) as Record<string, string>,
 );
+const saveAutos = computed(
+  () => (modelSnapshot().saving_throw_autos ?? {}) as Record<string, boolean>,
+);
+const saveProfs = computed(
+  () => (modelSnapshot().saving_throw_profs ?? {}) as Record<string, boolean>,
+);
+
+// ── Skills ──────────────────────────────────────────────────────────────────
 const skillValues = computed(
   () => (modelSnapshot().skill_values ?? {}) as Record<string, string>,
 );
+const skillAutos = computed(
+  () => (modelSnapshot().skill_value_autos ?? {}) as Record<string, boolean>,
+);
+
+type SkillProf = "none" | "proficient" | "expert";
+const skillProfs = computed(
+  () => (modelSnapshot().skill_profs ?? {}) as Record<string, SkillProf>,
+);
+
+// ── Proficiency bonus & auto-calc ──────────────────────────────────────────
+const profBonus = computed(() => getDerived("proficiency_bonus").value || 2);
+
+function calcSaveValue(ability: string, proficient?: boolean): string {
+  const mod = abilityMod(scores.value[ability] ?? 10);
+  const hasProf = proficient !== undefined ? proficient : !!saveProfs.value[ability];
+  return fmtMod(mod + (hasProf ? profBonus.value : 0));
+}
+
+function calcSkillValue(key: string, prof?: SkillProf): string {
+  const skill = DND5E_SKILLS.find(s => s.key === key);
+  if (!skill) return "+0";
+  const mod = abilityMod(scores.value[skill.ability] ?? 10);
+  const p = prof !== undefined ? prof : (skillProfs.value[key] ?? "none");
+  const bonus = p === "proficient" ? profBonus.value : p === "expert" ? profBonus.value * 2 : 0;
+  return fmtMod(mod + bonus);
+}
+
+// ── Auto flag helpers ──────────────────────────────────────────────────────
+function isAutoSave(ability: string): boolean {
+  const flag = saveAutos.value[ability];
+  return flag !== undefined ? flag : !(savingThrows.value[ability]?.trim());
+}
+function isAutoSkill(key: string): boolean {
+  const flag = skillAutos.value[key];
+  return flag !== undefined ? flag : !(skillValues.value[key]?.trim());
+}
+
+function saveDisplayValue(ability: string): string {
+  return isAutoSave(ability) ? "" : (savingThrows.value[ability] ?? "");
+}
+function skillDisplayValue(key: string): string {
+  return isAutoSkill(key) ? "" : (skillValues.value[key] ?? "");
+}
+
+function savePlaceholder(ability: string): string { return calcSaveValue(ability); }
+function skillPlaceholder(key: string): string { return calcSkillValue(key); }
+
+// ── setSave / setSkill ─────────────────────────────────────────────────────
+function setSave(ability: string, v: string) {
+  const isAuto = v.trim() === "";
+  updateMultiple({
+    saving_throws: { ...savingThrows.value, [ability]: isAuto ? calcSaveValue(ability) : v },
+    saving_throw_autos: { ...saveAutos.value, [ability]: isAuto },
+  });
+}
+function setSkill(key: string, v: string) {
+  const isAuto = v.trim() === "";
+  updateMultiple({
+    skill_values: { ...skillValues.value, [key]: isAuto ? calcSkillValue(key) : v },
+    skill_value_autos: { ...skillAutos.value, [key]: isAuto },
+  });
+}
+
+// ── Prof toggles ───────────────────────────────────────────────────────────
+function toggleSaveProf(ability: string) {
+  const newProf = !saveProfs.value[ability];
+  const patches: Record<string, unknown> = {
+    saving_throw_profs: { ...saveProfs.value, [ability]: newProf },
+  };
+  if (isAutoSave(ability)) {
+    patches.saving_throws = { ...savingThrows.value, [ability]: calcSaveValue(ability, newProf) };
+  }
+  updateMultiple(patches);
+}
+function cycleSkillProf(key: string) {
+  const cur = skillProfs.value[key] ?? "none";
+  const next: SkillProf = cur === "none" ? "proficient" : cur === "proficient" ? "expert" : "none";
+  const patches: Record<string, unknown> = {
+    skill_profs: { ...skillProfs.value, [key]: next },
+  };
+  if (isAutoSkill(key)) {
+    patches.skill_values = { ...skillValues.value, [key]: calcSkillValue(key, next) };
+  }
+  updateMultiple(patches);
+}
 
 function abilityShort(ability: string) {
   return t(ABILITY_LABEL_KEYS[ability as keyof typeof ABILITY_LABEL_KEYS]).slice(0, 2);
-}
-
-function setSave(ability: string, v: string) {
-  update("saving_throws", { ...savingThrows.value, [ability]: v });
-}
-function setSkill(key: string, v: string) {
-  update("skill_values", { ...skillValues.value, [key]: v });
 }
 
 // ── Proficiencies ────────────────────────────────────────────────────────────
@@ -214,11 +304,18 @@ const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
       <div class="section-title">{{ t("character.attributes.savingThrows") }}</div>
       <div class="saves-grid">
         <div v-for="ability in ABILITY_KEYS" :key="ability" class="save-item">
+          <button
+            class="prof-dot"
+            :class="{ proficient: !!saveProfs[ability] }"
+            :title="saveProfs[ability] ? '熟练' : ''"
+            @click="toggleSaveProf(ability)"
+          />
           <span class="save-label">{{ abilityShort(ability) }}</span>
           <input
             type="text"
             class="compact-input"
-            :value="savingThrows[ability] ?? ''"
+            :value="saveDisplayValue(ability)"
+            :placeholder="savePlaceholder(ability)"
             @input="setSave(ability, ($event.target as HTMLInputElement).value)"
           />
         </div>
@@ -230,11 +327,18 @@ const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
       <div class="section-title">{{ t("character.attributes.skills") }}</div>
       <div class="skills-grid">
         <div v-for="skill in DND5E_SKILLS" :key="skill.key" class="skill-item">
+          <button
+            class="prof-dot"
+            :class="skillProfs[skill.key] ?? 'none'"
+            :title="skillProfs[skill.key] === 'proficient' ? '熟练' : skillProfs[skill.key] === 'expert' ? '专精' : ''"
+            @click="cycleSkillProf(skill.key)"
+          />
           <span class="skill-name">{{ t(skill.labelKey) }}</span>
           <input
             type="text"
             class="compact-input"
-            :value="skillValues[skill.key] ?? ''"
+            :value="skillDisplayValue(skill.key)"
+            :placeholder="skillPlaceholder(skill.key)"
             @input="setSkill(skill.key, ($event.target as HTMLInputElement).value)"
           />
         </div>
@@ -343,17 +447,41 @@ const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
 .auto-btn:hover { background: var(--c-hover); color: var(--c-text); }
 .auto-btn-spacer { height: 24px; }
 
-/* Saving throws — 3-col compact, label + input 左对齐紧贴 */
+/* Saving throws — 3-col compact */
 .saves-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; }
 .save-item { display: flex; align-items: center; gap: 4px; justify-self: start; }
-.save-label { font-size: 12px; font-weight: 600; color: var(--c-text-muted); white-space: nowrap; flex-shrink: 0; }
+.save-label { font-size: 12px; font-weight: 500; color: var(--c-text); white-space: nowrap; flex-shrink: 0; }
 
-/* Skills — 3-col compact, label + input 左对齐紧贴 */
+/* Skills — 3-col compact */
 .skills-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 10px; }
 .skill-item { display: flex; align-items: center; gap: 4px; justify-self: start; max-width: 100%; }
 .skill-name {
-  font-size: 12px; color: var(--c-text); white-space: nowrap;
+  font-size: 12px; font-weight: 500; color: var(--c-text); white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 0;
+}
+
+/* Prof dots — 三态: 空心 / 圆环 / 圆环+内圆 */
+.prof-dot {
+  position: relative;
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid var(--c-border); background: transparent;
+  cursor: pointer; flex-shrink: 0; padding: 0;
+  transition: border-color 0.12s, border-width 0.12s;
+}
+.prof-dot.proficient {
+  border: 3px solid var(--c-primary);
+}
+.prof-dot.expert {
+  border: 3px solid var(--c-primary);
+}
+.prof-dot.expert::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 4px; height: 4px;
+  border-radius: 50%;
+  background: var(--c-primary);
+  transform: translate(-50%, -50%);
 }
 
 /* Shared compact input */
@@ -363,4 +491,5 @@ const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
   padding: 3px 6px; font-size: 12px; font-family: inherit; outline: none;
 }
 .compact-input:focus { border-color: var(--c-accent); }
+.compact-input::placeholder { color: var(--c-text-muted); opacity: 0.5; }
 </style>

@@ -42,7 +42,11 @@ def _text_preview(text: str, limit: int = 400) -> str:
 def _llm_log(settings: Settings, event: str, message: str, **fields: Any) -> None:
     if not settings.llm_log_verbose:
         return
-    logger.info(message, **log_extra(event, **fields))
+    if fields:
+        fields_str = " ".join(f"{k}={v}" for k, v in fields.items())
+        logger.info("%s %s", message, fields_str, **log_extra(event, **fields))
+    else:
+        logger.info(message, **log_extra(event, **fields))
 
 
 def _deep_merge(base: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:

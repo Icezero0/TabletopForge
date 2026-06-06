@@ -43,18 +43,6 @@ async function handleDeleteConfirm() {
   }
 }
 
-function goImportNew() {
-  const target = linkTarget("/characters/new");
-  if (typeof target === "object") {
-    void router.push({
-      path: target.path,
-      query: { ...target.query, openImport: "1" },
-    });
-  } else {
-    void router.push({ path: target, query: { openImport: "1" } });
-  }
-}
-
 onMounted(() => void chars.fetchPage(1));
 </script>
 
@@ -66,9 +54,6 @@ onMounted(() => void chars.fetchPage(1));
     :max-width="1100"
   >
     <template #actions>
-      <BaseButton variant="default" @click="goImportNew">
-        {{ t("character.import.fromList") }}
-      </BaseButton>
       <BaseButton variant="primary" @click="router.push(linkTarget('/characters/new'))">
         <span class="btn-icon-text">
           <AppIcon :icon="PlusIcon" :size="16" />

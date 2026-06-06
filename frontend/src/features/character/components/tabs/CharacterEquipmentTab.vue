@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { PlusIcon, TrashIcon, PencilIcon, CheckIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import BaseButton from "@/ui/base/BaseButton.vue";
@@ -43,6 +43,19 @@ function shiftDraftMap<T>(m: Map<number, T>, removedIdx: number): Map<number, T>
 const localItems = ref<Item[]>([...(props.modelValue.items as Item[] ?? [])]);
 const editingItems = ref(new Set<number>());
 const itemDrafts = ref(new Map<number, ItemDraft>());
+
+watch(
+  () => props.modelValue.items,
+  (newVal) => {
+    const fromParent = (newVal as Item[]) ?? [];
+    if (JSON.stringify(fromParent) !== JSON.stringify(localItems.value)) {
+      localItems.value = [...fromParent];
+      editingItems.value = new Set();
+      itemDrafts.value = new Map();
+    }
+  },
+  { deep: true },
+);
 
 function addItem() {
   const idx = localItems.value.length;

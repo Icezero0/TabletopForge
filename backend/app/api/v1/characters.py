@@ -51,7 +51,7 @@ async def list_characters(
     "/import-preview",
     response_model=CharacterImportPreviewResponse,
 )
-async def preview_character_import(
+def preview_character_import(
     payload: CharacterImportPreviewRequest,
     current_user: User = Depends(get_current_user),
 ) -> CharacterImportPreviewResponse:

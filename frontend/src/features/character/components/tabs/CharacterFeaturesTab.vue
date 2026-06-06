@@ -55,6 +55,19 @@ type TraitDraft = { data: RacialTrait; isNew: boolean };
 const localTraits = ref<RacialTrait[]>([...(props.modelValue.racial_traits as RacialTrait[] ?? [])]);
 const traitDrafts = ref(new Map<number, TraitDraft>());
 
+watch(
+  () => props.modelValue.racial_traits,
+  (newVal) => {
+    const fromParent = (newVal as RacialTrait[]) ?? [];
+    if (JSON.stringify(fromParent) !== JSON.stringify(localTraits.value)) {
+      localTraits.value = [...fromParent];
+      editingTraits.value = new Set();
+      traitDrafts.value = new Map();
+    }
+  },
+  { deep: true },
+);
+
 function updateTrait(i: number, field: string, v: string) {
   localTraits.value = localTraits.value.map((tr, idx) => idx === i ? { ...tr, [field]: v } : tr);
   if (!isNew(traitDrafts.value, i)) update("racial_traits", localTraits.value);
@@ -110,6 +123,19 @@ type FeatureDraft = { data: ClassFeature; isNew: boolean };
 
 const localFeatures = ref<ClassFeature[]>([...(props.modelValue.class_features as ClassFeature[] ?? [])]);
 const featureDrafts = ref(new Map<number, FeatureDraft>());
+
+watch(
+  () => props.modelValue.class_features,
+  (newVal) => {
+    const fromParent = (newVal as ClassFeature[]) ?? [];
+    if (JSON.stringify(fromParent) !== JSON.stringify(localFeatures.value)) {
+      localFeatures.value = [...fromParent];
+      editingFeatures.value = new Set();
+      featureDrafts.value = new Map();
+    }
+  },
+  { deep: true },
+);
 
 function updateFeature(i: number, field: string, v: string) {
   localFeatures.value = localFeatures.value.map((f, idx) => idx === i ? { ...f, [field]: v } : f);

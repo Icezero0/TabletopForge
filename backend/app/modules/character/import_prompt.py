@@ -114,7 +114,9 @@ def _output_format_section() -> str:
 | `ability_scores` | object | 六维属性，键为 {abilities}；每项整数 1–30 |
 | `derived` | object | 派生数值，键见下表；每项为 `{{"value": number, "breakdown": string}}` |
 | `saving_throws` | object | 豁免加值，键为六维属性名；值为 `"+3"` / `"-1"` 格式字符串，未知可 `""` |
+| `saving_throw_profs` | object | 豁免熟练标记，键为六维属性名；值为 `true`（熟练）或 `false`；未提及可省略（默认 `{{}}`） |
 | `skill_values` | object | 技能加值，键为技能 key（见下）；值为 `"+3"` 格式字符串，未知可 `""` |
+| `skill_profs` | object | 技能熟练等级，键为技能 key；值为 `"none"` / `"proficient"` / `"expert"`；未提及可省略（默认 `{{}}`） |
 | `weapon_proficiencies` | string[] | 武器熟练，如 `["简易武器","长剑"]` |
 | `armor_proficiencies` | string[] | 护甲熟练 |
 | `tool_proficiencies` | string[] | 工具熟练 |
@@ -210,7 +212,9 @@ def _output_format_section() -> str:
       "passive_perception": {{"value": 10, "breakdown": ""}}
     }},
     "saving_throws": {{}},
+    "saving_throw_profs": {{}},
     "skill_values": {{}},
+    "skill_profs": {{}},
     "weapon_proficiencies": [],
     "armor_proficiencies": [],
     "tool_proficiencies": [],
