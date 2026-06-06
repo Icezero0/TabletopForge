@@ -12,6 +12,7 @@ import {
 } from "@/infra/api/characterState.api";
 import { patchRoomToken } from "@/infra/api/rooms.api";
 import { getBackendErrorMessage } from "@/infra/http/client";
+import { buildPathWithReturn } from "@/composables/useNavigationReturn";
 import PanelSectionHeader from "@/ui/layout/PanelSectionHeader.vue";
 
 const props = defineProps<{
@@ -110,12 +111,6 @@ const abilityScores = computed(() => {
     .filter((item): item is { key: string; score: number } => item != null);
 });
 
-const customFields = computed(() => {
-  const fields = character.value?.features?.custom_fields;
-  if (!fields || typeof fields !== "object") return [];
-  return Object.entries(fields as Record<string, unknown>).slice(0, 6);
-});
-
 async function loadInspection() {
   const inspection = props.inspection;
   if (!inspection || inspection.kind !== "character") {
@@ -207,7 +202,13 @@ async function saveInstanceName() {
 
 function openFullEdit() {
   if (!character.value || !canFullEdit.value) return;
-  void router.push(`/characters/${character.value.id}`);
+  void router.push(
+    buildPathWithReturn(
+      `/characters/${character.value.id}`,
+      `/rooms/${props.roomId}`,
+      true,
+    ),
+  );
 }
 </script>
 
@@ -251,16 +252,6 @@ function openFullEdit() {
             {{ item.key.toUpperCase() }} {{ item.score }}
           </span>
         </div>
-      </div>
-
-      <div v-if="customFields.length" class="section">
-        <h4 class="sectionTitle">{{ t("table.inspector.customFields") }}</h4>
-        <dl class="kvList">
-          <div v-for="[key, value] in customFields" :key="key" class="kvRow">
-            <dt>{{ key }}</dt>
-            <dd>{{ value }}</dd>
-          </div>
-        </dl>
       </div>
 
       <div class="section">
@@ -374,23 +365,6 @@ function openFullEdit() {
   background: var(--c-bg-subtle);
   border: 1px solid var(--c-border);
   color: var(--c-text);
-}
-
-.kvList {
-  margin: 0;
-  display: grid;
-  gap: 4px;
-  font-size: 13px;
-}
-
-.kvRow dt {
-  font-weight: 600;
-  color: var(--c-text);
-}
-
-.kvRow dd {
-  margin: 0 0 6px;
-  color: var(--c-text-muted);
 }
 
 .stateForm {

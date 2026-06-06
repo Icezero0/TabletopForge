@@ -30,7 +30,7 @@ const displayName = computed(() => {
 });
 
 const ownerDisplay = computed(() => {
-  if (props.entry?.kind === "pc" && props.entry.player_name?.trim()) {
+  if (props.entry?.kind === "pc_main" && props.entry.player_name?.trim()) {
     return props.entry.player_name.trim();
   }
   return props.ownerLabel;

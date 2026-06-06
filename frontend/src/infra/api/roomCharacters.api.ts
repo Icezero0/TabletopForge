@@ -1,6 +1,6 @@
 import { http } from "@/infra/http/client";
 
-export type CharacterKind = "pc" | "additional" | "monster";
+export type CharacterKind = "pc_main" | "pc_additional" | "npc";
 
 export type CharacterStateSummary = {
   current_hp: number | null;

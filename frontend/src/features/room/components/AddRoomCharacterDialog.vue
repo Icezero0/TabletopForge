@@ -71,6 +71,14 @@ const quickFile = ref<File | null>(null);
 
 const spawnAfterCreate = ref(false);
 
+const importKind = computed(() => (isGm.value ? "npc" : "pc_main"));
+
+const fullEditorKind = computed(() => {
+  if (isGm.value) return "npc";
+  if (step.value === "additional") return "pc_additional";
+  return "pc_main";
+});
+
 const title = computed(() => {
   if (step.value === "pc") return t("room.characters.pcQuickTitle");
   if (step.value === "additional") return t("room.characters.additionalTitle");
@@ -175,6 +183,31 @@ function submitQuick() {
   });
 }
 
+function openImportDialog() {
+  const base = buildPathWithReturn(
+    "/characters/new",
+    `/rooms/${props.roomId}`,
+    true,
+  );
+  const query =
+    typeof base === "object"
+      ? {
+          ...base.query,
+          roomId: String(props.roomId),
+          kind: importKind.value,
+          openCharacterPopover: "1",
+          openImport: "1",
+        }
+      : {
+          roomId: String(props.roomId),
+          kind: importKind.value,
+          openCharacterPopover: "1",
+          openImport: "1",
+        };
+  void router.push({ path: "/characters/new", query });
+  close();
+}
+
 function openFullEditor() {
   const base = buildPathWithReturn(
     "/characters/new",
@@ -186,12 +219,12 @@ function openFullEditor() {
       ? {
           ...base.query,
           roomId: String(props.roomId),
-          kind: "additional",
+          kind: fullEditorKind.value,
           openCharacterPopover: "1",
         }
       : {
           roomId: String(props.roomId),
-          kind: "additional",
+          kind: fullEditorKind.value,
           openCharacterPopover: "1",
         };
   void router.push({ path: "/characters/new", query });
@@ -226,6 +259,10 @@ function openFullEditor() {
             <span class="choiceHint">{{ t("room.characters.kindAdditionalHint") }}</span>
           </button>
         </template>
+        <button type="button" class="choiceCard importCard" @click="openImportDialog">
+          <span class="choiceTitle">{{ t("character.import.fromRoom") }}</span>
+          <span class="choiceHint">{{ t("character.import.hint") }}</span>
+        </button>
       </div>
 
       <form v-else-if="step === 'pc'" class="form" @submit.prevent="submitPc">
@@ -400,6 +437,10 @@ function openFullEditor() {
 .chooseGrid {
   display: grid;
   gap: 10px;
+}
+
+.importCard {
+  margin-top: 4px;
 }
 
 .choiceCard {

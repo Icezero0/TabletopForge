@@ -1,6 +1,6 @@
 import { http } from "@/infra/http/client";
 
-export type CharacterKind = "pc" | "additional" | "monster";
+export type CharacterKind = "pc_main" | "pc_additional" | "npc";
 
 export type Character = {
   id: number;
@@ -28,6 +28,16 @@ export type CharacterListResponse = {
   page: number;
   page_size: number;
   total_pages: number;
+};
+
+export type CharacterImportPreview = CharacterPayload & {
+  state?: {
+    current_hp?: number | null;
+    max_hp?: number | null;
+    temp_hp?: number;
+    armor_class?: number | null;
+    conditions?: Record<string, unknown>;
+  } | null;
 };
 
 export type CharacterPayload = {
@@ -68,4 +78,15 @@ export async function patchCharacter(id: number, payload: Partial<CharacterPaylo
 
 export async function deleteCharacter(id: number) {
   await http.delete(`/characters/${id}`);
+}
+
+const IMPORT_PREVIEW_TIMEOUT_MS = 6 * 60_000;
+
+export async function importCharacterPreview(rawText: string) {
+  const { data } = await http.post<CharacterImportPreview>(
+    "/characters/import-preview",
+    { raw_text: rawText },
+    { timeout: IMPORT_PREVIEW_TIMEOUT_MS },
+  );
+  return data;
 }

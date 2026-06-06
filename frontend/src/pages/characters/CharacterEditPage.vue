@@ -8,10 +8,13 @@ import {
 } from "@/features/character/constants";
 import {
   getCharacter, createCharacter, patchCharacter,
+  type CharacterImportPreview,
+  type CharacterKind,
 } from "@/infra/api/character.api";
 import { postRoomCharacter } from "@/infra/api/roomCharacters.api";
 import { usePageReturnTo, RETURN_TO_QUERY } from "@/composables/useNavigationReturn";
 import { useToastsStore } from "@/stores/toasts.store";
+import CharacterImportDialog from "@/features/character/components/CharacterImportDialog.vue";
 import CharacterIdentityTab from "@/features/character/components/tabs/CharacterIdentityTab.vue";
 import CharacterAttributesTab from "@/features/character/components/tabs/CharacterAttributesTab.vue";
 import CharacterFeaturesTab from "@/features/character/components/tabs/CharacterFeaturesTab.vue";
@@ -38,11 +41,14 @@ const roomIdFromQuery = computed(() => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 });
 
-const kindFromQuery = computed(() => {
-  const raw = route.query.kind;
-  if (raw === "additional" || raw === "pc") return raw;
-  return "pc";
-});
+function normalizeKindFromQuery(raw: unknown): CharacterKind {
+  if (raw === "pc_main" || raw === "pc_additional" || raw === "npc") return raw;
+  if (raw === "pc") return "pc_main";
+  if (raw === "additional") return "pc_additional";
+  return "pc_main";
+}
+
+const kindFromQuery = computed(() => normalizeKindFromQuery(route.query.kind));
 
 function routeQueryWithReturn() {
   const query: Record<string, string> = {};
@@ -52,7 +58,7 @@ function routeQueryWithReturn() {
   if (roomIdFromQuery.value != null) {
     query.roomId = String(roomIdFromQuery.value);
   }
-  if (kindFromQuery.value !== "pc") {
+  if (kindFromQuery.value !== "pc_main") {
     query.kind = kindFromQuery.value;
   }
   return query;
@@ -82,6 +88,9 @@ const formExtras = ref<Record<string, unknown>>({});
 
 const isLoading = ref(false);
 const isSaving = ref(false);
+const importDialogOpen = ref(false);
+
+const OPEN_IMPORT_QUERY = "openImport";
 
 // Derive name from identity block (single source of truth)
 const charName = computed(() => (formIdentity.value.name as string)?.trim() ?? "");
@@ -151,6 +160,9 @@ async function save() {
       await patchCharacter(characterId.value!, payload);
       savedSnapshot.value = currentSnapshot.value;
       toasts.push({ message: t("character.toast.saved"), tone: "success" });
+      if (backTo.value.startsWith("/rooms/")) {
+        await router.push({ path: backTo.value });
+      }
     } else if (roomIdFromQuery.value != null) {
       await postRoomCharacter(roomIdFromQuery.value, {
         kind: kindFromQuery.value,
@@ -206,12 +218,109 @@ function handleBeforeUnload(e: BeforeUnloadEvent) {
   }
 }
 
-onMounted(() => {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+function mergeImportBlock(
+  defaults: Record<string, unknown>,
+  patch: unknown,
+): Record<string, unknown> {
+  const base = structuredClone(defaults);
+  if (!isRecord(patch)) return base;
+
+  const incoming = structuredClone(patch);
+  for (const [key, val] of Object.entries(incoming)) {
+    if (isRecord(val) && isRecord(base[key])) {
+      base[key] = { ...base[key], ...val };
+    } else {
+      base[key] = val;
+    }
+  }
+  return base;
+}
+
+function applyImportDraft(draft: CharacterImportPreview) {
+  const importedName = draft.name?.trim() ?? "";
+  const identityName = isRecord(draft.identity)
+    ? String(draft.identity.name ?? "").trim()
+    : "";
+  const resolvedName = importedName || identityName;
+
+  formIdentity.value = mergeImportBlock(
+    defaultIdentity() as unknown as Record<string, unknown>,
+    isRecord(draft.identity)
+      ? { ...draft.identity, ...(resolvedName ? { name: resolvedName } : {}) }
+      : resolvedName
+        ? { name: resolvedName }
+        : undefined,
+  );
+  formFlavor.value = mergeImportBlock(
+    defaultFlavor() as unknown as Record<string, unknown>,
+    draft.flavor,
+  );
+  formAttributes.value = mergeImportBlock(
+    defaultAttributes() as unknown as Record<string, unknown>,
+    draft.attributes,
+  );
+  formFeatures.value = mergeImportBlock(
+    defaultFeatures() as unknown as Record<string, unknown>,
+    draft.features,
+  );
+  if (isRecord(draft.spells)) {
+    formSpells.value = mergeImportBlock(
+      defaultSpells() as unknown as Record<string, unknown>,
+      draft.spells,
+    );
+  } else if (draft.spells === null) {
+    formSpells.value = structuredClone(
+      defaultSpells() as unknown as Record<string, unknown>,
+    );
+  }
+  formEquipment.value = mergeImportBlock(
+    defaultEquipment() as unknown as Record<string, unknown>,
+    draft.equipment,
+  );
+  formExtras.value = mergeImportBlock({ notes: "" }, draft.extras);
+}
+
+function openImportDialog() {
+  if (isDirty.value || isEdit.value) {
+    if (!window.confirm(t("character.import.overwriteConfirm"))) return;
+  }
+  importDialogOpen.value = true;
+}
+
+function handleImportApplied(preview: CharacterImportPreview) {
+  applyImportDraft(preview);
+  activeTab.value = "identity";
+  toasts.push({ message: t("character.import.applied"), tone: "success" });
+}
+
+function replaceQueryWithoutOpenImport() {
+  const query: Record<string, string> = { ...routeQueryWithReturn() };
+  for (const [key, value] of Object.entries(route.query)) {
+    if (key === OPEN_IMPORT_QUERY) continue;
+    if (typeof value === "string" && !(key in query)) {
+      query[key] = value;
+    }
+  }
+  return query;
+}
+
+function applyOpenImportFromQuery() {
+  if (route.query[OPEN_IMPORT_QUERY] !== "1") return;
+  importDialogOpen.value = true;
+  void router.replace({ path: route.path, query: replaceQueryWithoutOpenImport() });
+}
+
+onMounted(async () => {
   if (isEdit.value) {
-    void loadCharacter(characterId.value!);
+    await loadCharacter(characterId.value!);
   } else {
     savedSnapshot.value = currentSnapshot.value;
   }
+  applyOpenImportFromQuery();
   window.addEventListener("beforeunload", handleBeforeUnload);
 });
 onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload));
@@ -220,7 +329,10 @@ onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload)
 <template>
   <AppPageShell :title="pageTitle" :back-to="backTo" :back-text="backTo.startsWith('/rooms/') ? backText : t('character.title')" :max-width="900">
     <template #actions>
-      <BaseButton variant="primary" :loading="isSaving" :disabled="isEdit && !isDirty" @click="save">
+      <BaseButton variant="default" @click="openImportDialog">
+        {{ t("character.import.aiImport") }}
+      </BaseButton>
+      <BaseButton variant="primary" :loading="isSaving" :disabled="isSaving" @click="save">
         {{ isEdit ? t("common.save") : t("character.create") }}
       </BaseButton>
     </template>
@@ -244,7 +356,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload)
       <!-- Tab content -->
       <div class="tab-panel">
         <CharacterIdentityTab
-          v-if="activeTab === 'identity'"
+          v-show="activeTab === 'identity'"
           v-model="formIdentity"
           v-model:flavor="formFlavor"
           :portrait-asset-id="formPortraitAssetId"
@@ -252,34 +364,40 @@ onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload)
         />
 
         <CharacterAttributesTab
-          v-else-if="activeTab === 'attributes'"
+          v-show="activeTab === 'attributes'"
           v-model="formAttributes"
           :identity-block="formIdentity"
         />
 
         <CharacterFeaturesTab
-          v-else-if="activeTab === 'features'"
+          v-show="activeTab === 'features'"
           v-model="formFeatures"
         />
 
         <CharacterSpellsTab
-          v-else-if="activeTab === 'spells'"
+          v-show="activeTab === 'spells'"
           v-model="formSpells"
           :attributes-block="formAttributes"
         />
 
         <CharacterEquipmentTab
-          v-else-if="activeTab === 'equipment'"
+          v-show="activeTab === 'equipment'"
           v-model="formEquipment"
         />
 
         <CharacterExtrasTab
-          v-else-if="activeTab === 'extras'"
+          v-show="activeTab === 'extras'"
           v-model="formExtras"
         />
       </div>
     </template>
   </AppPageShell>
+
+  <CharacterImportDialog
+    :open="importDialogOpen"
+    @close="importDialogOpen = false"
+    @imported="handleImportApplied"
+  />
 </template>
 
 <style scoped>

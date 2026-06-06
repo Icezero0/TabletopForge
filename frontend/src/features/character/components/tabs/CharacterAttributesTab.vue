@@ -5,7 +5,6 @@ import {
   ABILITY_KEYS, ABILITY_LABEL_KEYS, DND5E_SKILLS,
   abilityMod, fmtMod,
 } from "@/features/character/constants";
-import BaseInput from "@/ui/base/BaseInput.vue";
 import TagInput from "@/features/library/components/TagInput.vue";
 
 const props = defineProps<{
@@ -15,13 +14,25 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: "update:modelValue", v: Record<string, unknown>): void }>();
 const { t } = useI18n();
 
+function modelSnapshot(): Record<string, unknown> {
+  const raw = props.modelValue;
+  if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) return raw;
+  return {};
+}
+
+function identitySnapshot(): Record<string, unknown> {
+  const raw = props.identityBlock;
+  if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) return raw;
+  return {};
+}
+
 function update(key: string, value: unknown) {
-  emit("update:modelValue", { ...props.modelValue, [key]: value });
+  emit("update:modelValue", { ...modelSnapshot(), [key]: value });
 }
 
 // ── Ability scores ──────────────────────────────────────────────────────────
 const scores = computed(() => {
-  const s = (props.modelValue.ability_scores ?? {}) as Record<string, number>;
+  const s = (modelSnapshot().ability_scores ?? {}) as Record<string, number>;
   const result: Record<string, number> = {};
   for (const k of ABILITY_KEYS) result[k] = Number(s[k] ?? 10);
   return result;
@@ -35,13 +46,21 @@ const DERIVED_KEYS = ["ac", "max_hp", "speed", "initiative", "proficiency_bonus"
 type DerivedKey = (typeof DERIVED_KEYS)[number];
 
 function getDerived(key: DerivedKey): { value: number; breakdown: string } {
-  const d = (props.modelValue.derived ?? {}) as Record<string, { value: number; breakdown: string }>;
-  return d[key] ?? { value: 0, breakdown: "" };
+  const d = (modelSnapshot().derived ?? {}) as Record<string, unknown>;
+  const entry = d[key];
+  if (entry && typeof entry === "object" && !Array.isArray(entry)) {
+    const obj = entry as { value?: unknown; breakdown?: unknown };
+    return {
+      value: Number(obj.value) || 0,
+      breakdown: String(obj.breakdown ?? ""),
+    };
+  }
+  return { value: 0, breakdown: "" };
 }
 function setDerived(key: DerivedKey, field: "value" | "breakdown", raw: string) {
   const current = getDerived(key);
   const updated = { ...current, [field]: field === "value" ? (parseInt(raw) || 0) : raw };
-  update("derived", { ...(props.modelValue.derived as Record<string, unknown> ?? {}), [key]: updated });
+  update("derived", { ...(modelSnapshot().derived as Record<string, unknown> ?? {}), [key]: updated });
 }
 
 // Hit dice by class (DnD 5e)
@@ -51,15 +70,13 @@ const HIT_DIE: Record<string, number> = {
   sorcerer: 6, warlock: 8, wizard: 6,
 };
 
-// Write value + breakdown in one emit to avoid second call overwriting the first
 function setDerivedBoth(key: DerivedKey, value: number, breakdown: string) {
   update("derived", {
-    ...(props.modelValue.derived as Record<string, unknown> ?? {}),
+    ...(modelSnapshot().derived as Record<string, unknown> ?? {}),
     [key]: { value, breakdown },
   });
 }
 
-// Auto-calc functions
 function autoCalcAC() {
   const dex = abilityMod(scores.value.dexterity);
   setDerivedBoth("ac", 10 + dex, `10 + 敏捷 ${dex}`);
@@ -75,18 +92,17 @@ function autoCalcPassivePerception() {
   setDerivedBoth("passive_perception", 10 + percVal, `10 + 察觉 ${percVal}`);
 }
 function autoCalcProfBonus() {
-  const classList = (props.identityBlock.classes as { level: number }[]) ?? [];
+  const classList = (identitySnapshot().classes as { level: number }[]) ?? [];
   const totalLevel = Math.max(1, classList.reduce((sum, c) => sum + (Number(c.level) || 0), 0));
   const bonus = Math.floor((totalLevel - 1) / 4) + 2;
   setDerivedBoth("proficiency_bonus", bonus, `角色总等级 ${totalLevel}`);
 }
 function autoCalcMaxHP() {
-  const classList = (props.identityBlock.classes as { name: string; level: number }[]) ?? [];
+  const classList = (identitySnapshot().classes as { name: string; level: number }[]) ?? [];
   const con = abilityMod(scores.value.constitution);
   const totalLevel = classList.reduce((sum, c) => sum + (Number(c.level) || 0), 0);
   if (totalLevel === 0) return;
 
-  // Fixed average per level: first level = max die, subsequent = floor(die/2)+1
   let hp = 0;
   let isFirst = true;
   const parts: string[] = [];
@@ -107,7 +123,6 @@ function autoCalcMaxHP() {
   setDerivedBoth("max_hp", Math.max(1, hp), parts.join(" + "));
 }
 
-// Map which keys get auto-calc and which function to call
 const AUTO_CALC: Partial<Record<DerivedKey, () => void>> = {
   ac: autoCalcAC,
   max_hp: autoCalcMaxHP,
@@ -116,128 +131,30 @@ const AUTO_CALC: Partial<Record<DerivedKey, () => void>> = {
   passive_perception: autoCalcPassivePerception,
 };
 
-// ── Saving throws ───────────────────────────────────────────────────────────
+// ── Saving throws & skills (manual text modifiers) ─────────────────────────
 const savingThrows = computed(
-  () => (props.modelValue.saving_throws ?? {}) as Record<string, string>,
+  () => (modelSnapshot().saving_throws ?? {}) as Record<string, string>,
 );
-const saveAutos = computed(
-  () => (props.modelValue.saving_throw_autos ?? {}) as Record<string, boolean>,
-);
-
-// ── Skills ──────────────────────────────────────────────────────────────────
 const skillValues = computed(
-  () => (props.modelValue.skill_values ?? {}) as Record<string, string>,
-);
-const skillAutos = computed(
-  () => (props.modelValue.skill_value_autos ?? {}) as Record<string, boolean>,
+  () => (modelSnapshot().skill_values ?? {}) as Record<string, string>,
 );
 
-// Ability short labels (first 2 chars)
 function abilityShort(ability: string) {
   return t(ABILITY_LABEL_KEYS[ability as keyof typeof ABILITY_LABEL_KEYS]).slice(0, 2);
 }
 
-// ── Saving throw proficiencies ─────────────────────────────────────────────
-const saveProfs = computed(
-  () => (props.modelValue.saving_throw_profs ?? {}) as Record<string, boolean>,
-);
-
-// ── Skill proficiencies ─────────────────────────────────────────────────────
-type SkillProf = "none" | "proficient" | "expert";
-const skillProfs = computed(
-  () => (props.modelValue.skill_profs ?? {}) as Record<string, SkillProf>,
-);
-
-// ── Computed placeholder values ────────────────────────────────────────────
-const profBonus = computed(() => getDerived("proficiency_bonus").value || 2);
-
-function calcSaveValue(ability: string, proficient?: boolean): string {
-  const mod = abilityMod(scores.value[ability]);
-  const hasProf = proficient !== undefined ? proficient : !!saveProfs.value[ability];
-  return fmtMod(mod + (hasProf ? profBonus.value : 0));
-}
-
-function calcSkillValue(key: string, prof?: SkillProf): string {
-  const skill = DND5E_SKILLS.find(s => s.key === key);
-  if (!skill) return "+0";
-  const mod = abilityMod(scores.value[skill.ability]);
-  const p = prof !== undefined ? prof : (skillProfs.value[key] ?? "none");
-  const bonus = p === "proficient" ? profBonus.value : p === "expert" ? profBonus.value * 2 : 0;
-  return fmtMod(mod + bonus);
-}
-
-// ── Auto flag helpers ──────────────────────────────────────────────────────
-// If flag is unset: treat as auto when the stored value is empty (backward compat)
-function isAutoSave(ability: string): boolean {
-  const flag = saveAutos.value[ability];
-  return flag !== undefined ? flag : !(savingThrows.value[ability]?.trim());
-}
-function isAutoSkill(key: string): boolean {
-  const flag = skillAutos.value[key];
-  return flag !== undefined ? flag : !(skillValues.value[key]?.trim());
-}
-
-// Display value: empty string when auto (lets placeholder show), stored value otherwise
-function saveDisplayValue(ability: string): string {
-  return isAutoSave(ability) ? "" : (savingThrows.value[ability] ?? "");
-}
-function skillDisplayValue(key: string): string {
-  return isAutoSkill(key) ? "" : (skillValues.value[key] ?? "");
-}
-
-// Placeholder: always shows the computed reference value
-function savePlaceholder(ability: string): string { return calcSaveValue(ability); }
-function skillPlaceholder(skillKey: string, ability: string): string { return calcSkillValue(skillKey); }
-
-// ── Batch update helper ────────────────────────────────────────────────────
-function updateMultiple(patches: Record<string, unknown>) {
-  emit("update:modelValue", { ...props.modelValue, ...patches });
-}
-
-// ── setSave / setSkill ─────────────────────────────────────────────────────
 function setSave(ability: string, v: string) {
-  const isAuto = v.trim() === "";
-  updateMultiple({
-    saving_throws: { ...savingThrows.value, [ability]: isAuto ? calcSaveValue(ability) : v },
-    saving_throw_autos: { ...saveAutos.value, [ability]: isAuto },
-  });
+  update("saving_throws", { ...savingThrows.value, [ability]: v });
 }
 function setSkill(key: string, v: string) {
-  const isAuto = v.trim() === "";
-  updateMultiple({
-    skill_values: { ...skillValues.value, [key]: isAuto ? calcSkillValue(key) : v },
-    skill_value_autos: { ...skillAutos.value, [key]: isAuto },
-  });
-}
-
-// ── Prof toggles — also refresh stored value when field is in auto state ───
-function toggleSaveProf(ability: string) {
-  const newProf = !saveProfs.value[ability];
-  const patches: Record<string, unknown> = {
-    saving_throw_profs: { ...saveProfs.value, [ability]: newProf },
-  };
-  if (isAutoSave(ability)) {
-    patches.saving_throws = { ...savingThrows.value, [ability]: calcSaveValue(ability, newProf) };
-  }
-  updateMultiple(patches);
-}
-function cycleSkillProf(key: string) {
-  const cur = skillProfs.value[key] ?? "none";
-  const next: SkillProf = cur === "none" ? "proficient" : cur === "proficient" ? "expert" : "none";
-  const patches: Record<string, unknown> = {
-    skill_profs: { ...skillProfs.value, [key]: next },
-  };
-  if (isAutoSkill(key)) {
-    patches.skill_values = { ...skillValues.value, [key]: calcSkillValue(key, next) };
-  }
-  updateMultiple(patches);
+  update("skill_values", { ...skillValues.value, [key]: v });
 }
 
 // ── Proficiencies ────────────────────────────────────────────────────────────
-const weaponProfs = computed(() => (props.modelValue.weapon_proficiencies as string[]) ?? []);
-const armorProfs = computed(() => (props.modelValue.armor_proficiencies as string[]) ?? []);
-const toolProfs = computed(() => (props.modelValue.tool_proficiencies as string[]) ?? []);
-const languages = computed(() => (props.modelValue.languages as string[]) ?? []);
+const weaponProfs = computed(() => (modelSnapshot().weapon_proficiencies as string[]) ?? []);
+const armorProfs = computed(() => (modelSnapshot().armor_proficiencies as string[]) ?? []);
+const toolProfs = computed(() => (modelSnapshot().tool_proficiencies as string[]) ?? []);
+const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
 </script>
 
 <template>
@@ -263,7 +180,7 @@ const languages = computed(() => (props.modelValue.languages as string[]) ?? [])
       </div>
     </div>
 
-    <!-- Derived stats (no section title per request) -->
+    <!-- Derived stats -->
     <div class="section">
       <div class="derived-hint">{{ t("character.attributes.autoCalcHint") }}</div>
       <div class="derived-grid">
@@ -292,41 +209,32 @@ const languages = computed(() => (props.modelValue.languages as string[]) ?? [])
       </div>
     </div>
 
-    <!-- Saving throws (manual) -->
+    <!-- Saving throws -->
     <div class="section">
       <div class="section-title">{{ t("character.attributes.savingThrows") }}</div>
       <div class="saves-grid">
         <div v-for="ability in ABILITY_KEYS" :key="ability" class="save-item">
-          <button class="prof-dot" :class="{ proficient: !!saveProfs[ability] }" :title="saveProfs[ability] ? '熟练' : ''" @click="toggleSaveProf(ability)" />
           <span class="save-label">{{ abilityShort(ability) }}</span>
           <input
             type="text"
             class="compact-input"
-            :value="saveDisplayValue(ability)"
-            :placeholder="savePlaceholder(ability)"
+            :value="savingThrows[ability] ?? ''"
             @input="setSave(ability, ($event.target as HTMLInputElement).value)"
           />
         </div>
       </div>
     </div>
 
-    <!-- Skills (manual, compact 3-col) -->
+    <!-- Skills -->
     <div class="section">
       <div class="section-title">{{ t("character.attributes.skills") }}</div>
       <div class="skills-grid">
         <div v-for="skill in DND5E_SKILLS" :key="skill.key" class="skill-item">
-          <button
-            class="prof-dot"
-            :class="skillProfs[skill.key] ?? 'none'"
-            :title="skillProfs[skill.key] === 'proficient' ? '熟练' : skillProfs[skill.key] === 'expert' ? '专精' : ''"
-            @click="cycleSkillProf(skill.key)"
-          />
           <span class="skill-name">{{ t(skill.labelKey) }}</span>
           <input
             type="text"
             class="compact-input"
-            :value="skillDisplayValue(skill.key)"
-            :placeholder="skillPlaceholder(skill.key, skill.ability)"
+            :value="skillValues[skill.key] ?? ''"
             @input="setSkill(skill.key, ($event.target as HTMLInputElement).value)"
           />
         </div>
@@ -435,48 +343,24 @@ const languages = computed(() => (props.modelValue.languages as string[]) ?? [])
 .auto-btn:hover { background: var(--c-hover); color: var(--c-text); }
 .auto-btn-spacer { height: 24px; }
 
-/* Saving throws — 3-col compact */
+/* Saving throws — 3-col compact, label + input 左对齐紧贴 */
 .saves-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; }
-.save-item { display: flex; align-items: center; gap: 6px; }
+.save-item { display: flex; align-items: center; gap: 4px; justify-self: start; }
 .save-label { font-size: 12px; font-weight: 600; color: var(--c-text-muted); white-space: nowrap; flex-shrink: 0; }
 
-/* Skills — 3-col compact */
+/* Skills — 3-col compact, label + input 左对齐紧贴 */
 .skills-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 10px; }
-.skill-item { display: flex; align-items: center; gap: 5px; }
-.skill-name { font-size: 12px; color: var(--c-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 0; }
-
-/* Prof dots — 三态: 空心 / 圆环 / 圆环+内部圆 */
-.prof-dot {
-  position: relative;
-  width: 14px; height: 14px; border-radius: 50%;
-  border: 2px solid var(--c-border); background: transparent;
-  cursor: pointer; flex-shrink: 0; padding: 0;
-  transition: border-color 0.12s, border-width 0.12s;
-}
-.prof-dot.proficient {
-  border: 3px solid var(--c-primary);
-  background: transparent;
-}
-.prof-dot.expert {
-  border: 3px solid var(--c-primary);
-  background: transparent;
-}
-.prof-dot.expert::after {
-  content: '';
-  position: absolute;
-  top: 50%; left: 50%;
-  width: 4px; height: 4px;
-  border-radius: 50%;
-  background: var(--c-primary);
-  transform: translate(-50%, -50%);
+.skill-item { display: flex; align-items: center; gap: 4px; justify-self: start; max-width: 100%; }
+.skill-name {
+  font-size: 12px; color: var(--c-text); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 0;
 }
 
 /* Shared compact input */
 .compact-input {
-  width: 48px; flex-shrink: 0; text-align: center; border: 1px solid var(--c-border);
+  width: 44px; flex-shrink: 0; text-align: left; border: 1px solid var(--c-border);
   border-radius: var(--r-1); background: var(--c-surface); color: var(--c-text);
-  padding: 3px 4px; font-size: 12px; font-family: inherit; outline: none;
+  padding: 3px 6px; font-size: 12px; font-family: inherit; outline: none;
 }
 .compact-input:focus { border-color: var(--c-accent); }
-.compact-input::placeholder { color: var(--c-text-muted); opacity: 0.5; }
 </style>
