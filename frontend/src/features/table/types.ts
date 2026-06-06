@@ -1,4 +1,4 @@
-export type TableToolMode = "select" | "hand" | "draw" | "pointer";
+export type TableToolMode = "select" | "hand" | "draw" | "pointer" | "measure";
 
 export type { DrawSubTool } from "@/features/table/drawingTypes";
 

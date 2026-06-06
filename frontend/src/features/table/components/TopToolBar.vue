@@ -33,6 +33,7 @@ const tools: { mode: TableToolMode; labelKey: string; icon: typeof HandRaisedIco
   { mode: "hand", labelKey: "table.tools.hand", icon: HandRaisedIcon },
   { mode: "draw", labelKey: "table.tools.draw", icon: PencilSquareIcon },
   { mode: "pointer", labelKey: "table.tools.pointer", icon: CursorArrowRaysIcon },
+  { mode: "measure", labelKey: "table.tools.measure", icon: ArrowsPointingOutIcon },
 ];
 
 function isDisabled(mode: TableToolMode) {
@@ -55,7 +56,7 @@ function selectTool(mode: TableToolMode) {
         class="toolBtn"
         :class="{ active: modelValue === tool.mode, disabled: isDisabled(tool.mode) }"
         :disabled="isDisabled(tool.mode)"
-        :title="t(tool.labelKey)"
+        :title="tool.mode === 'measure' ? t('table.tools.measureHint') : t(tool.labelKey)"
         @click="selectTool(tool.mode)"
       >
         <component :is="tool.icon" class="toolIcon" aria-hidden="true" />
@@ -91,15 +92,6 @@ function selectTool(mode: TableToolMode) {
       </button>
     </div>
 
-    <button
-      type="button"
-      class="toolBtn measureBtn"
-      disabled
-      :title="t('table.tools.measureDisabledHint')"
-    >
-      <ArrowsPointingOutIcon class="toolIcon" aria-hidden="true" />
-      <span class="toolLabel">{{ t("table.tools.measure") }}</span>
-    </button>
   </div>
 </template>
 
@@ -175,10 +167,6 @@ function selectTool(mode: TableToolMode) {
 
 .scaleBtn {
   padding: 0 8px;
-}
-
-.measureBtn {
-  margin-left: auto;
 }
 
 .toolIcon {

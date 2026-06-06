@@ -629,7 +629,7 @@ export default {
       draw: "绘制",
       pointer: "Pointer",
       measure: "测距",
-      measureDisabledHint: "测距不在 MVP 范围内",
+      measureHint: "按住拖拽测量，线段跟随鼠标，距离按格取整",
       gridScale: "比例尺",
       gridScaleValue: "{ft} ft/格 · {px}px",
       gridScaleIncrease: "放大网格",

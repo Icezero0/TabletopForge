@@ -1,7 +1,7 @@
 from enum import StrEnum
 
 DEFAULT_GRID_CELL_FT = 5.0
-DEFAULT_GRID_CELL_PX = 40
+DEFAULT_GRID_CELL_PX = 52
 
 
 class DrawingKind(StrEnum):
