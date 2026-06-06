@@ -76,7 +76,7 @@ class RoomMembershipRepository:
         user_id: int,
     ) -> bool:
         result = await db.execute(
-            select(RoomMember.id)
+            select(RoomMember.user_id)
             .where(
                 RoomMember.user_id == user_id,
                 RoomMember.game_role == GameRole.GM.value,
