@@ -209,7 +209,6 @@ function close() {
             <label class="label">{{ t("library.upload.commentLabel") }}</label>
             <BaseTextarea
               v-model="comment"
-              resize="none"
               min-height="72px"
               :placeholder="t('library.upload.commentPlaceholder')"
             />
