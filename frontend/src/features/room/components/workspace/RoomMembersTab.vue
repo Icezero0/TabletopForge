@@ -10,6 +10,7 @@ defineProps<{
     avatarUrl?: string | null;
     room_role: RoomRole;
     game_role: GameRole;
+    player_color?: string | null;
     status: MemberStatus;
   }>;
   searchPlaceholder: string;
@@ -32,6 +33,9 @@ defineProps<{
   loading?: boolean;
   loadingLabel: string;
   emptyLabel: string;
+  currentUserId?: number | null;
+  takenPlayerColors?: Set<string>;
+  playerColorSaving?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -42,6 +46,7 @@ const emit = defineEmits<{
   unsetManager: [userId: number];
   setGameRole: [userId: number, gameRole: GameRole];
   removeMember: [userId: number];
+  updatePlayerColor: [color: string];
 }>();
 </script>
 
@@ -49,6 +54,9 @@ const emit = defineEmits<{
   <div class="panelBody membersPanelBody">
     <RoomMembersPanel
       :members="members"
+      :current-user-id="currentUserId"
+      :taken-player-colors="takenPlayerColors"
+      :player-color-saving="playerColorSaving"
       :search-placeholder="searchPlaceholder"
       :invite-label="inviteLabel"
       :leave-room-label="leaveRoomLabel"
@@ -73,6 +81,7 @@ const emit = defineEmits<{
       @unset-manager="emit('unsetManager', $event)"
       @set-game-role="(userId, gameRole) => emit('setGameRole', userId, gameRole)"
       @remove-member="emit('removeMember', $event)"
+      @update-player-color="emit('updatePlayerColor', $event)"
     />
   </div>
 </template>

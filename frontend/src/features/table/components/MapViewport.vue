@@ -45,6 +45,7 @@ const props = withDefaults(
     currentUserId?: number | null;
     characterOwnerById?: Map<number, number>;
     characterKindById?: Map<number, import("@/infra/api/roomCharacters.api").CharacterKind>;
+    playerColorByUserId?: Map<number, string>;
   }>(),
   {
     maps: () => [],
@@ -371,6 +372,7 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
       <PointerOverlay
         :cursors="remoteCursors"
         :lasers="remoteLasers"
+        :color-by-user-id="playerColorByUserId"
       />
     </SceneCanvas>
   </div>

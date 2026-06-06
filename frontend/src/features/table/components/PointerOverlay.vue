@@ -5,14 +5,17 @@ import type { RemoteCursor, RemoteLaser } from "@/features/table/composables/use
 const props = defineProps<{
   cursors: RemoteCursor[];
   lasers: RemoteLaser[];
+  colorByUserId?: Map<number, string>;
 }>();
 
-const cursorHue = (userId: number) => (userId * 47) % 360;
+function cursorColor(userId: number): string {
+  return props.colorByUserId?.get(userId) ?? `hsl(${(userId * 47) % 360} 85% 55%)`;
+}
 
 const cursorItems = computed(() =>
   props.cursors.map((c) => ({
     ...c,
-    hue: cursorHue(c.userId),
+    color: cursorColor(c.userId),
     style: {
       transform: `translate(${c.x}px, ${c.y}px)`,
     },
@@ -20,17 +23,14 @@ const cursorItems = computed(() =>
 );
 
 const laserItems = computed(() =>
-  props.lasers.map((l) => {
-    const hue = cursorHue(l.userId);
-    return {
-      ...l,
-      hue,
-      x: Math.min(l.x1, l.x2),
-      y: Math.min(l.y1, l.y2),
-      width: Math.max(2, Math.abs(l.x2 - l.x1)),
-      height: Math.max(2, Math.abs(l.y2 - l.y1)),
-    };
-  }),
+  props.lasers.map((l) => ({
+    ...l,
+    color: cursorColor(l.userId),
+    x: Math.min(l.x1, l.x2),
+    y: Math.min(l.y1, l.y2),
+    width: Math.max(2, Math.abs(l.x2 - l.x1)),
+    height: Math.max(2, Math.abs(l.y2 - l.y1)),
+  })),
 );
 </script>
 
@@ -45,7 +45,7 @@ const laserItems = computed(() =>
         :x2="laser.x2"
         :y2="laser.y2"
         class="laserLine"
-        :style="{ stroke: `hsl(${laser.hue} 85% 55%)` }"
+        :style="{ stroke: laser.color }"
       />
     </svg>
     <div
@@ -56,13 +56,13 @@ const laserItems = computed(() =>
     >
       <span
         class="cursorDot"
-        :style="{ background: `hsl(${cursor.hue} 85% 55%)` }"
+        :style="{ background: cursor.color }"
       />
       <span
         class="cursorLabel"
         :style="{
-          background: `color-mix(in srgb, hsl(${cursor.hue} 85% 55%) 22%, var(--c-surface))`,
-          borderColor: `hsl(${cursor.hue} 70% 45%)`,
+          background: `color-mix(in srgb, ${cursor.color} 22%, var(--c-surface))`,
+          borderColor: cursor.color,
         }"
       >
         {{ cursor.displayName }}

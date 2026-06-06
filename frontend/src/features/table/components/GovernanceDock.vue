@@ -25,6 +25,7 @@ const props = defineProps<{
     avatarUrl?: string | null;
     room_role: RoomRole;
     game_role: GameRole;
+    player_color?: string | null;
     status: MemberStatus;
   }>;
   membersLoading?: boolean;
@@ -54,6 +55,9 @@ const props = defineProps<{
   settingManagerUserIds?: number[];
   settingGameRoleUserIds?: number[];
   removingMemberUserIds?: number[];
+  currentUserId?: number | null;
+  takenPlayerColors?: Set<string>;
+  playerColorSaving?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -68,6 +72,7 @@ const emit = defineEmits<{
   rejectRequest: [requestId: number];
   saveSettings: [payload: RoomPatchPayload];
   openRequests: [];
+  updatePlayerColor: [color: string];
 }>();
 
 const { t } = useI18n();
@@ -145,6 +150,10 @@ watch(activePanel, (panel) => {
       :loading="membersLoading"
       :loading-label="t('common.loading')"
       :empty-label="membersError || t('room.membersEmpty')"
+      :current-user-id="currentUserId"
+      :taken-player-colors="takenPlayerColors"
+      :player-color-saving="playerColorSaving"
+      @update-player-color="emit('updatePlayerColor', $event)"
       @leave-room="emit('leaveRoom')"
       @disband-room="emit('disbandRoom')"
       @invite-user="emit('inviteUser', $event)"

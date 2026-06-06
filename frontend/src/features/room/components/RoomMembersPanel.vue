@@ -3,12 +3,12 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import {
   ArrowRightStartOnRectangleIcon,
   MagnifyingGlassIcon,
-  UserIcon,
   TrashIcon,
   UserPlusIcon,
 } from "@heroicons/vue/24/outline";
 import { useI18n } from "vue-i18n";
 import RoomMemberAvatar from "@/features/room/components/RoomMemberAvatar.vue";
+import PlayerColorPicker from "@/features/room/components/PlayerColorPicker.vue";
 import { getUsers, type UserResponse } from "@/infra/api/users.api";
 import { resolveMediaUrl } from "@/infra/media";
 import type { GameRole, MemberStatus, RoomRole } from "@/features/room/types";
@@ -20,6 +20,7 @@ type RoomMemberPanelItem = {
   avatarUrl?: string | null;
   room_role: RoomRole;
   game_role: GameRole;
+  player_color?: string | null;
   status: MemberStatus;
 };
 
@@ -49,6 +50,9 @@ const props = defineProps<{
   loading?: boolean;
   loadingLabel?: string;
   emptyLabel?: string;
+  currentUserId?: number | null;
+  takenPlayerColors?: Set<string>;
+  playerColorSaving?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -59,6 +63,7 @@ const emit = defineEmits<{
   unsetManager: [userId: number];
   setGameRole: [userId: number, gameRole: GameRole];
   removeMember: [userId: number];
+  updatePlayerColor: [color: string];
 }>();
 
 function roomRoleLabel(role: RoomRole) {
@@ -145,6 +150,13 @@ function handleSelectedMemberGameRoleChange(gameRole: GameRole) {
 
 const profileActionCount = computed(() =>
   Number(showSetSelectedMemberManager.value) + Number(canRemoveSelectedMember.value));
+
+const isSelfProfile = computed(
+  () =>
+    !!selectedMember.value &&
+    props.currentUserId != null &&
+    selectedMember.value.id === props.currentUserId,
+);
 
 function userDisplayName(user: UserResponse) {
   return user.username || user.email || `User #${user.id}`;
@@ -344,6 +356,7 @@ onBeforeUnmount(() => {
               :src="member.avatarUrl"
               :role="member.room_role"
               :status="member.status"
+              :player-color="member.player_color"
             />
           </button>
           <div class="memberMeta">
@@ -449,18 +462,14 @@ onBeforeUnmount(() => {
     >
       <BaseCard v-if="selectedMember" class="memberProfileCard">
         <div class="memberProfileTitle">{{ t("room.members.profileTitle") }}</div>
-        <div class="memberProfileAvatar" aria-hidden="true">
-          <img
-            v-if="selectedMember.avatarUrl"
-            class="memberProfileAvatarImage"
+        <div class="memberProfileAvatarWrap">
+          <RoomMemberAvatar
+            :name="selectedMember.name"
             :src="selectedMember.avatarUrl"
-            :alt="selectedMember.name"
-          >
-          <AppIcon
-            v-else
-            class="memberProfileAvatarFallback"
-            :icon="UserIcon"
-            :size="54"
+            :role="selectedMember.room_role"
+            status="idle"
+            :player-color="selectedMember.player_color"
+            :size="96"
           />
         </div>
         <div class="memberProfileText">
@@ -472,6 +481,14 @@ onBeforeUnmount(() => {
             <span class="identityBadge governance">{{ roomRoleLabel(selectedMember.room_role) }}</span>
             <span class="identityBadge game">{{ gameRoleLabel(selectedMember.game_role) }}</span>
           </div>
+        </div>
+        <div v-if="isSelfProfile && selectedMember.player_color" class="playerColorSection">
+          <PlayerColorPicker
+            :model-value="selectedMember.player_color"
+            :taken-colors="takenPlayerColors"
+            :disabled="playerColorSaving"
+            @update:model-value="emit('updatePlayerColor', $event)"
+          />
         </div>
         <div v-if="showGameRoleEditor" class="gameRoleSection">
           <div class="gameRoleSectionLabel">{{ t("room.members.gameRoleLabel") }}</div>
@@ -841,34 +858,14 @@ onBeforeUnmount(() => {
   font-weight: 650;
 }
 
-.memberProfileAvatar {
-  width: 152px;
-  height: 152px;
-  border-radius: 24px;
+.memberProfileAvatarWrap {
   display: grid;
   place-items: center;
-  overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--c-border) 78%, white);
-  background:
-    linear-gradient(
-      145deg,
-      color-mix(in srgb, var(--c-surface) 88%, white),
-      color-mix(in srgb, var(--c-bg) 82%, var(--c-surface))
-    );
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.32),
-    0 18px 42px rgb(0 0 0 / 0.12);
 }
 
-.memberProfileAvatarImage {
+.playerColorSection {
   width: 100%;
-  height: 100%;
-  display: block;
-  object-fit: cover;
-}
-
-.memberProfileAvatarFallback {
-  color: var(--c-text-muted);
+  padding-top: 4px;
 }
 
 .memberProfileText {

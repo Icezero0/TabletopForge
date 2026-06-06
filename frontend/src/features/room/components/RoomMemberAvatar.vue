@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import type { MemberStatus, RoomRole } from "@/features/room/types";
 
 const props = withDefaults(
@@ -7,12 +8,20 @@ const props = withDefaults(
     src?: string | null;
     role: RoomRole;
     status: MemberStatus;
+    playerColor?: string | null;
     size?: number;
   }>(),
   {
     size: 42,
   },
 );
+
+const avatarBorderColor = computed(() => {
+  if (props.playerColor) return props.playerColor;
+  if (props.role === "owner") return "#f2c14d";
+  if (props.role === "manager") return "#3dc0b3";
+  return "color-mix(in srgb, var(--c-border) 75%, white)";
+});
 
 function memberInitial(name: string) {
   return name.slice(0, 1).toUpperCase();
@@ -32,7 +41,11 @@ function memberInitial(name: string) {
       :alt="name"
       shape="circle"
       fit="cover"
-      :style="{ width: `${props.size}px`, height: `${props.size}px` }"
+      :style="{
+        width: `${props.size}px`,
+        height: `${props.size}px`,
+        borderColor: avatarBorderColor,
+      }"
     >
       <template #fallback>
         <span>{{ memberInitial(name) }}</span>
@@ -54,18 +67,6 @@ function memberInitial(name: string) {
   font-size: 13px;
   border: 2px solid var(--c-border);
   user-select: none;
-}
-
-.avatar[data-role="owner"] .avatarInner {
-  border-color: #f2c14d;
-}
-
-.avatar[data-role="manager"] .avatarInner {
-  border-color: #3dc0b3;
-}
-
-.avatar[data-role="member"] .avatarInner {
-  border-color: color-mix(in srgb, var(--c-border) 75%, white);
 }
 
 .statusDot {

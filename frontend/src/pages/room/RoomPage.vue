@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import {
   getRoomById,
   getRoomMembers,
+  patchMyPlayerColor,
   patchRoom,
   type Room,
   type RoomPatchPayload,
@@ -141,6 +142,11 @@ const mapUploading = ref(false);
 
 const addCharacterDialogOpen = ref(false);
 const characterPopoverOpen = ref(false);
+const mapPopoverOpen = ref(false);
+
+const selectedMapId = computed(() =>
+  selection.value?.type === "map" ? selection.value.id : null,
+);
 const infoPanelCollapsed = ref(false);
 const characterSubmitting = ref(false);
 
@@ -891,6 +897,56 @@ function onViewportPointerUp(event: PointerEvent) {
   sendPointerUp(event.clientX, event.clientY, scenePointFromViewport);
 }
 
+const playerColorByUserId = computed(() => {
+  const map = new Map<number, string>();
+  for (const member of entityRoomMembers.value) {
+    if (member.player_color) {
+      map.set(member.user_id, member.player_color);
+    }
+  }
+  return map;
+});
+
+const selfPlayerColor = computed(() => {
+  const meId = currentUserId.value;
+  if (!meId) return null;
+  return playerColorByUserId.value.get(meId) ?? null;
+});
+
+const takenPlayerColors = computed(() => {
+  const meId = currentUserId.value;
+  const taken = new Set<string>();
+  for (const member of entityRoomMembers.value) {
+    if (member.player_color && member.user_id !== meId) {
+      taken.add(member.player_color);
+    }
+  }
+  return taken;
+});
+
+const playerColorSaving = ref(false);
+
+async function updatePlayerColor(color: string) {
+  if (!roomId.value || playerColorSaving.value) return;
+  playerColorSaving.value = true;
+  try {
+    const updated = await patchMyPlayerColor(roomId.value, color);
+    entitiesStore.upsertRoomMember(updated);
+    strokeColor.value = color;
+  } catch (e) {
+    toasts.push({
+      message: getBackendErrorMessage(e) || t("room.playerColor.saveFailed"),
+      tone: "danger",
+    });
+  } finally {
+    playerColorSaving.value = false;
+  }
+}
+
+watch(selfPlayerColor, (color) => {
+  if (color) strokeColor.value = color;
+}, { immediate: true });
+
 const presentUserIds = computed(() => new Set(realtime.presentUserIds.value));
 const roomMemberItems = computed(() => entityRoomMembers.value.map((member) => {
   const user = entitiesStore.getUser(member.user_id);
@@ -909,6 +965,7 @@ const roomMemberItems = computed(() => entityRoomMembers.value.map((member) => {
     avatarUrl: user?.avatar_url ?? null,
     room_role: member.room_role,
     game_role: member.game_role,
+    player_color: member.player_color ?? null,
     status: memberStatus,
   };
 }));
@@ -1118,7 +1175,7 @@ async function handleCreateRoomPc(payload: {
   try {
     const hasState = payload.max_hp != null || payload.armor_class != null;
     const entry = await createRoomCharacter({
-      kind: "pc",
+      kind: "pc_main",
       name: payload.name,
       player_name: payload.player_name,
       state: hasState
@@ -1170,7 +1227,7 @@ async function handleCreateRoomAdditional(payload: {
     if (payload.backstory) flavor.backstory = payload.backstory;
 
     const entry = await createRoomCharacter({
-      kind: "additional",
+      kind: "pc_additional",
       name: payload.name,
       identity,
       flavor,
@@ -1212,7 +1269,7 @@ async function handleCreateRoomQuick(payload: {
     if (payload.backstory) flavor.backstory = payload.backstory;
 
     const entry = await createRoomCharacter({
-      kind: "additional",
+      kind: "npc",
       name: payload.name,
       flavor,
       state: hasState
@@ -1324,6 +1381,7 @@ watch(
             :draw-font-size="fontSize"
             :remote-cursors="remoteCursors"
             :remote-lasers="remoteLasers"
+            :player-color-by-user-id="playerColorByUserId"
             :measure-state="measureState"
             :character-owner-by-id="characterOwnerById"
             :character-kind-by-id="characterKindById"
@@ -1426,6 +1484,10 @@ watch(
             @reject-request="rejectRequest"
             @save-settings="handleSaveRoomSettings"
             @open-requests="fetchRoomRequests({ force: true })"
+            :current-user-id="currentUserId"
+            :taken-player-colors="takenPlayerColors"
+            :player-color-saving="playerColorSaving"
+            @update-player-color="updatePlayerColor"
           />
           <InGameCharacterList
             :room-id="roomId"
@@ -1498,15 +1560,19 @@ watch(
           >
             <BottomAssetBar
               v-model:popover-open="characterPopoverOpen"
+              v-model:map-popover-open="mapPopoverOpen"
               :can-add-map="canAddMap"
               :can-add-character="canAddCharacter"
               :characters="roomCharacters"
               :characters-loading="roomCharactersLoading"
+              :maps="tabletopMaps"
+              :selected-map-id="selectedMapId"
               :game-role="currentUserGameRole"
               :current-user-id="currentUserId"
               @add-map="handleAddMapClick"
               @add-character="openAddCharacterDialog"
               @spawn="handleSpawnCharacter"
+              @select-map="selectMap"
             />
           </FloatingPanel>
 

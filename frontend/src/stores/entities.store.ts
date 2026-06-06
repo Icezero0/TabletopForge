@@ -35,6 +35,7 @@ type EntityRoomMember = {
   joined_at?: string | null;
   room_role: RoomMember["room_role"];
   game_role: RoomMember["game_role"];
+  player_color?: string | null;
 };
 
 type State = {
@@ -102,6 +103,7 @@ function normalizeRoomMember(member: RoomMember): EntityRoomMember {
     joined_at: member.joined_at,
     room_role: member.room_role,
     game_role: member.game_role,
+    player_color: member.player_color,
   };
 }
 

@@ -56,6 +56,7 @@ export type RoomMember = {
   joined_at: string | null;
   room_role: RoomRole;
   game_role: GameRole;
+  player_color: string | null;
   user: RoomUserBrief | null;
 };
 
@@ -288,6 +289,14 @@ export async function patchRoomMemberGameRole(
   const { data } = await http.patch<RoomMember>(
     `/rooms/${roomId}/members/${targetUserId}/game-role`,
     payload,
+  );
+  return data;
+}
+
+export async function patchMyPlayerColor(roomId: number, playerColor: string) {
+  const { data } = await http.patch<RoomMember>(
+    `/rooms/${roomId}/members/me/player-color`,
+    { player_color: playerColor },
   );
   return data;
 }
