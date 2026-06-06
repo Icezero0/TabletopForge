@@ -812,6 +812,9 @@ export default {
       instanceName: "实例名",
       damageTaken: "已受伤害",
       damageTakenShort: "伤害",
+      notInRoom: "未入库",
+      createdBy: "创建者",
+      linkFailed: "关联角色到房间失败",
     },
     settings: {
       nameLabel: "房间名称",

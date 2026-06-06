@@ -2,7 +2,7 @@
 import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import type { GameRole } from "@/features/room/types";
-import type { RoomCharacterEntry } from "@/infra/api/roomCharacters.api";
+import type { SpawnPopoverEntry } from "@/infra/api/roomCharacters.api";
 import BaseButton from "@/ui/base/BaseButton.vue";
 import CharacterSpawnPopover from "@/features/room/components/CharacterSpawnPopover.vue";
 import MapSpawnPopover from "@/features/table/components/MapSpawnPopover.vue";
@@ -11,8 +11,9 @@ import type { RoomMap } from "@/infra/api/rooms.api";
 defineProps<{
   canAddMap?: boolean;
   canAddCharacter?: boolean;
-  characters?: RoomCharacterEntry[];
-  charactersLoading?: boolean;
+  entries?: SpawnPopoverEntry[];
+  entriesLoading?: boolean;
+  ownerNameByUserId?: Map<number, string>;
   maps?: RoomMap[];
   selectedMapId?: number | null;
   gameRole?: GameRole | "unknown";
@@ -87,8 +88,9 @@ function onSelectMap(mapId: number) {
       <CharacterSpawnPopover
         :open="popoverOpen"
         :anchor-el="characterAnchorRef"
-        :characters="characters ?? []"
-        :loading="charactersLoading"
+        :entries="entries ?? []"
+        :loading="entriesLoading"
+        :owner-name-by-user-id="ownerNameByUserId"
         :game-role="gameRole ?? 'unknown'"
         :current-user-id="currentUserId"
         @close="closeSpawnPopover"

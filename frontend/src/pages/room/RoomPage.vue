@@ -16,6 +16,12 @@ import type { GameRole, MemberStatus, RoomRole } from "@/features/room/types";
 import type { ChatSegment } from "@/features/chat/types";
 import { useRoomJoinRequests } from "@/features/room/composables/useRoomJoinRequests";
 import { useRoomCharacters } from "@/features/room/composables/useRoomCharacters";
+import {
+  fetchAllMyCharacters,
+  mergeSpawnPopoverEntries,
+} from "@/features/room/utils/spawnCharacters";
+import type { Character } from "@/infra/api/character.api";
+import { linkRoomCharacter } from "@/infra/api/roomCharacters.api";
 import { useRoomInspection } from "@/features/room/composables/useRoomInspection";
 import { useRoomMemberActions } from "@/features/room/composables/useRoomMemberActions";
 import { useRoomRealtimeSession } from "@/features/room/composables/useRoomRealtimeSession";
@@ -80,6 +86,7 @@ const {
   isLoading: roomCharactersLoading,
   fetchCharacters: fetchRoomCharacters,
   createCharacter: createRoomCharacter,
+  upsertEntry: upsertRoomCharacter,
   updateEntryState: updateRoomCharacterState,
 } = useRoomCharacters(roomId);
 
@@ -143,6 +150,40 @@ const mapUploading = ref(false);
 const addCharacterDialogOpen = ref(false);
 const characterPopoverOpen = ref(false);
 const mapPopoverOpen = ref(false);
+const libraryCharacters = ref<Character[]>([]);
+const libraryLoading = ref(false);
+
+const spawnPopoverEntries = computed(() =>
+  mergeSpawnPopoverEntries(
+    roomCharacters.value,
+    libraryCharacters.value,
+    currentUserGameRole.value,
+    currentUserId.value,
+  ),
+);
+
+const spawnPopoverLoading = computed(
+  () => roomCharactersLoading.value || libraryLoading.value,
+);
+
+watch(characterPopoverOpen, async (open) => {
+  if (!open) return;
+  if (currentUserGameRole.value !== "GM" && currentUserGameRole.value !== "PL") return;
+  libraryLoading.value = true;
+  try {
+    libraryCharacters.value = await fetchAllMyCharacters();
+    if (currentUserGameRole.value === "GM") {
+      await entitiesStore.ensureUsers([
+        ...roomCharacters.value.map((entry) => entry.owner_id),
+        ...libraryCharacters.value.map((char) => char.owner_id),
+      ]);
+    }
+  } catch {
+    libraryCharacters.value = [];
+  } finally {
+    libraryLoading.value = false;
+  }
+});
 
 const selectedMapId = computed(() =>
   selection.value?.type === "map" ? selection.value.id : null,
@@ -405,6 +446,19 @@ function viewportCenterPoint() {
 
 async function handleSpawnCharacter(characterId: number) {
   if (!roomId.value) return;
+  const inRoom = roomCharacters.value.some((entry) => entry.character_id === characterId);
+  if (!inRoom) {
+    try {
+      const entry = await linkRoomCharacter(roomId.value, characterId);
+      upsertRoomCharacter(entry);
+    } catch (error) {
+      toasts.push({
+        message: getBackendErrorMessage(error) || t("room.characters.linkFailed"),
+        tone: "danger",
+      });
+      return;
+    }
+  }
   const center = viewportCenterPoint();
   try {
     await tabletopStore.spawnCharacterToken(roomId.value, characterId, {
@@ -988,9 +1042,16 @@ const characterById = computed(() => {
   return map;
 });
 
-const ownerNameByUserId = computed(
-  () => new Map(roomMemberItems.value.map((member) => [member.id, member.name])),
-);
+const ownerNameByUserId = computed(() => {
+  const map = new Map(roomMemberItems.value.map((member) => [member.id, member.name]));
+  for (const entry of spawnPopoverEntries.value) {
+    if (map.has(entry.owner_id)) continue;
+    const user = entitiesStore.getUser(entry.owner_id);
+    const name = user?.username?.trim() || user?.email?.trim();
+    if (name) map.set(entry.owner_id, name);
+  }
+  return map;
+});
 
 function syncCurrentUserRoles() {
   const meId = auth.me?.id;
@@ -1563,8 +1624,9 @@ watch(
               v-model:map-popover-open="mapPopoverOpen"
               :can-add-map="canAddMap"
               :can-add-character="canAddCharacter"
-              :characters="roomCharacters"
-              :characters-loading="roomCharactersLoading"
+              :entries="spawnPopoverEntries"
+              :entries-loading="spawnPopoverLoading"
+              :owner-name-by-user-id="ownerNameByUserId"
               :maps="tabletopMaps"
               :selected-map-id="selectedMapId"
               :game-role="currentUserGameRole"

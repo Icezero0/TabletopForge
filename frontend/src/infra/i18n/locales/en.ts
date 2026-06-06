@@ -812,6 +812,9 @@ export default {
       instanceName: "Instance name",
       damageTaken: "Damage taken",
       damageTakenShort: "DMG",
+      notInRoom: "Not in room",
+      createdBy: "Created by",
+      linkFailed: "Failed to link character to room",
     },
     settings: {
       nameLabel: "Room name",

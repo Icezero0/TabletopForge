@@ -36,6 +36,19 @@ export function useRoomCharacters(roomId: Ref<number | null>) {
     return entry;
   }
 
+  function upsertEntry(entry: RoomCharacterEntry) {
+    const index = characters.value.findIndex(
+      (item) => item.character_id === entry.character_id,
+    );
+    if (index >= 0) {
+      characters.value = characters.value.map((item, i) =>
+        i === index ? entry : item,
+      );
+    } else {
+      characters.value = [...characters.value, entry];
+    }
+  }
+
   function updateEntryState(characterId: number, summary: TokenStateSummary | CharacterStateSummary) {
     characters.value = characters.value.map((entry) => {
       if (entry.character_id !== characterId) return entry;
@@ -57,6 +70,7 @@ export function useRoomCharacters(roomId: Ref<number | null>) {
     error,
     fetchCharacters,
     createCharacter,
+    upsertEntry,
     updateEntryState,
     refresh: fetchCharacters,
   };

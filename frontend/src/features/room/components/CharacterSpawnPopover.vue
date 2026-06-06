@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { GameRole } from "@/features/room/types";
-import type { RoomCharacterEntry } from "@/infra/api/roomCharacters.api";
+import type { SpawnPopoverEntry } from "@/infra/api/roomCharacters.api";
 import CharacterSpawnPopoverItem from "@/features/room/components/CharacterSpawnPopoverItem.vue";
 import { canSpawnCharacter, formatTokenPreview } from "@/features/table/utils/tokenDisplay";
 import { PlusIcon } from "@heroicons/vue/24/outline";
@@ -10,8 +10,9 @@ import { PlusIcon } from "@heroicons/vue/24/outline";
 const props = defineProps<{
   open: boolean;
   anchorEl: HTMLElement | null;
-  characters: RoomCharacterEntry[];
+  entries: SpawnPopoverEntry[];
   loading?: boolean;
+  ownerNameByUserId?: Map<number, string>;
   gameRole: GameRole | "unknown";
   currentUserId?: number | null;
 }>();
@@ -52,11 +53,11 @@ function onBackdropPointerDown() {
   emit("close");
 }
 
-function canSpawn(entry: RoomCharacterEntry): boolean {
+function canSpawn(entry: SpawnPopoverEntry): boolean {
   return canSpawnCharacter(entry, props.gameRole, props.currentUserId);
 }
 
-function onSpawn(entry: RoomCharacterEntry) {
+function onSpawn(entry: SpawnPopoverEntry) {
   emit("spawn", entry.character_id);
   emit("close");
 }
@@ -65,10 +66,16 @@ function onAddCharacter() {
   emit("addCharacter");
 }
 
-function entryStats(entry: RoomCharacterEntry): string {
+function entryStats(entry: SpawnPopoverEntry): string {
+  if (!entry.inRoom) return "";
   return formatTokenPreview(entry.state, {
     damageLabel: t("room.characters.damageTakenShort"),
   });
+}
+
+function ownerLabel(entry: SpawnPopoverEntry): string {
+  const name = props.ownerNameByUserId?.get(entry.owner_id);
+  return name ?? `User #${entry.owner_id}`;
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -104,6 +111,12 @@ onBeforeUnmount(() => {
 });
 
 const showPopover = computed(() => props.open && props.anchorEl != null);
+
+const visibleEntries = computed(() =>
+  props.entries.filter((entry) =>
+    canSpawnCharacter(entry, props.gameRole, props.currentUserId),
+  ),
+);
 </script>
 
 <template>
@@ -120,11 +133,12 @@ const showPopover = computed(() => props.open && props.anchorEl != null);
       <p v-if="loading" class="muted">{{ t("common.loading") }}</p>
       <div v-else class="track">
         <CharacterSpawnPopoverItem
-          v-for="entry in characters"
-          :key="entry.room_character_id"
+          v-for="entry in visibleEntries"
+          :key="entry.character_id"
           :entry="entry"
           :can-spawn="canSpawn(entry)"
           :stats-text="entryStats(entry)"
+          :owner-label="gameRole === 'GM' ? ownerLabel(entry) : undefined"
           @spawn="onSpawn(entry)"
         />
         <button type="button" class="addCard" @click="onAddCharacter">

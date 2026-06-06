@@ -20,6 +20,10 @@ export type RoomCharacterEntry = {
   state: CharacterStateSummary;
 };
 
+export type SpawnPopoverEntry = RoomCharacterEntry & {
+  inRoom: boolean;
+};
+
 export type RoomCharacterStateInput = {
   current_hp?: number | null;
   max_hp?: number | null;
@@ -48,6 +52,14 @@ export type RoomCharacterCreatePayload = {
 
 export async function getRoomCharacters(roomId: number) {
   const { data } = await http.get<RoomCharacterEntry[]>(`/rooms/${roomId}/characters`);
+  return data;
+}
+
+export async function linkRoomCharacter(roomId: number, characterId: number) {
+  const { data } = await http.post<RoomCharacterEntry>(
+    `/rooms/${roomId}/characters/link`,
+    { character_id: characterId },
+  );
   return data;
 }
 

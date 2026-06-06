@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { toRef } from "vue";
 import { useI18n } from "vue-i18n";
-import type { RoomCharacterEntry } from "@/infra/api/roomCharacters.api";
+import type { SpawnPopoverEntry } from "@/infra/api/roomCharacters.api";
 import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthenticatedAssetUrl";
 import { tokenInitial } from "@/features/table/utils/tokenDisplay";
 
 const props = defineProps<{
-  entry: RoomCharacterEntry;
+  entry: SpawnPopoverEntry;
   canSpawn: boolean;
   statsText?: string;
+  ownerLabel?: string;
 }>();
 
 const emit = defineEmits<{
@@ -39,7 +40,11 @@ function onClick() {
     </div>
     <span class="name">{{ entry.name }}</span>
     <span class="kind">{{ t(`room.characters.kindTag.${entry.kind}`) }}</span>
+    <span v-if="!entry.inRoom" class="notInRoom">{{ t("room.characters.notInRoom") }}</span>
     <span v-if="entry.player_name" class="sub">{{ entry.player_name }}</span>
+    <span v-if="ownerLabel" class="creator">
+      {{ t("room.characters.createdBy") }} {{ ownerLabel }}
+    </span>
     <div v-if="statsText" class="stats">{{ statsText }}</div>
   </button>
 </template>
@@ -110,8 +115,25 @@ function onClick() {
   color: var(--c-text-muted);
 }
 
+.notInRoom {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px dashed var(--c-border);
+  color: var(--c-text-muted);
+}
+
 .sub {
   font-size: 11px;
+  color: var(--c-text-muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.creator {
+  font-size: 10px;
   color: var(--c-text-muted);
   max-width: 100%;
   overflow: hidden;
