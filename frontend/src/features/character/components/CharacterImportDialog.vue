@@ -7,6 +7,7 @@ import {
 } from "@/infra/api/character.api";
 import { getBackendErrorMessage } from "@/infra/http/client";
 import BaseButton from "@/ui/base/BaseButton.vue";
+import BaseTextarea from "@/ui/base/BaseTextarea.vue";
 
 const props = defineProps<{
   open: boolean;
@@ -148,18 +149,19 @@ onUnmounted(() => stopFakeProgress());
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="backdrop" @click="close">
-      <div class="dialog" @click.stop>
+    <div v-if="open" class="backdrop">
+      <div class="dialog">
         <h3 class="title">{{ t("character.import.title") }}</h3>
         <p class="hint">{{ t("character.import.hint") }}</p>
 
-        <textarea
+        <BaseTextarea
           v-model="rawText"
-          class="textarea"
+          min-height="220px"
+          max-height="400px"
+          :rows="12"
           :placeholder="t('character.import.placeholder')"
           :maxlength="MAX_LENGTH"
           :disabled="loading"
-          rows="12"
         />
 
         <p class="counter">{{ rawText.length }} / {{ MAX_LENGTH }}</p>
@@ -223,29 +225,6 @@ onUnmounted(() => stopFakeProgress());
   line-height: 1.5;
 }
 
-.textarea {
-  width: 100%;
-  min-height: 220px;
-  resize: vertical;
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-1);
-  background: var(--c-surface-raised);
-  color: var(--c-text);
-  padding: 10px 12px;
-  font-size: 13px;
-  font-family: inherit;
-  line-height: 1.5;
-}
-
-.textarea:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.textarea:focus {
-  outline: none;
-  border-color: var(--c-accent);
-}
 
 .counter {
   margin: 0;

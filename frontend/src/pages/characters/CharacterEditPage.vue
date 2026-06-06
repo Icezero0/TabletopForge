@@ -332,7 +332,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload)
       <BaseButton variant="default" @click="openImportDialog">
         {{ t("character.import.aiImport") }}
       </BaseButton>
-      <BaseButton variant="primary" :loading="isSaving" :disabled="isSaving" @click="save">
+      <BaseButton variant="primary" :loading="isSaving" :disabled="isSaving || !isDirty" @click="save">
         {{ isEdit ? t("common.save") : t("character.create") }}
       </BaseButton>
     </template>

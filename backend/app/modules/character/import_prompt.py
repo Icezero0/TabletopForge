@@ -114,9 +114,9 @@ def _output_format_section() -> str:
 | `ability_scores` | object | 六维属性，键为 {abilities}；每项整数 1–30 |
 | `derived` | object | 派生数值，键见下表；每项为 `{{"value": number, "breakdown": string}}` |
 | `saving_throws` | object | 豁免加值，键为六维属性名；值为 `"+3"` / `"-1"` 格式字符串，未知可 `""` |
-| `saving_throw_profs` | object | 豁免熟练标记，键为六维属性名；值为 `true`（熟练）或 `false`；未提及可省略（默认 `{{}}`） |
+| `saving_throw_profs` | object | 豁免熟练标记；键为六维属性名，值为 `true`；**按规则 2.7 识别并填写**，无法判断的属性省略该键 |
 | `skill_values` | object | 技能加值，键为技能 key（见下）；值为 `"+3"` 格式字符串，未知可 `""` |
-| `skill_profs` | object | 技能熟练等级，键为技能 key；值为 `"none"` / `"proficient"` / `"expert"`；未提及可省略（默认 `{{}}`） |
+| `skill_profs` | object | 技能熟练等级；键为技能 key，值为 `"proficient"` 或 `"expert"`；**按规则 2.7 识别并填写**，无法判断的技能省略该键 |
 | `weapon_proficiencies` | string[] | 武器熟练，如 `["简易武器","长剑"]` |
 | `armor_proficiencies` | string[] | 护甲熟练 |
 | `tool_proficiencies` | string[] | 工具熟练 |
@@ -280,6 +280,23 @@ def build_import_prompt(raw_text: str) -> str:
 ### 2.6 输出约束
 - 响应体只能是**单个 JSON 对象**。
 - 必须包含输出格式章节中列出的**全部顶层键**及嵌套结构，不可省略键。
+
+### 2.7 熟练与精通识别
+
+填写 `saving_throw_profs` 和 `skill_profs` 时，按以下优先级判断：
+
+**（a）明确标注**：文本出现以下标记时，直接记录：
+- 熟练：实心圆 ●/◉/•、打勾 ✓/✔、字母 P、关键词"熟练""proficient""擅长"
+- 精通（专精）：双圆 ◎、星号 ★、字母 E、关键词"精通""专精""expertise"
+- 豁免熟练：常见于"力量豁免熟练""擅长：体质豁免"等表述
+
+**（b）数值反推**（文本无明确标注，但提供了技能/豁免加值时）：
+设属性调整值为 M，熟练加值为 P（可从 `derived.proficiency_bonus` 或角色等级推算）：
+- 加值 ≈ M + P → `"proficient"` / `true`
+- 加值 ≈ M + 2P → `"expert"`
+- 加值 ≈ M → `"none"`（无熟练，可省略该键）
+
+**（c）无法判断**：省略该键，不要猜测。
 
 ## 3. 任务工作流（WORKFLOW）
 

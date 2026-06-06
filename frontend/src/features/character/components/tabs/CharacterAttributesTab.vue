@@ -215,25 +215,12 @@ function setSkill(key: string, v: string) {
 
 // ── Prof toggles ───────────────────────────────────────────────────────────
 function toggleSaveProf(ability: string) {
-  const newProf = !saveProfs.value[ability];
-  const patches: Record<string, unknown> = {
-    saving_throw_profs: { ...saveProfs.value, [ability]: newProf },
-  };
-  if (isAutoSave(ability)) {
-    patches.saving_throws = { ...savingThrows.value, [ability]: calcSaveValue(ability, newProf) };
-  }
-  updateMultiple(patches);
+  update("saving_throw_profs", { ...saveProfs.value, [ability]: !saveProfs.value[ability] });
 }
 function cycleSkillProf(key: string) {
   const cur = skillProfs.value[key] ?? "none";
   const next: SkillProf = cur === "none" ? "proficient" : cur === "proficient" ? "expert" : "none";
-  const patches: Record<string, unknown> = {
-    skill_profs: { ...skillProfs.value, [key]: next },
-  };
-  if (isAutoSkill(key)) {
-    patches.skill_values = { ...skillValues.value, [key]: calcSkillValue(key, next) };
-  }
-  updateMultiple(patches);
+  update("skill_profs", { ...skillProfs.value, [key]: next });
 }
 
 function abilityShort(ability: string) {
@@ -449,12 +436,12 @@ const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
 
 /* Saving throws — 3-col compact */
 .saves-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; }
-.save-item { display: flex; align-items: center; gap: 4px; justify-self: start; }
+.save-item { display: flex; align-items: center; gap: 6px; justify-self: start; }
 .save-label { font-size: 12px; font-weight: 500; color: var(--c-text); white-space: nowrap; flex-shrink: 0; }
 
 /* Skills — 3-col compact */
 .skills-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 10px; }
-.skill-item { display: flex; align-items: center; gap: 4px; justify-self: start; max-width: 100%; }
+.skill-item { display: flex; align-items: center; gap: 6px; justify-self: start; max-width: 100%; }
 .skill-name {
   font-size: 12px; font-weight: 500; color: var(--c-text); white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 0;
@@ -486,7 +473,7 @@ const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
 
 /* Shared compact input */
 .compact-input {
-  width: 44px; flex-shrink: 0; text-align: left; border: 1px solid var(--c-border);
+  width: 44px; flex-shrink: 0; text-align: center; border: 1px solid var(--c-border);
   border-radius: var(--r-1); background: var(--c-surface); color: var(--c-text);
   padding: 3px 6px; font-size: 12px; font-family: inherit; outline: none;
 }
