@@ -14,12 +14,12 @@ export const SCENE_ORIGIN = -SCENE_GRID_HALF_EXTENT;
 export const SCENE_SPAN = SCENE_GRID_HALF_EXTENT * 2;
 
 export const TOKEN_BAND_BASE = 100;
-/** 绘制与 Token 同类 band 基准（effectiveZ = base + z_index） */
-export const DRAWING_BAND_BASE = TOKEN_BAND_BASE;
-/** 测距叠层：高于 Token/绘制，仅低于网格 */
-export const MEASURE_LAYER_Z = TOKEN_BAND_BASE + 99;
+/** 绘制 band 基准（effectiveZ = base + z_index，见 tabletop_scene.md §3.2） */
+export const DRAWING_BAND_BASE = 200;
+/** 测距叠层：高于绘制，低于网格 */
+export const MEASURE_LAYER_Z = DRAWING_BAND_BASE + 5;
 /** 网格叠层：SceneCanvas 内最上（不拦截指针） */
-export const GRID_LAYER_Z = TOKEN_BAND_BASE + 100;
+export const GRID_LAYER_Z = DRAWING_BAND_BASE + 10;
 
 export function sceneBandZ(zIndex: number, base = TOKEN_BAND_BASE) {
   return base + zIndex;
