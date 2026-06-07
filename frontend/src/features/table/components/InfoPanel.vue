@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import type { GameRole } from "@/features/room/types";
 import type { ActiveInspection } from "@/features/room/composables/useRoomInspection";
 import { getCharacter, type Character } from "@/infra/api/character.api";
+import { ABILITY_KEYS, DND5E_SKILLS, fmtMod } from "@/features/character/constants";
 import {
   getCharacterState,
   patchCharacterState,
@@ -98,6 +99,35 @@ const identitySummary = computed(() => {
   }
   return parts.join(" · ");
 });
+
+const ABILITY_SHORT: Record<string, string> = {
+  strength: "STR", dexterity: "DEX", constitution: "CON",
+  intelligence: "INT", wisdom: "WIS", charisma: "CHA",
+};
+
+const primaryPanel = computed(() =>
+  character.value?.token_configs?.find(tc => tc.is_primary)?.panel_initial ?? null
+);
+
+const savingThrows = computed(() => {
+  const st = primaryPanel.value?.saving_throws as Record<string, number | null> | undefined;
+  if (!st) return [];
+  return ABILITY_KEYS
+    .map(key => ({ key, value: st[key] ?? null }))
+    .filter((item): item is { key: string; value: number } => item.value != null);
+});
+
+const skillRows = computed(() => {
+  const sk = primaryPanel.value?.skills as Record<string, number | null> | undefined;
+  if (!sk) return [];
+  return DND5E_SKILLS
+    .map(s => ({ key: s.key, labelKey: s.labelKey, value: sk[s.key] ?? null }))
+    .filter((item): item is { key: string; labelKey: string; value: number } => item.value != null);
+});
+
+const inventoryItems = computed(() =>
+  (primaryPanel.value?.items ?? []) as { name: string; quantity: number; notes: string }[]
+);
 
 const abilityScores = computed(() => {
   const abilities = character.value?.attributes?.abilities;
@@ -251,6 +281,35 @@ function openFullEdit() {
           <span v-for="item in abilityScores" :key="item.key" class="abilityChip">
             {{ item.key.toUpperCase() }} {{ item.score }}
           </span>
+        </div>
+      </div>
+
+      <div v-if="savingThrows.length" class="section">
+        <h4 class="sectionTitle">{{ t("table.inspector.savingThrows") }}</h4>
+        <div class="chipRow">
+          <span v-for="st in savingThrows" :key="st.key" class="compactChip">
+            {{ ABILITY_SHORT[st.key] }} {{ fmtMod(st.value) }}
+          </span>
+        </div>
+      </div>
+
+      <div v-if="skillRows.length" class="section">
+        <h4 class="sectionTitle">{{ t("table.inspector.skills") }}</h4>
+        <div class="kvList">
+          <div v-for="sk in skillRows" :key="sk.key" class="kvRow">
+            <span class="kvLabel">{{ t(sk.labelKey) }}</span>
+            <span class="kvVal">{{ fmtMod(sk.value) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="inventoryItems.length" class="section">
+        <h4 class="sectionTitle">{{ t("table.inspector.inventory") }}</h4>
+        <div class="kvList">
+          <div v-for="(item, i) in inventoryItems" :key="i" class="kvRow">
+            <span class="kvLabel">{{ item.name }}</span>
+            <span class="kvVal muted">×{{ item.quantity }}</span>
+          </div>
         </div>
       </div>
 
@@ -449,6 +508,56 @@ function openFullEdit() {
 
 .stateReadonly {
   font-size: 13px;
+  color: var(--c-text-muted);
+}
+
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.compactChip {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--c-bg-subtle);
+  border: 1px solid var(--c-border);
+  color: var(--c-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.kvList {
+  display: grid;
+  gap: 1px;
+}
+
+.kvRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  padding: 2px 0;
+  gap: 8px;
+}
+
+.kvLabel {
+  color: var(--c-text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kvVal {
+  font-weight: 500;
+  color: var(--c-text);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.kvVal.muted {
+  font-weight: 400;
   color: var(--c-text-muted);
 }
 

@@ -88,6 +88,8 @@ const {
   createCharacter: createRoomCharacter,
   upsertEntry: upsertRoomCharacter,
   updateEntryState: updateRoomCharacterState,
+  setVisibility: setRoomCharacterVisibility,
+  removeEntry: removeRoomCharacter,
 } = useRoomCharacters(roomId);
 
 const { activeInspection, inspectCharacter, clearInspection } = useRoomInspection();
@@ -440,8 +442,47 @@ function handleInspectCharacter(payload: {
   inspectCharacter(payload);
 }
 
+async function handleRemoveRoomCharacter(roomCharacterId: number) {
+  try {
+    await removeRoomCharacter(roomCharacterId);
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error) || t("table.characterList.removeFailed"),
+      tone: "danger",
+    });
+  }
+}
+
+async function handleToggleCharacterVisibility(payload: {
+  roomCharacterId: number;
+  isHidden: boolean;
+}) {
+  try {
+    await setRoomCharacterVisibility(payload.roomCharacterId, payload.isHidden);
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error) || t("table.characterList.visibilityFailed"),
+      tone: "danger",
+    });
+  }
+}
+
 function viewportCenterPoint() {
   return mapViewportRef.value?.scenePointFromViewportCenter?.() ?? { x: 0, y: 0 };
+}
+
+async function handleLinkRoomCharacter(characterId: number) {
+  if (!roomId.value) return;
+  try {
+    const entry = await linkRoomCharacter(roomId.value, characterId);
+    upsertRoomCharacter(entry);
+    toasts.push({ message: t("room.characters.linked"), tone: "success" });
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error) || t("room.characters.linkFailed"),
+      tone: "danger",
+    });
+  }
 }
 
 async function handleSpawnCharacter(characterId: number) {
@@ -1042,6 +1083,10 @@ const characterById = computed(() => {
   return map;
 });
 
+const inRoomCharacterIds = computed(
+  () => new Set(roomCharacters.value.map((e) => e.character_id)),
+);
+
 const ownerNameByUserId = computed(() => {
   const map = new Map(roomMemberItems.value.map((member) => [member.id, member.name]));
   for (const entry of spawnPopoverEntries.value) {
@@ -1224,7 +1269,7 @@ async function handleCreateRoomPc(payload: {
   player_name: string;
   max_hp: number | null;
   armor_class: number | null;
-  file: File | null;
+  portrait_asset_id: number | null;
   spawnAfterCreate?: boolean;
 }) {
   if (!roomId.value) {
@@ -1246,7 +1291,7 @@ async function handleCreateRoomPc(payload: {
             armor_class: payload.armor_class,
           }
         : undefined,
-      file: payload.file ?? undefined,
+      portrait_asset_id: payload.portrait_asset_id ?? undefined,
     });
     closeAddCharacterDialog();
     characterPopoverOpen.value = true;
@@ -1269,7 +1314,7 @@ async function handleCreateRoomAdditional(payload: {
   race: string;
   class_name: string;
   backstory: string;
-  file: File | null;
+  portrait_asset_id: number | null;
   spawnAfterCreate?: boolean;
 }) {
   if (!roomId.value) {
@@ -1292,7 +1337,7 @@ async function handleCreateRoomAdditional(payload: {
       name: payload.name,
       identity,
       flavor,
-      file: payload.file ?? undefined,
+      portrait_asset_id: payload.portrait_asset_id ?? undefined,
     });
     closeAddCharacterDialog();
     characterPopoverOpen.value = true;
@@ -1315,7 +1360,7 @@ async function handleCreateRoomQuick(payload: {
   max_hp: number | null;
   armor_class: number | null;
   backstory: string;
-  file: File | null;
+  portrait_asset_id: number | null;
   spawnAfterCreate?: boolean;
 }) {
   if (!roomId.value) {
@@ -1340,7 +1385,7 @@ async function handleCreateRoomQuick(payload: {
             armor_class: payload.armor_class,
           }
         : undefined,
-      file: payload.file ?? undefined,
+      portrait_asset_id: payload.portrait_asset_id ?? undefined,
     });
     closeAddCharacterDialog();
     characterPopoverOpen.value = true;
@@ -1502,10 +1547,14 @@ watch(
             :game-role="currentUserGameRole"
             :current-user-display-name="currentUserDisplayName"
             :submitting="characterSubmitting"
+            :library-characters="libraryCharacters"
+            :library-loading="libraryLoading"
+            :in-room-character-ids="inRoomCharacterIds"
             @close="closeAddCharacterDialog"
             @create-pc="handleCreateRoomPc"
             @create-additional="handleCreateRoomAdditional"
             @create-quick="handleCreateRoomQuick"
+            @link-character="handleLinkRoomCharacter"
           />
         </template>
 
@@ -1552,12 +1601,15 @@ watch(
           />
           <InGameCharacterList
             :room-id="roomId"
-            :tokens="tabletopTokens"
-            :character-by-id="characterById"
+            :entries="roomCharacters"
             :owner-name-by-user-id="ownerNameByUserId"
+            :current-user-id="currentUserId ?? undefined"
             :loading="roomCharactersLoading"
             :game-role="currentUserGameRole"
             @inspect="handleInspectCharacter"
+            @add-character="openAddCharacterDialog"
+            @toggle-visibility="handleToggleCharacterVisibility"
+            @remove="handleRemoveRoomCharacter"
           />
           </div>
 

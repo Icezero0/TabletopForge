@@ -18,6 +18,7 @@ export type RoomCharacterEntry = {
   player_name: string;
   token_image_asset_id: number | null;
   state: CharacterStateSummary;
+  is_hidden: boolean;
 };
 
 export type SpawnPopoverEntry = RoomCharacterEntry & {
@@ -59,6 +60,22 @@ export async function linkRoomCharacter(roomId: number, characterId: number) {
   const { data } = await http.post<RoomCharacterEntry>(
     `/rooms/${roomId}/characters/link`,
     { character_id: characterId },
+  );
+  return data;
+}
+
+export async function deleteRoomCharacter(roomId: number, roomCharacterId: number) {
+  await http.delete(`/rooms/${roomId}/characters/${roomCharacterId}`);
+}
+
+export async function patchRoomCharacterVisibility(
+  roomId: number,
+  roomCharacterId: number,
+  isHidden: boolean,
+) {
+  const { data } = await http.patch<RoomCharacterEntry>(
+    `/rooms/${roomId}/characters/${roomCharacterId}/visibility`,
+    { is_hidden: isHidden },
   );
   return data;
 }

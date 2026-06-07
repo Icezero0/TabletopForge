@@ -572,6 +572,16 @@ class RoomTabletopService:
                 reason=ErrorReason.REQUEST_VALIDATION_FAILED,
             )
 
+        primary_config = next(
+            (cfg for cfg in (character.token_configs or []) if cfg.is_primary),
+            None,
+        )
+        spawn_asset_id = (
+            primary_config.asset_id
+            if primary_config and primary_config.asset_id is not None
+            else character.token_image_asset_id or character.portrait_asset_id
+        )
+
         token = await self.repo.create_token(
             db,
             room_id=room_id,
@@ -581,7 +591,7 @@ class RoomTabletopService:
             width=settings.grid_cell_ft,
             height=settings.grid_cell_ft,
             owner_user_id=user.id,
-            asset_id=character.token_image_asset_id or character.portrait_asset_id,
+            asset_id=spawn_asset_id,
             linked_character_id=character_id,
             token_type=TokenType.CHARACTER.value,
             z_index=next_z_index,

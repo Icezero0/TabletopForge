@@ -5,10 +5,10 @@ from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_reasons import ErrorReason
-from app.core.exceptions import BadRequestError, ForbiddenError
+from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.modules.assets.constants import AssetType
 from app.modules.assets.service import AssetService
-from app.modules.character.constants import CharacterKind, assert_room_character_kind, kind_value
+from app.modules.character.constants import CharacterKind, kind_value
 from app.modules.character.models import CharacterState
 from app.modules.character.presenter import present_character_state_summary
 from app.modules.character.schemas import CharacterStateCreate
@@ -17,6 +17,7 @@ from app.modules.rooms.characters.repository import RoomCharacterRepository
 from app.modules.rooms.characters.schemas import (
     RoomCharacterCreate,
     RoomCharacterEntryResponse,
+    RoomCharacterVisibilityPatch,
 )
 from app.modules.rooms.constants import GamePermission, GameRole
 from app.modules.rooms.game_permissions import require_game_permission
@@ -88,6 +89,7 @@ class RoomCharacterService:
             player_name=character.player_name,
             token_image_asset_id=character.token_image_asset_id,
             state=state_summary,
+            is_hidden=entry.is_hidden,
         )
 
     async def list_room_characters(
@@ -99,6 +101,8 @@ class RoomCharacterService:
     ) -> list[RoomCharacterEntryResponse]:
         game_role = await self._require_member_game_role(db, room_id=room_id, user=user)
         entries = await self.repo.list_by_room(db, room_id=room_id)
+        if game_role != GameRole.GM:
+            entries = [e for e in entries if not e.is_hidden]
         return [
             self._entry_response(
                 entry,
@@ -108,6 +112,85 @@ class RoomCharacterService:
             )
             for entry in entries
         ]
+
+    async def remove_room_character(
+        self,
+        db: AsyncSession,
+        *,
+        room_id: int,
+        room_character_id: int,
+        user: User,
+    ) -> None:
+        game_role = await self._require_member_game_role(db, room_id=room_id, user=user)
+        entry = await self.repo.get_by_id_and_room(
+            db,
+            room_character_id=room_character_id,
+            room_id=room_id,
+        )
+        if entry is None:
+            raise NotFoundError(
+                "Room character not found",
+                reason=ErrorReason.CHARACTER_NOT_FOUND,
+                details={"room_character_id": room_character_id},
+            )
+        if game_role != GameRole.GM and entry.character.owner_id != user.id:
+            raise ForbiddenError(
+                "You do not have permission to remove this character",
+                reason=ErrorReason.CHARACTER_PERMISSION_DENIED,
+                details={"room_character_id": room_character_id},
+            )
+        await self.repo.delete_by_id_and_room(
+            db,
+            room_character_id=room_character_id,
+            room_id=room_id,
+        )
+        await db.commit()
+
+    async def set_visibility(
+        self,
+        db: AsyncSession,
+        *,
+        room_id: int,
+        room_character_id: int,
+        user: User,
+        payload: RoomCharacterVisibilityPatch,
+    ) -> RoomCharacterEntryResponse:
+        game_role = await self._require_member_game_role(db, room_id=room_id, user=user)
+        if game_role != GameRole.GM:
+            raise ForbiddenError(
+                "Only GMs can manage character visibility",
+                reason=ErrorReason.ROOM_PERMISSION_DENIED,
+                details={"game_role": game_role},
+            )
+        existing = await self.repo.get_by_id_and_room(
+            db,
+            room_character_id=room_character_id,
+            room_id=room_id,
+        )
+        if existing is None:
+            raise NotFoundError(
+                "Room character not found",
+                reason=ErrorReason.CHARACTER_NOT_FOUND,
+                details={"room_character_id": room_character_id},
+            )
+        await self.repo.set_visibility(
+            db,
+            room_character_id=room_character_id,
+            is_hidden=payload.is_hidden,
+        )
+        await db.commit()
+        updated = await self.repo.get_by_id_and_room(
+            db,
+            room_character_id=room_character_id,
+            room_id=room_id,
+        )
+        assert updated is not None
+        return self._entry_response(
+            updated,
+            updated.character.state,
+            game_role=game_role,
+            viewer_user_id=user.id,
+        )
 
     async def create_room_character(
         self,
@@ -135,7 +218,6 @@ class RoomCharacterService:
             token_image_asset_id = payload.portrait_asset_id
 
         kind_value_str = kind_value(payload.kind)
-        assert_room_character_kind(game_role, kind_value_str)
 
         character = await self.character_service._create_character_record(
             db,
@@ -197,8 +279,6 @@ class RoomCharacterService:
                 reason=ErrorReason.CHARACTER_PERMISSION_DENIED,
                 details={"character_id": character_id},
             )
-
-        assert_room_character_kind(game_role, character.kind)
 
         existing = await self.repo.get_by_room_and_character(
             db,

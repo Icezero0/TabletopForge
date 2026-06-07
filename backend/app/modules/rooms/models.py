@@ -353,6 +353,7 @@ class RoomCharacter(Base):
         index=True,
     )
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default="false")
     added_by_user_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("users.id", ondelete="CASCADE"),

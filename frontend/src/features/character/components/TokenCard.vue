@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { toRef } from "vue";
 import { useI18n } from "vue-i18n";
-import { PencilSquareIcon, TrashIcon, PhotoIcon } from "@heroicons/vue/24/outline";
+import { PencilSquareIcon, TrashIcon, PhotoIcon, DocumentDuplicateIcon } from "@heroicons/vue/24/outline";
 import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthenticatedAssetUrl";
 import type { TokenConfigUpsert } from "@/infra/api/character.api";
 import AppIcon from "@/ui/base/AppIcon.vue";
@@ -14,6 +14,7 @@ const emit = defineEmits<{
   (e: "edit"): void;
   (e: "pickImage"): void;
   (e: "remove"): void;
+  (e: "copy"): void;
   (e: "update:name", v: string): void;
 }>();
 
@@ -46,6 +47,9 @@ const { url: imageUrl } = useAuthenticatedAssetUrl(assetId);
     <div class="token-actions">
       <button class="action-btn" :title="t('character.token.editPanel')" @click="emit('edit')">
         <AppIcon :icon="PencilSquareIcon" :size="16" />
+      </button>
+      <button v-if="!isPrimary" class="action-btn" :title="t('character.token.copySecondary')" @click="emit('copy')">
+        <AppIcon :icon="DocumentDuplicateIcon" :size="16" />
       </button>
       <button class="action-btn del" :title="t('common.delete')" @click="emit('remove')">
         <AppIcon :icon="TrashIcon" :size="16" />

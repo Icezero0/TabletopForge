@@ -67,6 +67,64 @@ class RoomCharacterRepository:
         )
         return result.scalar_one_or_none()
 
+    async def get_by_id_and_room(
+        self,
+        db: AsyncSession,
+        *,
+        room_character_id: int,
+        room_id: int,
+    ) -> RoomCharacter | None:
+        result = await db.execute(
+            select(RoomCharacter)
+            .where(
+                RoomCharacter.id == room_character_id,
+                RoomCharacter.room_id == room_id,
+            )
+            .options(
+                selectinload(RoomCharacter.character).selectinload(Character.state)
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def set_visibility(
+        self,
+        db: AsyncSession,
+        *,
+        room_character_id: int,
+        is_hidden: bool,
+    ) -> RoomCharacter:
+        result = await db.execute(
+            select(RoomCharacter)
+            .where(RoomCharacter.id == room_character_id)
+            .options(
+                selectinload(RoomCharacter.character).selectinload(Character.state)
+            )
+        )
+        entry = result.scalar_one()
+        entry.is_hidden = is_hidden
+        await db.flush()
+        await db.refresh(entry)
+        return entry
+
+    async def delete_by_id_and_room(
+        self,
+        db: AsyncSession,
+        *,
+        room_character_id: int,
+        room_id: int,
+    ) -> bool:
+        result = await db.execute(
+            select(RoomCharacter).where(
+                RoomCharacter.id == room_character_id,
+                RoomCharacter.room_id == room_id,
+            )
+        )
+        entry = result.scalar_one_or_none()
+        if entry is None:
+            return False
+        await db.delete(entry)
+        return True
+
     async def is_character_in_room(
         self,
         db: AsyncSession,

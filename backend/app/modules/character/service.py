@@ -64,14 +64,15 @@ class CharacterService:
                 source_asset_id = cfg.asset_id
                 if source_asset_id is None and cfg.is_primary:
                     source_asset_id = portrait_asset_id
-                resource = await self.library_service.create_resource_from_asset_id(
-                    db,
-                    owner_id=owner_id,
-                    type=ResourceType.TOKEN,
-                    name=cfg.name or character_name,
-                    asset_id=source_asset_id,
-                )
-                cfg = cfg.model_copy(update={"library_resource_id": resource.id})
+                if source_asset_id is not None:
+                    resource = await self.library_service.create_resource_from_asset_id(
+                        db,
+                        owner_id=owner_id,
+                        type=ResourceType.TOKEN,
+                        name=cfg.name or character_name,
+                        asset_id=source_asset_id,
+                    )
+                    cfg = cfg.model_copy(update={"library_resource_id": resource.id})
             result.append(cfg)
         return result
 

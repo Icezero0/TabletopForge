@@ -100,6 +100,22 @@ function removeSecondary(idx: number) {
   push([...primary, ...secondaryConfigs().filter((_, i) => i !== idx)]);
 }
 
+function copySecondary(idx: number) {
+  const src = secondaryConfigs()[idx];
+  const copy: TokenConfigUpsert = {
+    id: undefined,
+    is_primary: false,
+    name: src.name,
+    asset_id: src.asset_id,
+    library_resource_id: src.library_resource_id,
+    sort_order: secondaryConfigs().length,
+    panel_initial: src.panel_initial ? { ...src.panel_initial } : undefined,
+  };
+  const primary = primaryConfig() ? [primaryConfig()!] : [];
+  const secs = secondaryConfigs();
+  push([...primary, ...secs.slice(0, idx + 1), copy, ...secs.slice(idx + 1)]);
+}
+
 function patchAt(target: TokenConfigUpsert, patch: Partial<TokenConfigUpsert>) {
   push(props.modelValue.map(c => c === target ? { ...c, ...patch } : c));
 }
@@ -218,6 +234,7 @@ function closeEditor() {
         @edit="openEditor(cfg)"
         @pick-image="triggerImagePick(cfg)"
         @remove="removeSecondary(i)"
+        @copy="copySecondary(i)"
         @update:name="patchAt(cfg, { name: $event })"
       />
     </div>

@@ -134,6 +134,7 @@ async function loadCharacter(id: number) {
       is_primary: tc.is_primary,
       name: tc.name,
       asset_id: tc.asset_id,
+      library_resource_id: tc.library_resource_id,
       panel_initial: tc.panel_initial,
       sort_order: tc.sort_order,
     }));

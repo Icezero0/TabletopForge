@@ -19,12 +19,17 @@ class RoomCharacterEntryResponse(BaseModel):
     player_name: str
     token_image_asset_id: int | None
     state: CharacterStateSummary
+    is_hidden: bool = False
 
     model_config = {"from_attributes": True}
 
 
 class RoomCharacterLinkRequest(BaseModel):
     character_id: int
+
+
+class RoomCharacterVisibilityPatch(BaseModel):
+    is_hidden: bool
 
 
 class RoomCharacterCreate(BaseModel):

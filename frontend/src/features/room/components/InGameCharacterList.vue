@@ -1,70 +1,29 @@
 <script setup lang="ts">
-import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import type { GameRole } from "@/features/room/types";
 import type { RoomCharacterEntry } from "@/infra/api/roomCharacters.api";
-import type { RoomToken } from "@/infra/api/rooms.api";
 import InGameCharacterListItem from "@/features/room/components/InGameCharacterListItem.vue";
 import FloatingPanel from "@/features/table/components/FloatingPanel.vue";
 
-export type OnFieldTokenRow = {
-  token: RoomToken;
-  entry?: RoomCharacterEntry;
-  instanceLabel?: string;
-  ownerLabel: string;
-};
-
 const props = defineProps<{
   roomId: number;
-  tokens: RoomToken[];
-  characterById: Map<number, RoomCharacterEntry>;
+  entries: RoomCharacterEntry[];
   ownerNameByUserId: Map<number, string>;
+  currentUserId?: number;
   loading?: boolean;
   gameRole?: GameRole | "unknown";
 }>();
 
 const emit = defineEmits<{
-  inspect: [payload: { characterId: number; tokenId?: number; tokenInstanceName?: string }];
+  inspect: [payload: { characterId: number }];
+  addCharacter: [];
+  toggleVisibility: [payload: { roomCharacterId: number; isHidden: boolean }];
+  remove: [roomCharacterId: number];
 }>();
 
 const { t } = useI18n();
 
-const onFieldRows = computed((): OnFieldTokenRow[] => {
-  const linked = props.tokens.filter(
-    (token) => token.visible && token.linked_character_id != null,
-  );
-  const byCharacter = new Map<number, RoomToken[]>();
-  for (const token of linked) {
-    const characterId = token.linked_character_id!;
-    const group = byCharacter.get(characterId) ?? [];
-    group.push(token);
-    byCharacter.set(characterId, group);
-  }
-
-  const rows: OnFieldTokenRow[] = [];
-  for (const group of byCharacter.values()) {
-    const sorted = [...group].sort((a, b) => a.id - b.id);
-    sorted.forEach((token, index) => {
-      const characterId = token.linked_character_id!;
-      const entry = props.characterById.get(characterId);
-      const ownerId = entry?.owner_id ?? token.linked_character_owner_id ?? null;
-      const ownerLabel =
-        (ownerId != null ? props.ownerNameByUserId.get(ownerId) : null) ??
-        (ownerId != null ? `User #${ownerId}` : "—");
-      rows.push({
-        token,
-        entry,
-        instanceLabel:
-          sorted.length > 1 && index > 0
-            ? t("table.characterList.instanceLabel", { n: index + 1 })
-            : undefined,
-        ownerLabel,
-      });
-    });
-  }
-
-  return rows.sort((a, b) => a.token.z_index - b.token.z_index || a.token.id - b.token.id);
-});
+const isGm = () => props.gameRole === "GM";
 </script>
 
 <template>
@@ -76,20 +35,26 @@ const onFieldRows = computed((): OnFieldTokenRow[] => {
     :storage-key="`room-${roomId}-character-list`"
   >
     <div class="listBody">
+      <div v-if="isGm() || gameRole === 'PL'" class="toolbar">
+        <button class="addBtn" @click="emit('addCharacter')">
+          + {{ t("table.characterList.addCharacter") }}
+        </button>
+      </div>
       <p v-if="loading" class="muted">{{ t("common.loading") }}</p>
-      <p v-else-if="onFieldRows.length === 0" class="muted">
-        {{ t("table.characterList.emptyOnField") }}
+      <p v-else-if="entries.length === 0" class="muted empty">
+        {{ t("table.characterList.empty") }}
       </p>
       <ul v-else class="list">
         <InGameCharacterListItem
-          v-for="row in onFieldRows"
-          :key="row.token.id"
-          :token="row.token"
-          :entry="row.entry"
-          :instance-label="row.instanceLabel"
-          :owner-label="row.ownerLabel"
+          v-for="entry in entries"
+          :key="entry.room_character_id"
+          :entry="entry"
+          :owner-label="(entry.owner_id != null ? ownerNameByUserId.get(entry.owner_id) : null) ?? `User #${entry.owner_id}`"
           :game-role="gameRole"
+          :current-user-id="currentUserId"
           @inspect="emit('inspect', $event)"
+          @toggle-visibility="emit('toggleVisibility', $event)"
+          @remove="emit('remove', $event)"
         />
       </ul>
     </div>
@@ -100,12 +65,40 @@ const onFieldRows = computed((): OnFieldTokenRow[] => {
 .listBody {
   min-width: 240px;
   max-width: 320px;
+  padding: 8px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+  padding-right: 4px;
+}
+
+.addBtn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--c-border);
+  background: var(--c-bg-subtle);
+  color: var(--c-text);
+  cursor: pointer;
+}
+
+.addBtn:hover {
+  border-color: var(--c-accent);
+  color: var(--c-accent);
 }
 
 .muted {
   margin: 0;
   font-size: 13px;
   color: var(--c-text-muted);
+}
+
+.empty {
+  text-align: center;
+  padding: 12px 0;
 }
 
 .list {

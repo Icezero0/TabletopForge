@@ -1,6 +1,8 @@
 import { ref, type Ref } from "vue";
 import {
+  deleteRoomCharacter,
   getRoomCharacters,
+  patchRoomCharacterVisibility,
   postRoomCharacter,
   type CharacterStateSummary,
   type RoomCharacterCreatePayload,
@@ -64,6 +66,23 @@ export function useRoomCharacters(roomId: Ref<number | null>) {
     });
   }
 
+  async function removeEntry(roomCharacterId: number) {
+    const id = roomId.value;
+    if (!id) throw new Error("Missing room id");
+    await deleteRoomCharacter(id, roomCharacterId);
+    characters.value = characters.value.filter(
+      (e) => e.room_character_id !== roomCharacterId,
+    );
+  }
+
+  async function setVisibility(roomCharacterId: number, isHidden: boolean) {
+    const id = roomId.value;
+    if (!id) throw new Error("Missing room id");
+    const updated = await patchRoomCharacterVisibility(id, roomCharacterId, isHidden);
+    upsertEntry(updated);
+    return updated;
+  }
+
   return {
     characters,
     isLoading,
@@ -72,6 +91,8 @@ export function useRoomCharacters(roomId: Ref<number | null>) {
     createCharacter,
     upsertEntry,
     updateEntryState,
+    removeEntry,
+    setVisibility,
     refresh: fetchCharacters,
   };
 }

@@ -49,6 +49,7 @@ from app.modules.rooms.tabletop.service import RoomTabletopService
 from app.modules.rooms.characters.schemas import (
     RoomCharacterEntryResponse,
     RoomCharacterLinkRequest,
+    RoomCharacterVisibilityPatch,
 )
 from app.modules.rooms.characters.service import RoomCharacterService
 from app.modules.rooms.room.schemas import (
@@ -543,6 +544,44 @@ async def link_room_character(
         room_id=room_id,
         user=current_user,
         character_id=payload.character_id,
+    )
+
+
+@router.delete(
+    "/{room_id}/characters/{room_character_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_room_character(
+    room_id: int,
+    room_character_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    await room_characters_service.remove_room_character(
+        db,
+        room_id=room_id,
+        room_character_id=room_character_id,
+        user=current_user,
+    )
+
+
+@router.patch(
+    "/{room_id}/characters/{room_character_id}/visibility",
+    response_model=RoomCharacterEntryResponse,
+)
+async def patch_room_character_visibility(
+    room_id: int,
+    room_character_id: int,
+    payload: RoomCharacterVisibilityPatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RoomCharacterEntryResponse:
+    return await room_characters_service.set_visibility(
+        db,
+        room_id=room_id,
+        room_character_id=room_character_id,
+        user=current_user,
+        payload=payload,
     )
 
 

@@ -3,11 +3,19 @@ import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import type { GameRole } from "@/features/room/types";
+import type { Character } from "@/infra/api/character.api";
 import { buildPathWithReturn } from "@/composables/useNavigationReturn";
 import BaseButton from "@/ui/base/BaseButton.vue";
+import BaseInput from "@/ui/base/BaseInput.vue";
+import BaseTextarea from "@/ui/base/BaseTextarea.vue";
+import CharacterPickerItem from "@/features/room/components/CharacterPickerItem.vue";
 import { useToastsStore } from "@/stores/toasts.store";
+import AvatarCropDialog from "@/ui/domain/avatar/AvatarCropDialog.vue";
+import { uploadAsset } from "@/infra/api/assets.api";
+import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthenticatedAssetUrl";
+import { tokenInitial } from "@/features/table/utils/tokenDisplay";
 
-type Step = "choose" | "pc" | "additional" | "quick";
+type Step = "choose" | "pc" | "additional" | "quick" | "pick";
 
 const props = defineProps<{
   open: boolean;
@@ -15,6 +23,9 @@ const props = defineProps<{
   gameRole: GameRole | "unknown";
   currentUserDisplayName?: string;
   submitting?: boolean;
+  libraryCharacters?: Character[];
+  libraryLoading?: boolean;
+  inRoomCharacterIds?: Set<number>;
 }>();
 
 const emit = defineEmits<{
@@ -24,7 +35,7 @@ const emit = defineEmits<{
     player_name: string;
     max_hp: number | null;
     armor_class: number | null;
-    file: File | null;
+    portrait_asset_id: number | null;
     spawnAfterCreate?: boolean;
   }];
   createAdditional: [payload: {
@@ -32,7 +43,7 @@ const emit = defineEmits<{
     race: string;
     class_name: string;
     backstory: string;
-    file: File | null;
+    portrait_asset_id: number | null;
     spawnAfterCreate?: boolean;
   }];
   createQuick: [payload: {
@@ -40,9 +51,10 @@ const emit = defineEmits<{
     max_hp: number | null;
     armor_class: number | null;
     backstory: string;
-    file: File | null;
+    portrait_asset_id: number | null;
     spawnAfterCreate?: boolean;
   }];
+  linkCharacter: [characterId: number];
 }>();
 
 const { t } = useI18n();
@@ -55,23 +67,26 @@ const step = ref<Step>("choose");
 const pcName = ref("");
 const pcMaxHp = ref("");
 const pcAc = ref("");
-const pcFile = ref<File | null>(null);
 
 const addName = ref("");
 const addRace = ref("");
 const addClass = ref("");
 const addBackstory = ref("");
-const addFile = ref<File | null>(null);
 
 const quickName = ref("");
 const quickMaxHp = ref("");
 const quickAc = ref("");
 const quickBackstory = ref("");
-const quickFile = ref<File | null>(null);
 
+const pickSearch = ref("");
 const spawnAfterCreate = ref(false);
 
-const importKind = computed(() => (isGm.value ? "npc" : "pc_main"));
+const avatarAssetId = ref<number | null>(null);
+const cropOpen = ref(false);
+const pickedFile = ref<File | null>(null);
+const uploadingAvatar = ref(false);
+const avatarFileInputEl = ref<HTMLInputElement | null>(null);
+const { url: avatarUrl } = useAuthenticatedAssetUrl(avatarAssetId);
 
 const fullEditorKind = computed(() => {
   if (isGm.value) return "npc";
@@ -83,7 +98,15 @@ const title = computed(() => {
   if (step.value === "pc") return t("room.characters.pcQuickTitle");
   if (step.value === "additional") return t("room.characters.additionalTitle");
   if (step.value === "quick") return t("room.characters.gmQuickTitle");
+  if (step.value === "pick") return t("room.characters.pickFromLibrary");
   return t("room.characters.chooseTitle");
+});
+
+const filteredLibrary = computed(() => {
+  const chars = props.libraryCharacters ?? [];
+  const q = pickSearch.value.trim().toLowerCase();
+  if (!q) return chars;
+  return chars.filter((c) => c.name.toLowerCase().includes(q));
 });
 
 function resetForm() {
@@ -91,18 +114,18 @@ function resetForm() {
   pcName.value = "";
   pcMaxHp.value = "";
   pcAc.value = "";
-  pcFile.value = null;
   addName.value = "";
   addRace.value = "";
   addClass.value = "";
   addBackstory.value = "";
-  addFile.value = null;
   quickName.value = "";
   quickMaxHp.value = "";
   quickAc.value = "";
   quickBackstory.value = "";
-  quickFile.value = null;
+  pickSearch.value = "";
   spawnAfterCreate.value = false;
+  avatarAssetId.value = null;
+  pickedFile.value = null;
 }
 
 watch(
@@ -117,13 +140,31 @@ function close() {
   emit("close");
 }
 
-function onFileChange(event: Event, target: "pc" | "additional" | "quick") {
-  const file = (event.target as HTMLInputElement).files?.[0];
+function openAvatarPicker() {
+  avatarFileInputEl.value?.click();
+}
+
+function onAvatarPick(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0];
   if (!file) return;
-  if (!file.type.startsWith("image/")) return;
-  if (target === "pc") pcFile.value = file;
-  else if (target === "additional") addFile.value = file;
-  else quickFile.value = file;
+  pickedFile.value = file;
+  cropOpen.value = true;
+  (e.target as HTMLInputElement).value = "";
+}
+
+async function onCropDone(file: File) {
+  uploadingAvatar.value = true;
+  try {
+    const asset = await uploadAsset(file, "image");
+    avatarAssetId.value = asset.id;
+  } finally {
+    uploadingAvatar.value = false;
+    pickedFile.value = null;
+  }
+}
+
+function onCropCancel() {
+  pickedFile.value = null;
 }
 
 function parseOptionalInt(raw: string | number | null | undefined): number | null {
@@ -146,7 +187,7 @@ function submitPc() {
     player_name: props.currentUserDisplayName?.trim() ?? "",
     max_hp: parseOptionalInt(pcMaxHp.value),
     armor_class: parseOptionalInt(pcAc.value),
-    file: pcFile.value,
+    portrait_asset_id: avatarAssetId.value,
     spawnAfterCreate: spawnAfterCreate.value,
   });
 }
@@ -162,7 +203,7 @@ function submitAdditional() {
     race: addRace.value.trim(),
     class_name: addClass.value.trim(),
     backstory: addBackstory.value.trim(),
-    file: addFile.value,
+    portrait_asset_id: avatarAssetId.value,
     spawnAfterCreate: spawnAfterCreate.value,
   });
 }
@@ -178,33 +219,15 @@ function submitQuick() {
     max_hp: parseOptionalInt(quickMaxHp.value),
     armor_class: parseOptionalInt(quickAc.value),
     backstory: quickBackstory.value.trim(),
-    file: quickFile.value,
+    portrait_asset_id: avatarAssetId.value,
     spawnAfterCreate: spawnAfterCreate.value,
   });
 }
 
-function openImportDialog() {
-  const base = buildPathWithReturn(
-    "/characters/new",
-    `/rooms/${props.roomId}`,
-    true,
-  );
-  const query =
-    typeof base === "object"
-      ? {
-          ...base.query,
-          roomId: String(props.roomId),
-          kind: importKind.value,
-          openCharacterPopover: "1",
-          openImport: "1",
-        }
-      : {
-          roomId: String(props.roomId),
-          kind: importKind.value,
-          openCharacterPopover: "1",
-          openImport: "1",
-        };
-  void router.push({ path: "/characters/new", query });
+function pickCharacter(char: Character) {
+  const alreadyIn = props.inRoomCharacterIds?.has(char.id) ?? false;
+  if (alreadyIn) return;
+  emit("linkCharacter", char.id);
   close();
 }
 
@@ -234,176 +257,229 @@ function openFullEditor() {
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="backdrop" @click="close">
+    <div v-if="open" class="backdrop" @click="step === 'choose' || step === 'pick' ? close() : undefined">
       <div class="dialog" @click.stop>
-      <h3 class="title">{{ title }}</h3>
+        <h3 class="title">{{ title }}</h3>
 
-      <div v-if="step === 'choose'" class="chooseGrid">
-        <template v-if="isGm">
-          <button type="button" class="choiceCard" @click="openFullEditor">
-            <span class="choiceTitle">{{ t("room.characters.gmFull") }}</span>
-            <span class="choiceHint">{{ t("room.characters.gmFullHint") }}</span>
+        <div v-if="step === 'choose'" class="chooseGrid">
+          <button type="button" class="choiceCard" @click="step = 'pick'">
+            <span class="choiceTitle">{{ t("room.characters.pickFromLibrary") }}</span>
+            <span class="choiceHint">{{ t("room.characters.pickFromLibraryHint") }}</span>
           </button>
-          <button type="button" class="choiceCard" @click="step = 'quick'">
-            <span class="choiceTitle">{{ t("room.characters.gmQuick") }}</span>
-            <span class="choiceHint">{{ t("room.characters.gmQuickHint") }}</span>
-          </button>
-        </template>
-        <template v-else>
-          <button type="button" class="choiceCard" @click="step = 'pc'">
-            <span class="choiceTitle">{{ t("room.characters.kindPc") }}</span>
-            <span class="choiceHint">{{ t("room.characters.kindPcHint") }}</span>
-          </button>
-          <button type="button" class="choiceCard" @click="step = 'additional'">
-            <span class="choiceTitle">{{ t("room.characters.kindAdditional") }}</span>
-            <span class="choiceHint">{{ t("room.characters.kindAdditionalHint") }}</span>
-          </button>
-        </template>
-        <button type="button" class="choiceCard importCard" @click="openImportDialog">
-          <span class="choiceTitle">{{ t("character.import.fromRoom") }}</span>
-          <span class="choiceHint">{{ t("character.import.hint") }}</span>
-        </button>
-      </div>
+          <template v-if="isGm">
+            <button type="button" class="choiceCard" @click="step = 'quick'">
+              <span class="choiceTitle">{{ t("room.characters.gmQuick") }}</span>
+              <span class="choiceHint">{{ t("room.characters.gmQuickHint") }}</span>
+            </button>
+            <button type="button" class="choiceCard" @click="openFullEditor">
+              <span class="choiceTitle">{{ t("room.characters.gmFull") }}</span>
+              <span class="choiceHint">{{ t("room.characters.gmFullHint") }}</span>
+            </button>
+          </template>
+          <template v-else>
+            <button type="button" class="choiceCard" @click="step = 'pc'">
+              <span class="choiceTitle">{{ t("room.characters.kindPc") }}</span>
+              <span class="choiceHint">{{ t("room.characters.kindPcHint") }}</span>
+            </button>
+            <button type="button" class="choiceCard" @click="step = 'additional'">
+              <span class="choiceTitle">{{ t("room.characters.kindAdditional") }}</span>
+              <span class="choiceHint">{{ t("room.characters.kindAdditionalHint") }}</span>
+            </button>
+          </template>
+        </div>
 
-      <form v-else-if="step === 'pc'" class="form" @submit.prevent="submitPc">
-        <label class="field">
-          <span>{{ t("room.characters.nameLabel") }}</span>
-          <input v-model="pcName" type="text" required />
-        </label>
-        <label class="field">
-          <span>{{ t("room.characters.boundPlayer") }}</span>
-          <input
-            type="text"
-            :value="currentUserDisplayName ?? ''"
-            readonly
-            class="readonlyInput"
+        <form v-else-if="step === 'pc'" class="form" @submit.prevent="submitPc">
+          <div class="avatarArea" @click="openAvatarPicker">
+            <div class="avatarCircle" :class="{ uploading: uploadingAvatar }">
+              <img v-if="avatarUrl" :src="avatarUrl" class="avatarImg" alt="" />
+              <span v-else class="avatarInitial">{{ tokenInitial(pcName || "?") }}</span>
+            </div>
+            <span class="avatarHint">{{ t("room.characters.changeAvatar") }}</span>
+          </div>
+          <label class="field">
+            <span>{{ t("room.characters.nameLabel") }}</span>
+            <BaseInput v-model="pcName" />
+          </label>
+          <label class="field">
+            <span>{{ t("room.characters.boundPlayer") }}</span>
+            <BaseInput :model-value="currentUserDisplayName ?? ''" disabled />
+          </label>
+          <div class="row">
+            <label class="field">
+              <span>{{ t("room.characters.maxHpLabel") }}</span>
+              <BaseInput v-model="pcMaxHp" type="number" />
+            </label>
+            <label class="field">
+              <span>{{ t("room.characters.acLabel") }}</span>
+              <BaseInput v-model="pcAc" type="number" />
+            </label>
+          </div>
+          <label class="toggleField">
+            <span>{{ t("table.assets.spawnAfterCreate") }}</span>
+            <span class="toggle" :class="{ on: spawnAfterCreate }" @click="spawnAfterCreate = !spawnAfterCreate">
+              <span class="toggleThumb" />
+            </span>
+          </label>
+          <BaseButton type="button" variant="default" @click="openFullEditor">
+            {{ t("room.characters.fullEditor") }}
+          </BaseButton>
+          <div class="actions">
+            <BaseButton type="button" variant="default" @click="step = 'choose'">
+              {{ t("common.back") }}
+            </BaseButton>
+            <BaseButton
+              type="button"
+              variant="primary"
+              :disabled="submitting"
+              :loading="submitting"
+              @click="submitPc"
+            >
+              {{ t("room.characters.create") }}
+            </BaseButton>
+          </div>
+        </form>
+
+        <form v-else-if="step === 'quick'" class="form" @submit.prevent="submitQuick">
+          <div class="avatarArea" @click="openAvatarPicker">
+            <div class="avatarCircle" :class="{ uploading: uploadingAvatar }">
+              <img v-if="avatarUrl" :src="avatarUrl" class="avatarImg" alt="" />
+              <span v-else class="avatarInitial">{{ tokenInitial(quickName || "?") }}</span>
+            </div>
+            <span class="avatarHint">{{ t("room.characters.changeAvatar") }}</span>
+          </div>
+          <label class="field">
+            <span>{{ t("room.characters.nameLabel") }}</span>
+            <BaseInput v-model="quickName" />
+          </label>
+          <div class="row">
+            <label class="field">
+              <span>{{ t("room.characters.maxHpLabel") }}</span>
+              <BaseInput v-model="quickMaxHp" type="number" />
+            </label>
+            <label class="field">
+              <span>{{ t("room.characters.acLabel") }}</span>
+              <BaseInput v-model="quickAc" type="number" />
+            </label>
+          </div>
+          <label class="field">
+            <span>{{ t("room.characters.backstoryLabel") }}</span>
+            <BaseTextarea v-model="quickBackstory" :rows="4" min-height="80px" />
+          </label>
+          <label class="toggleField">
+            <span>{{ t("table.assets.spawnAfterCreate") }}</span>
+            <span class="toggle" :class="{ on: spawnAfterCreate }" @click="spawnAfterCreate = !spawnAfterCreate">
+              <span class="toggleThumb" />
+            </span>
+          </label>
+          <div class="actions">
+            <BaseButton type="button" variant="default" @click="step = 'choose'">
+              {{ t("common.back") }}
+            </BaseButton>
+            <BaseButton
+              type="button"
+              variant="primary"
+              :disabled="submitting"
+              :loading="submitting"
+              @click="submitQuick"
+            >
+              {{ t("room.characters.create") }}
+            </BaseButton>
+          </div>
+        </form>
+
+        <form v-else-if="step === 'additional'" class="form" @submit.prevent="submitAdditional">
+          <div class="avatarArea" @click="openAvatarPicker">
+            <div class="avatarCircle" :class="{ uploading: uploadingAvatar }">
+              <img v-if="avatarUrl" :src="avatarUrl" class="avatarImg" alt="" />
+              <span v-else class="avatarInitial">{{ tokenInitial(addName || "?") }}</span>
+            </div>
+            <span class="avatarHint">{{ t("room.characters.changeAvatar") }}</span>
+          </div>
+          <label class="field">
+            <span>{{ t("room.characters.nameLabel") }}</span>
+            <BaseInput v-model="addName" />
+          </label>
+          <div class="row">
+            <label class="field">
+              <span>{{ t("room.characters.raceLabel") }}</span>
+              <BaseInput v-model="addRace" />
+            </label>
+            <label class="field">
+              <span>{{ t("room.characters.classLabel") }}</span>
+              <BaseInput v-model="addClass" />
+            </label>
+          </div>
+          <label class="field">
+            <span>{{ t("room.characters.backstoryLabel") }}</span>
+            <BaseTextarea v-model="addBackstory" :rows="4" min-height="80px" />
+          </label>
+          <label class="toggleField">
+            <span>{{ t("table.assets.spawnAfterCreate") }}</span>
+            <span class="toggle" :class="{ on: spawnAfterCreate }" @click="spawnAfterCreate = !spawnAfterCreate">
+              <span class="toggleThumb" />
+            </span>
+          </label>
+          <div class="actions">
+            <BaseButton type="button" variant="default" @click="step = 'choose'">
+              {{ t("common.back") }}
+            </BaseButton>
+            <BaseButton
+              type="button"
+              variant="primary"
+              :disabled="submitting"
+              :loading="submitting"
+              @click="submitAdditional"
+            >
+              {{ t("room.characters.create") }}
+            </BaseButton>
+          </div>
+        </form>
+
+        <div v-else-if="step === 'pick'" class="pickStep">
+          <BaseInput
+            v-model="pickSearch"
+            :placeholder="t('room.characters.searchPlaceholder')"
           />
-        </label>
-        <div class="row">
-          <label class="field">
-            <span>{{ t("room.characters.maxHpLabel") }}</span>
-            <input v-model="pcMaxHp" type="text" inputmode="numeric" />
-          </label>
-          <label class="field">
-            <span>{{ t("room.characters.acLabel") }}</span>
-            <input v-model="pcAc" type="text" inputmode="numeric" />
-          </label>
+          <p v-if="libraryLoading" class="muted">{{ t("common.loading") }}</p>
+          <p v-else-if="filteredLibrary.length === 0" class="muted">
+            {{ t("room.characters.pickEmpty") }}
+          </p>
+          <ul v-else class="pickList">
+            <CharacterPickerItem
+              v-for="char in filteredLibrary"
+              :key="char.id"
+              :character="char"
+              :in-room="inRoomCharacterIds?.has(char.id)"
+              :in-room-label="t('room.characters.alreadyInRoom')"
+              @pick="pickCharacter"
+            />
+          </ul>
+          <div class="actions">
+            <BaseButton type="button" variant="default" @click="step = 'choose'">
+              {{ t("common.back") }}
+            </BaseButton>
+          </div>
         </div>
-        <label class="field">
-          <span>{{ t("room.characters.tokenImageLabel") }}</span>
-          <input type="file" accept="image/*" @change="onFileChange($event, 'pc')" />
-        </label>
-        <label class="checkboxField">
-          <input v-model="spawnAfterCreate" type="checkbox" />
-          <span>{{ t("table.assets.spawnAfterCreate") }}</span>
-        </label>
-        <BaseButton type="button" variant="default" @click="openFullEditor">
-          {{ t("room.characters.fullEditor") }}
-        </BaseButton>
-        <div class="actions">
-          <BaseButton type="button" variant="default" @click="step = 'choose'">
-            {{ t("common.back") }}
-          </BaseButton>
-          <BaseButton
-            type="button"
-            variant="primary"
-            :disabled="submitting"
-            :loading="submitting"
-            @click="submitPc"
-          >
-            {{ t("room.characters.create") }}
-          </BaseButton>
-        </div>
-      </form>
 
-      <form v-else-if="step === 'quick'" class="form" @submit.prevent="submitQuick">
-        <label class="field">
-          <span>{{ t("room.characters.nameLabel") }}</span>
-          <input v-model="quickName" type="text" required />
-        </label>
-        <div class="row">
-          <label class="field">
-            <span>{{ t("room.characters.maxHpLabel") }}</span>
-            <input v-model="quickMaxHp" type="text" inputmode="numeric" />
-          </label>
-          <label class="field">
-            <span>{{ t("room.characters.acLabel") }}</span>
-            <input v-model="quickAc" type="text" inputmode="numeric" />
-          </label>
-        </div>
-        <label class="field">
-          <span>{{ t("room.characters.backstoryLabel") }}</span>
-          <textarea v-model="quickBackstory" rows="4" />
-        </label>
-        <label class="field">
-          <span>{{ t("room.characters.tokenImageLabel") }}</span>
-          <input type="file" accept="image/*" @change="onFileChange($event, 'quick')" />
-        </label>
-        <label class="checkboxField">
-          <input v-model="spawnAfterCreate" type="checkbox" />
-          <span>{{ t("table.assets.spawnAfterCreate") }}</span>
-        </label>
-        <div class="actions">
-          <BaseButton type="button" variant="default" @click="step = 'choose'">
-            {{ t("common.back") }}
-          </BaseButton>
-          <BaseButton
-            type="button"
-            variant="primary"
-            :disabled="submitting"
-            :loading="submitting"
-            @click="submitQuick"
-          >
-            {{ t("room.characters.create") }}
-          </BaseButton>
-        </div>
-      </form>
-
-      <form v-else class="form" @submit.prevent="submitAdditional">
-        <label class="field">
-          <span>{{ t("room.characters.nameLabel") }}</span>
-          <input v-model="addName" type="text" required />
-        </label>
-        <div class="row">
-          <label class="field">
-            <span>{{ t("room.characters.raceLabel") }}</span>
-            <input v-model="addRace" type="text" />
-          </label>
-          <label class="field">
-            <span>{{ t("room.characters.classLabel") }}</span>
-            <input v-model="addClass" type="text" />
-          </label>
-        </div>
-        <label class="field">
-          <span>{{ t("room.characters.backstoryLabel") }}</span>
-          <textarea v-model="addBackstory" rows="4" />
-        </label>
-        <label class="field">
-          <span>{{ t("room.characters.tokenImageLabel") }}</span>
-          <input type="file" accept="image/*" @change="onFileChange($event, 'additional')" />
-        </label>
-        <label class="checkboxField">
-          <input v-model="spawnAfterCreate" type="checkbox" />
-          <span>{{ t("table.assets.spawnAfterCreate") }}</span>
-        </label>
-        <div class="actions">
-          <BaseButton type="button" variant="default" @click="step = 'choose'">
-            {{ t("common.back") }}
-          </BaseButton>
-          <BaseButton
-            type="button"
-            variant="primary"
-            :disabled="submitting"
-            :loading="submitting"
-            @click="submitAdditional"
-          >
-            {{ t("room.characters.create") }}
-          </BaseButton>
-        </div>
-      </form>
+        <input
+          ref="avatarFileInputEl"
+          type="file"
+          accept="image/*"
+          style="display: none"
+          @change="onAvatarPick"
+        />
       </div>
     </div>
   </Teleport>
+
+  <AvatarCropDialog
+    v-model="cropOpen"
+    :file="pickedFile"
+    :title="t('profile.crop.title')"
+    :output-size="512"
+    @done="onCropDone"
+    @cancel="onCropCancel"
+  />
 </template>
 
 <style scoped>
@@ -437,10 +513,6 @@ function openFullEditor() {
 .chooseGrid {
   display: grid;
   gap: 10px;
-}
-
-.importCard {
-  margin-top: 4px;
 }
 
 .choiceCard {
@@ -478,6 +550,53 @@ function openFullEditor() {
   gap: 12px;
 }
 
+.avatarArea {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.avatarCircle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--c-accent) 15%, var(--c-bg));
+  border: 2px solid var(--c-border);
+  transition: border-color 0.15s, opacity 0.15s;
+}
+
+.avatarArea:hover .avatarCircle {
+  border-color: var(--c-accent);
+}
+
+.avatarCircle.uploading {
+  opacity: 0.5;
+}
+
+.avatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatarInitial {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--c-accent);
+}
+
+.avatarHint {
+  font-size: 11px;
+  color: var(--c-text-muted);
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -486,27 +605,45 @@ function openFullEditor() {
   color: var(--c-text);
 }
 
-.checkboxField {
+.toggleField {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
   font-size: 13px;
   color: var(--c-text);
+  cursor: pointer;
+  user-select: none;
 }
 
-.field input,
-.field textarea,
-.readonlyInput {
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--c-border);
-  background: var(--c-bg);
-  color: var(--c-text);
+.toggle {
+  width: 36px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--c-border);
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s;
+  cursor: pointer;
 }
 
-.readonlyInput {
-  opacity: 0.85;
-  cursor: default;
+.toggle.on {
+  background: var(--c-accent, var(--c-primary));
+}
+
+.toggleThumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.toggle.on .toggleThumb {
+  transform: translateX(16px);
 }
 
 .row {
@@ -520,5 +657,33 @@ function openFullEditor() {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 4px;
+}
+
+.pickStep {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.muted {
+  font-size: 13px;
+  color: var(--c-text-muted);
+  margin: 0;
+}
+
+.hint {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.pickList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
 }
 </style>
