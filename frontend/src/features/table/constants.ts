@@ -8,6 +8,10 @@ export const GRID_CELL_PX_STEP = 4;
 
 /** Scene-space half-size of the repeating grid (total span = 2 × half). */
 export const SCENE_GRID_HALF_EXTENT = 32000;
+/** Scene-space origin (top-left) for full-scene SVG layers. */
+export const SCENE_ORIGIN = -SCENE_GRID_HALF_EXTENT;
+/** Scene-space width/height for full-scene SVG layers. */
+export const SCENE_SPAN = SCENE_GRID_HALF_EXTENT * 2;
 
 export const TOKEN_BAND_BASE = 100;
 /** 绘制与 Token 同类 band 基准（effectiveZ = base + z_index） */

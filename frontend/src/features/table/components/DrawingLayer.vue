@@ -4,7 +4,7 @@ import type { RoomDrawing } from "@/infra/api/rooms.api";
 import type { GameRole } from "@/features/room/types";
 import type { TableToolMode } from "@/features/table/types";
 import type { DrawPreview } from "@/features/table/composables/useDrawingTools";
-import { DRAWING_BAND_BASE, DRAWING_PICK_STROKE_HIT } from "@/features/table/constants";
+import { DRAWING_BAND_BASE, DRAWING_PICK_STROKE_HIT, SCENE_ORIGIN, SCENE_SPAN } from "@/features/table/constants";
 import {
   brushPathFromPoints,
   findTopDrawingAt,
@@ -209,9 +209,14 @@ function previewLabelPos(p: DrawPreview) {
       handTool: toolMode === 'hand',
       drawMode: canDraw,
     }"
+    :viewBox="`${SCENE_ORIGIN} ${SCENE_ORIGIN} ${SCENE_SPAN} ${SCENE_SPAN}`"
     :style="{
-      ...(drawCursor ? { cursor: drawCursor } : {}),
+      left: `${SCENE_ORIGIN}px`,
+      top: `${SCENE_ORIGIN}px`,
+      width: `${SCENE_SPAN}px`,
+      height: `${SCENE_SPAN}px`,
       zIndex: DRAWING_BAND_BASE,
+      ...(drawCursor ? { cursor: drawCursor } : {}),
     }"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
@@ -220,6 +225,15 @@ function previewLabelPos(p: DrawPreview) {
     @click="onPickClick"
     @contextmenu="onDrawingContextMenu"
   >
+    <rect
+      v-if="canDraw"
+      :x="SCENE_ORIGIN"
+      :y="SCENE_ORIGIN"
+      :width="SCENE_SPAN"
+      :height="SCENE_SPAN"
+      fill="transparent"
+      pointer-events="all"
+    />
     <g
       v-for="drawing in sortedDrawings"
       v-show="drawing.id !== editingDrawingId"
@@ -436,11 +450,10 @@ function previewLabelPos(p: DrawPreview) {
 <style scoped>
 .drawingLayer {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
+  top: 0;
+  left: 0;
   overflow: visible;
+  pointer-events: none;
 }
 
 .drawingLayer.interactive.drawMode {
