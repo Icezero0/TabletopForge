@@ -51,7 +51,12 @@ const { url: imageUrl } = useAuthenticatedAssetUrl(assetId);
 
     <div class="body">
       <div class="name" :title="resource.name">{{ resource.name }}</div>
-      <div class="type">{{ t(typeMeta.labelKey) }}</div>
+      <div class="type-row">
+        <span class="type">{{ t(typeMeta.labelKey) }}</span>
+        <span class="usage-badge" :class="resource.usage_count > 0 ? 'in-use' : 'not-in-use'">
+          {{ resource.usage_count > 0 ? t('library.card.inUse') : t('library.card.notInUse') }}
+        </span>
+      </div>
       <div v-if="resourceTags(resource).length" class="tags">
         <span v-for="tag in resourceTags(resource)" :key="tag" class="tag">{{ tag }}</span>
       </div>
@@ -86,9 +91,6 @@ const { url: imageUrl } = useAuthenticatedAssetUrl(assetId);
       </div>
     </Transition>
 
-    <div v-if="resource.usage_count > 0" class="usage-badge" :title="t('library.card.inUse')">
-      {{ resource.usage_count }}
-    </div>
   </div>
 
   <!-- Fullscreen viewer -->
@@ -149,6 +151,13 @@ const { url: imageUrl } = useAuthenticatedAssetUrl(assetId);
   text-overflow: ellipsis;
 }
 
+.type-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .type {
   font-size: 12px;
   color: var(--c-text-muted);
@@ -175,16 +184,22 @@ const { url: imageUrl } = useAuthenticatedAssetUrl(assetId);
 }
 
 .usage-badge {
-  position: absolute;
-  bottom: 46px;
-  left: 8px;
-  background: var(--c-accent);
-  color: #fff;
+  display: inline-block;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   border-radius: 10px;
   padding: 1px 7px;
   pointer-events: none;
+  white-space: nowrap;
+  line-height: 1.6;
+}
+.usage-badge.in-use {
+  background: #16a34a;
+  color: #fff;
+}
+.usage-badge.not-in-use {
+  background: #9ca3af;
+  color: #fff;
 }
 
 .fade-enter-active,

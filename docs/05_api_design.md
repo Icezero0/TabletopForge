@@ -1,6 +1,6 @@
 # TabletopForge HTTP API 设计
 
-版本：v0.2  
+版本：v0.3  
 状态：Draft
 
 ---
@@ -100,6 +100,13 @@ DELETE /rooms/{room_id}/maps/{map_id}
 POST   /rooms/{room_id}/drawings
 PATCH  /rooms/{room_id}/drawings/{drawing_id}
 DELETE /rooms/{room_id}/drawings
+POST   /rooms/{room_id}/tokens
+PATCH  /rooms/{room_id}/tokens/{token_id}
+DELETE /rooms/{room_id}/tokens/{token_id}
+GET    /rooms/{room_id}/characters
+POST   /rooms/{room_id}/characters
+POST   /rooms/{room_id}/characters/link
+POST   /rooms/{room_id}/characters/{character_id}/spawn-token
 ```
 
 **个人备忘录**（`room_personal_memos`）：仅当前登录用户读写本人在该房间的记录；须为房间成员，否则 `403`。不通过 WebSocket 同步。
@@ -181,30 +188,38 @@ DELETE /characters/{character_id}   # 删除角色（仅 owner 可操作）
 说明：
 
 - `GET /characters` 支持分页参数 `page` / `page_size`，仅返回当前用户的角色。
-- `POST /characters` / `PATCH` 请求体包含 `name`、`system`、`portrait_asset_id`、`identity`、
-  `flavor`、`attributes`、`features`、`spells`、`equipment`、`extras` 等字段。
+- `POST /characters` / `PATCH` 请求体包含 `name`、`system`、`portrait_asset_id`、
+  `token_image_asset_id`、`identity`、`flavor`、`attributes`、`features`、`spells`、
+  `equipment`、`extras`、`token_configs` 等字段。
+- `token_configs` 为角色 Token 配置 upsert 列表，支持 `is_primary`、`name`、`asset_id`、
+  `library_resource_id`、`panel_initial`、`sort_order`。主要 Token 缺少 `library_resource_id`
+  时，后端可自动创建 `library_resources(type=token)` 并维护 usage count。
 - `PATCH` 仅更新请求体中显式包含的字段（`model_fields_set`），允许传 `null` 清空可空字段
   （`portrait_asset_id`、`spells`）而不影响其他字段。
-- 权限：需登录；写操作仅限 `owner_id == current_user.id`。
+- 权限：需登录；全局角色写操作仅限 `owner_id == current_user.id`；已加入房间的角色可被房间成员按 `game_role` 读取状态摘要。
 
 ---
 
-# 11 角色状态 API（未落地，规划态）
+# 11 角色状态 API（已实现）
 
 ```text
 GET   /characters/{character_id}/state
 PATCH /characters/{character_id}/state
-POST  /characters/{character_id}/effects
-DELETE /characters/{character_id}/effects/{effect_id}
 ```
+
+说明：
+
+- 角色创建时自动 bootstrap `character_states`。
+- owner 可编辑自己的角色状态；GM 可编辑房间内任意角色状态。
+- NPC 对 PL/OB 隐藏精确 HP，返回 public summary 时以 `damage_taken` 等信息替代。
 
 触发事件：
 
-- 后续实现 CharacterState 层时定义。
+- `character_state_updated`
 
 ---
 
-# 12 跑团桌面 Tabletop API（MVP，扁平 room 模型）
+# 12 跑团桌面 Tabletop API（MVP，扁平 room 模型，已实现）
 
 > Campaign / Session / Scene 多场景 API 见下文「后续」；MVP 以房间为边界，见 `working-note/04-map-core.md`。
 
@@ -217,6 +232,10 @@ DELETE /rooms/{room_id}/maps/{map_id}
 POST   /rooms/{room_id}/drawings
 PATCH  /rooms/{room_id}/drawings/{drawing_id}
 DELETE /rooms/{room_id}/drawings          # body: { "ids": [1, 2] }
+POST   /rooms/{room_id}/tokens            # multipart: name/x/y/file?/linked_character_id?
+PATCH  /rooms/{room_id}/tokens/{token_id}
+DELETE /rooms/{room_id}/tokens/{token_id}
+POST   /rooms/{room_id}/characters/{character_id}/spawn-token
 ```
 
 权限（`game_role`，见 `08` §6.4）：
@@ -228,12 +247,14 @@ DELETE /rooms/{room_id}/drawings          # body: { "ids": [1, 2] }
 | POST/PATCH/DELETE maps | ✓ | — | — |
 | POST/PATCH drawings | ✓ | ✓ | — |
 | DELETE drawings（含批量） | ✓ | ✓ | — |
+| POST/PATCH/DELETE tokens | ✓ | 自己拥有/绑定的 Token | — |
+| spawn character token | ✓ | 自己拥有的角色 | — |
 
-`GET /tabletop` 响应：`settings`、`maps[]`、`drawings[]` 快照。
+`GET /tabletop` 响应：`settings`、`maps[]`、`drawings[]`、`tokens[]` 快照。
 
-`POST /maps`：上传 `map_background` asset 并创建 `room_maps` 行；MVP **每房间至多 1 张底图**。
+`POST /maps`：上传 `map_background` asset 并创建 `room_maps` 行；当前支持每房间多张地图，由 z_index 与前端 Map Popover 管理选择/切换。
 
-触发 WS 事件：`map_created`、`map_updated`、`map_deleted`、`drawing_created`、`drawing_updated`、`drawing_deleted`、`tabletop_settings_updated`（见 `06_websocket_protocol.md`）。
+触发 WS 事件：`tabletop_settings_updated`、`map_created`、`map_updated`、`map_deleted`、`drawing_created`、`drawing_updated`、`drawing_deleted`、`token_created`、`token_updated`、`token_deleted`、`character_state_updated`（见 `06_websocket_protocol.md`）。
 
 ---
 
@@ -253,7 +274,9 @@ PATCH  /scenes/{scene_id}/map
 
 ---
 
-# 13 Token API
+# 13 Token API（旧场景模型规划，非当前实现）
+
+当前实现见 §12 的扁平 room tabletop API。下列 scene 路径为多场景模型后续规划。
 
 ```text
 POST   /scenes/{scene_id}/tokens
@@ -274,20 +297,20 @@ DELETE /tokens/{token_id}
 
 触发事件：
 
-- 后续实现 Token 模块后定义。
+- 后续多场景 Token 模块实现后定义；当前 room token 事件见 §12。
 
 ---
 
 # 14 Asset API
 
-当前后端地基只实现与业务无关的基础图片资产：
+当前后端已实现基础资产与部分业务资产：
 
 - `avatar`：用户头像。
 - `feedback_image`：反馈图片。
 - `image`：用户资源库中的通用图片。
 - `audio`：用户资源库中的通用音频。
-
-地图、Token、handout 等游戏语义层用途后续在业务模块落地时再扩展。
+- `map_background`：房间地图底图。
+- `token_image`：地图 Token / 角色 Token 图片。
 
 ```text
 POST   /assets
@@ -317,7 +340,7 @@ POST   /feedback
 # 15 资源库 API
 
 个人资源库（`library_resources`）。资源类型由 `type` 字段决定字段要求；
-当前实现：`map_background`（必须上传图片）。
+当前实现：`map_background`、`token`、`sound`。
 
 ```text
 GET    /library/resources
@@ -329,9 +352,9 @@ DELETE /library/resources/{resource_id}
 
 说明：
 
-- `GET /library/resources`：分页列出当前用户的资源，支持 `?type=map_background`。
+- `GET /library/resources`：分页列出当前用户的资源，支持 `?type=map_background|token|sound`。
 - `POST /library/resources`：multipart 创建资源；通用字段 `type`、`name`；
-  `map_background` 类型需附带 `image` 文件字段，写入 `IMAGE` 类型 asset（享受 hash 去重）。
+  `map_background` / `token` 类型需附带 `image` 文件字段，`sound` 类型需附带 `audio` 文件字段（享受 hash 去重）。
 - `PATCH /library/resources/{id}`：仅限改名（`name` 字段），仅所有者可操作。
 - `DELETE /library/resources/{id}`：`usage_count > 0` 时返回 409（桌面上有引用）；
   删除成功后自动递减 `assets.ref_count`，归零则清理物理文件。
@@ -353,7 +376,7 @@ GET  /rooms/{room_id}/dice-rolls
 
 ---
 
-# 16 操作日志 API
+# 17 操作日志 API
 
 ```text
 GET /rooms/{room_id}/operation-logs
@@ -369,7 +392,7 @@ GET /rooms/{room_id}/operation-logs
 
 ---
 
-# 17 反馈 API
+# 18 反馈 API
 
 ```text
 POST /feedback
@@ -383,7 +406,7 @@ PATCH /feedback/admin/{feedback_id}
 
 ---
 
-# 18 错误返回
+# 19 错误返回
 
 建议统一错误结构：
 

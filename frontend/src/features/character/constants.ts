@@ -143,3 +143,31 @@ export function defaultEquipment() {
     currency: { cp: 0, sp: 0, ep: 0, gp: 0, pp: 0 },
   };
 }
+
+export function defaultTokenPanelInitial(isPrimary: boolean) {
+  return {
+    ability_scores: { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 },
+    ac: null as number | null,
+    hp_current: null as number | null,
+    hp_max: null as number | null,
+    speed: null as number | null,
+    pp: null as number | null,
+    saving_throws: {} as Record<string, number | null>,
+    skills: {} as Record<string, number | null>,
+    items: [] as { name: string; quantity: number; notes: string }[],
+    weapons: [] as unknown[],
+    armor: [] as unknown[],
+    inherit_items_from_character: isPrimary,
+  };
+}
+
+export function defaultTokenConfig(isPrimary: boolean, sortOrder = 0) {
+  return {
+    id: undefined as number | undefined,
+    is_primary: isPrimary,
+    name: isPrimary ? "主要 Token" : "",
+    asset_id: null as number | null,
+    panel_initial: defaultTokenPanelInitial(isPrimary),
+    sort_order: sortOrder,
+  };
+}

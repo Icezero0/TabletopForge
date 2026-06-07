@@ -6,6 +6,30 @@ from pydantic import BaseModel, Field
 from app.modules.character.constants import CharacterKind
 
 
+class TokenConfigResponse(BaseModel):
+    id: int
+    character_id: int
+    is_primary: bool
+    name: str
+    asset_id: int | None
+    library_resource_id: int | None = None
+    panel_initial: dict[str, Any]
+    sort_order: int
+
+    model_config = {"from_attributes": True}
+
+
+class TokenConfigUpsert(BaseModel):
+    """Used in create/patch. id=None means create new; id set means update existing."""
+    id: int | None = None
+    is_primary: bool = False
+    name: str = Field(default="", max_length=100)
+    asset_id: int | None = None
+    library_resource_id: int | None = None
+    panel_initial: dict[str, Any] = Field(default_factory=dict)
+    sort_order: int = 0
+
+
 class CharacterStateSummary(BaseModel):
     current_hp: int | None
     max_hp: int | None
@@ -60,6 +84,7 @@ class CharacterResponse(BaseModel):
     spells: dict[str, Any] | None
     equipment: dict[str, Any]
     extras: dict[str, Any]
+    token_configs: list[TokenConfigResponse] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime | None
 
@@ -107,6 +132,7 @@ class CharacterCreate(BaseModel):
     spells: dict[str, Any] | None = None
     equipment: dict[str, Any] = Field(default_factory=dict)
     extras: dict[str, Any] = Field(default_factory=dict)
+    token_configs: list[TokenConfigUpsert] = Field(default_factory=list)
     state: CharacterStateCreate | None = None
 
 
@@ -126,3 +152,4 @@ class CharacterPatch(BaseModel):
     spells: dict[str, Any] | None = None
     equipment: dict[str, Any] | None = None
     extras: dict[str, Any] | None = None
+    token_configs: list[TokenConfigUpsert] | None = None

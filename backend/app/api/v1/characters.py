@@ -74,8 +74,9 @@ async def create_character(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> CharacterResponse:
-    data = payload.model_dump()
-    state = data.pop("state", None)
+    token_configs = payload.token_configs or None
+    state = payload.state
+    data = payload.model_dump(exclude={"state", "token_configs"})
     kind = data.get("kind")
     if kind is not None:
         data["kind"] = kind.value if hasattr(kind, "value") else kind
@@ -83,6 +84,7 @@ async def create_character(
         db,
         user=current_user,
         state=state,
+        token_configs=token_configs,
         **data,
     )
     return CharacterResponse.model_validate(character)
@@ -108,10 +110,13 @@ async def update_character(
     current_user: User = Depends(get_current_user),
 ) -> CharacterResponse:
     patch_fields = {
-        k: v for k, v in payload.model_dump().items() if k in payload.model_fields_set
+        k: v for k, v in payload.model_dump(exclude={"token_configs"}).items()
+        if k in payload.model_fields_set
     }
     if "kind" in patch_fields and patch_fields["kind"] is not None:
         patch_fields["kind"] = patch_fields["kind"].value
+    if "token_configs" in payload.model_fields_set:
+        patch_fields["token_configs"] = payload.token_configs
     character = await character_service.update_character(
         db, character_id=character_id, user=current_user, patch_fields=patch_fields
     )

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -68,6 +68,49 @@ class Character(Base):
         uselist=False,
         cascade="all, delete-orphan",
     )
+    token_configs = relationship(
+        "CharacterTokenConfig",
+        back_populates="character",
+        cascade="all, delete-orphan",
+        order_by="(CharacterTokenConfig.is_primary.desc(), CharacterTokenConfig.sort_order)",
+    )
+
+
+class CharacterTokenConfig(Base):
+    __tablename__ = "character_token_configs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    character_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("characters.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    is_primary: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    name: Mapped[str] = mapped_column(String(100), nullable=False, default="", server_default="")
+    asset_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("assets.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    library_resource_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("library_resources.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    panel_initial: Mapped[dict] = mapped_column(
+        JSON, nullable=False, default=dict, server_default="{}"
+    )
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    character = relationship("Character", back_populates="token_configs")
+    asset = relationship("Asset", foreign_keys=[asset_id])
 
 
 class CharacterState(Base):

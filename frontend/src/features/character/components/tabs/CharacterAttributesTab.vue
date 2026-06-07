@@ -6,6 +6,8 @@ import {
   abilityMod, fmtMod,
 } from "@/features/character/constants";
 import BaseTagInput from "@/ui/base/BaseTagInput.vue";
+import AbilityScoresGrid from "@/features/character/components/AbilityScoresGrid.vue";
+import SkillSaveCompactList, { type CompactRow } from "@/features/character/components/SkillSaveCompactList.vue";
 
 const props = defineProps<{
   modelValue: Record<string, unknown>;
@@ -227,6 +229,26 @@ function abilityShort(ability: string) {
   return t(ABILITY_LABEL_KEYS[ability as keyof typeof ABILITY_LABEL_KEYS]).slice(0, 2);
 }
 
+// ── Rows for SkillSaveCompactList ──────────────────────────────────────────
+const saveRows = computed<CompactRow[]>(() =>
+  ABILITY_KEYS.map(ability => ({
+    key: ability,
+    label: abilityShort(ability),
+    value: saveDisplayValue(ability),
+    placeholder: savePlaceholder(ability),
+    profState: (saveProfs.value[ability] ? "proficient" : "none") as CompactRow["profState"],
+  })),
+);
+const skillRows = computed<CompactRow[]>(() =>
+  DND5E_SKILLS.map(sk => ({
+    key: sk.key,
+    label: t(sk.labelKey),
+    value: skillDisplayValue(sk.key),
+    placeholder: skillPlaceholder(sk.key),
+    profState: (skillProfs.value[sk.key] ?? "none") as CompactRow["profState"],
+  })),
+);
+
 // ── Proficiencies ────────────────────────────────────────────────────────────
 const weaponProfs = computed(() => (modelSnapshot().weapon_proficiencies as string[]) ?? []);
 const armorProfs = computed(() => (modelSnapshot().armor_proficiencies as string[]) ?? []);
@@ -239,22 +261,10 @@ const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
     <!-- Ability scores -->
     <div class="section">
       <div class="section-title">{{ t("character.attributes.abilityScores") }}</div>
-      <div class="scores-grid">
-        <div v-for="ability in ABILITY_KEYS" :key="ability" class="score-box">
-          <div class="score-label">{{ t(ABILITY_LABEL_KEYS[ability]) }}</div>
-          <div class="score-stepper">
-            <button class="score-step-btn" @click="setScore(ability, String(Math.max(1, (scores[ability] ?? 10) - 1)))">−</button>
-            <input
-              type="number"
-              class="score-input"
-              :value="scores[ability]"
-              @change="setScore(ability, ($event.target as HTMLInputElement).value)"
-            />
-            <button class="score-step-btn" @click="setScore(ability, String(Math.min(30, (scores[ability] ?? 10) + 1)))">+</button>
-          </div>
-          <div class="score-mod">{{ fmtMod(abilityMod(scores[ability] ?? 10)) }}</div>
-        </div>
-      </div>
+      <AbilityScoresGrid
+        :model-value="scores"
+        @update:model-value="v => update('ability_scores', v)"
+      />
     </div>
 
     <!-- Derived stats -->
@@ -289,47 +299,23 @@ const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
     <!-- Saving throws -->
     <div class="section">
       <div class="section-title">{{ t("character.attributes.savingThrows") }}</div>
-      <div class="saves-grid">
-        <div v-for="ability in ABILITY_KEYS" :key="ability" class="save-item">
-          <button
-            class="prof-dot"
-            :class="{ proficient: !!saveProfs[ability] }"
-            :title="saveProfs[ability] ? '熟练' : ''"
-            @click="toggleSaveProf(ability)"
-          />
-          <span class="save-label">{{ abilityShort(ability) }}</span>
-          <input
-            type="text"
-            class="compact-input"
-            :value="saveDisplayValue(ability)"
-            :placeholder="savePlaceholder(ability)"
-            @input="setSave(ability, ($event.target as HTMLInputElement).value)"
-          />
-        </div>
-      </div>
+      <SkillSaveCompactList
+        :rows="saveRows"
+        :show-prof-dots="true"
+        @update-value="(key, val) => setSave(key, val)"
+        @toggle-prof="toggleSaveProf"
+      />
     </div>
 
     <!-- Skills -->
     <div class="section">
       <div class="section-title">{{ t("character.attributes.skills") }}</div>
-      <div class="skills-grid">
-        <div v-for="skill in DND5E_SKILLS" :key="skill.key" class="skill-item">
-          <button
-            class="prof-dot"
-            :class="skillProfs[skill.key] ?? 'none'"
-            :title="skillProfs[skill.key] === 'proficient' ? '熟练' : skillProfs[skill.key] === 'expert' ? '专精' : ''"
-            @click="cycleSkillProf(skill.key)"
-          />
-          <span class="skill-name">{{ t(skill.labelKey) }}</span>
-          <input
-            type="text"
-            class="compact-input"
-            :value="skillDisplayValue(skill.key)"
-            :placeholder="skillPlaceholder(skill.key)"
-            @input="setSkill(skill.key, ($event.target as HTMLInputElement).value)"
-          />
-        </div>
-      </div>
+      <SkillSaveCompactList
+        :rows="skillRows"
+        :show-prof-dots="true"
+        @update-value="(key, val) => setSkill(key, val)"
+        @toggle-prof="cycleSkillProf"
+      />
     </div>
 
     <!-- Weapon + Armor + Tool proficiencies -->
@@ -382,34 +368,6 @@ const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
 .field { display: grid; gap: 5px; }
 .label { font-size: 12px; font-weight: 500; color: var(--c-text-muted); }
 
-/* Ability scores */
-.scores-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-.score-box {
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  border: 1px solid var(--c-border); border-radius: var(--r-2);
-  padding: 8px 4px; background: var(--c-surface);
-}
-.score-label { font-size: 11px; color: var(--c-text-muted); text-align: center; }
-.score-stepper { display: flex; align-items: center; gap: 2px; }
-.score-step-btn {
-  background: var(--c-surface-raised); border: 1px solid var(--c-border);
-  border-radius: var(--r-1); color: var(--c-text-muted); cursor: pointer;
-  font-size: 14px; font-weight: 600; line-height: 1;
-  padding: 2px 6px; height: 32px; transition: background 0.12s, color 0.12s;
-  flex-shrink: 0;
-}
-.score-step-btn:hover { background: var(--c-hover); color: var(--c-text); }
-.score-input {
-  width: 36px; text-align: center; border: 1px solid var(--c-border);
-  border-radius: var(--r-1); background: var(--c-surface-raised);
-  color: var(--c-text); font-size: 16px; font-weight: 600; padding: 4px 2px; outline: none;
-  -moz-appearance: textfield;
-}
-.score-input:focus { border-color: var(--c-accent); }
-.score-input::-webkit-outer-spin-button,
-.score-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-.score-mod { font-size: 14px; font-weight: 500; color: var(--c-text); }
-
 /* Derived stats */
 .derived-grid { display: grid; gap: 5px; }
 .derived-row { display: grid; grid-template-columns: 100px 58px 1fr 68px; gap: 6px; align-items: center; }
@@ -434,49 +392,4 @@ const languages = computed(() => (modelSnapshot().languages as string[]) ?? []);
 .auto-btn:hover { background: var(--c-hover); color: var(--c-text); }
 .auto-btn-spacer { height: 24px; }
 
-/* Saving throws — 3-col compact */
-.saves-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; }
-.save-item { display: flex; align-items: center; gap: 6px; justify-self: start; }
-.save-label { font-size: 12px; font-weight: 500; color: var(--c-text); white-space: nowrap; flex-shrink: 0; }
-
-/* Skills — 3-col compact */
-.skills-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px 10px; }
-.skill-item { display: flex; align-items: center; gap: 6px; justify-self: start; max-width: 100%; }
-.skill-name {
-  font-size: 12px; font-weight: 500; color: var(--c-text); white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 0;
-}
-
-/* Prof dots — 三态: 空心 / 圆环 / 圆环+内圆 */
-.prof-dot {
-  position: relative;
-  width: 14px; height: 14px; border-radius: 50%;
-  border: 2px solid var(--c-border); background: transparent;
-  cursor: pointer; flex-shrink: 0; padding: 0;
-  transition: border-color 0.12s, border-width 0.12s;
-}
-.prof-dot.proficient {
-  border: 3px solid var(--c-primary);
-}
-.prof-dot.expert {
-  border: 3px solid var(--c-primary);
-}
-.prof-dot.expert::after {
-  content: '';
-  position: absolute;
-  top: 50%; left: 50%;
-  width: 4px; height: 4px;
-  border-radius: 50%;
-  background: var(--c-primary);
-  transform: translate(-50%, -50%);
-}
-
-/* Shared compact input */
-.compact-input {
-  width: 44px; flex-shrink: 0; text-align: center; border: 1px solid var(--c-border);
-  border-radius: var(--r-1); background: var(--c-surface); color: var(--c-text);
-  padding: 3px 6px; font-size: 12px; font-family: inherit; outline: none;
-}
-.compact-input:focus { border-color: var(--c-accent); }
-.compact-input::placeholder { color: var(--c-text-muted); opacity: 0.5; }
 </style>

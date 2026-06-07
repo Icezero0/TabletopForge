@@ -2,6 +2,42 @@ import { http } from "@/infra/http/client";
 
 export type CharacterKind = "pc_main" | "pc_additional" | "npc";
 
+export type TokenPanelInitial = {
+  ability_scores?: Partial<Record<string, number>>;
+  ac?: number | null;
+  hp_current?: number | null;
+  hp_max?: number | null;
+  speed?: number | null;
+  pp?: number | null;
+  saving_throws?: Record<string, number | null>;
+  skills?: Record<string, number | null>;
+  items?: { name: string; quantity: number; notes: string }[];
+  weapons?: unknown[];
+  armor?: unknown[];
+  inherit_items_from_character?: boolean;
+};
+
+export type TokenConfig = {
+  id: number;
+  character_id: number;
+  is_primary: boolean;
+  name: string;
+  asset_id: number | null;
+  library_resource_id?: number | null;
+  panel_initial: TokenPanelInitial;
+  sort_order: number;
+};
+
+export type TokenConfigUpsert = {
+  id?: number;
+  is_primary: boolean;
+  name: string;
+  asset_id: number | null;
+  library_resource_id?: number | null;
+  panel_initial: TokenPanelInitial;
+  sort_order: number;
+};
+
 export type Character = {
   id: number;
   owner_id: number;
@@ -18,6 +54,7 @@ export type Character = {
   spells: Record<string, unknown> | null;
   equipment: Record<string, unknown>;
   extras: Record<string, unknown>;
+  token_configs: TokenConfig[];
   created_at: string;
   updated_at: string | null;
 };
@@ -54,6 +91,7 @@ export type CharacterPayload = {
   spells?: Record<string, unknown> | null;
   equipment?: Record<string, unknown>;
   extras?: Record<string, unknown>;
+  token_configs?: TokenConfigUpsert[];
 };
 
 export async function getCharacters(params?: { page?: number; page_size?: number }) {

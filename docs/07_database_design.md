@@ -1,6 +1,6 @@
 # TabletopForge 数据库设计
 
-版本：v0.3  
+版本：v0.4  
 状态：Draft
 
 ---
@@ -196,27 +196,27 @@ updated_at
 ```text
 id
 owner_id          # FK → users.id，CASCADE DELETE
-type              # ResourceType：map_background；后续扩展 token_image / audio_track 等
+type              # ResourceType：map_background | token | sound
 name              # 用户命名
 primary_asset_id  # FK → assets.id，SET NULL；主文件资产（图片 / 音频）
 meta              # JSON，类型附加字段，默认 {}
-usage_count       # 桌面引用计数；>0 时拒绝删除
+usage_count       # 业务引用计数；>0 时拒绝删除
 created_at
 updated_at
 ```
 
 说明：
 
-- `type` 决定必填字段；当前 `map_background` 要求上传图片，存为 `IMAGE` 类型 asset。
+- `type` 决定必填字段；当前 `map_background`、`token` 要求图片，`sound` 要求音频。
 - `primary_asset_id` 对应 `IMAGE` / `AUDIO` asset，享受 `content_hash` 去重与 `ref_count` 生命周期管理。
 - 删除资源时自动递减 `assets.ref_count`；归零则删除物理文件。
-- `usage_count` 由桌面模块调用 `increment_usage` / `decrement_usage` 维护，当前尚未接入。
+- `usage_count` 由业务模块调用 `increment_usage` / `decrement_usage` 维护；当前角色 Token 配置会在引用 `library_resource_id` 时维护该计数。
 
 ---
 
 # 5 消息
 
-## 4.1 messages
+## 5.1 messages
 
 用途：普通聊天消息。
 
@@ -231,7 +231,7 @@ created_at
 updated_at
 ```
 
-## 4.2 rp_messages
+## 5.2 rp_messages
 
 用途：结构化 RP 消息。
 
@@ -251,9 +251,9 @@ updated_at
 
 ---
 
-# 5 角色
+# 6 角色
 
-## 5.1 characters（已实现）
+## 6.1 characters（已实现）
 
 用途：角色卡，按用户所有，存储完整 DnD 5e 角色数据。不绑定房间（用户在多个房间使用同一角色）。
 
@@ -288,7 +288,7 @@ ix_characters_id
 ix_characters_owner_id
 ```
 
-## 5.2 character_states（已实现）
+## 6.2 character_states（已实现）
 
 用途：角色实时状态层（当前 HP / Buff 等高频变更字段），与 `characters` 1:1。
 
@@ -309,7 +309,7 @@ updated_at
 
 API：`GET/PATCH /characters/{id}/state`；创建角色（全局或房间库）时自动 bootstrap 默认行。
 
-## 5.3 room_characters（已实现）
+## 6.3 room_characters（已实现）
 
 用途：房间角色库 — 标记某角色在本房间可用/上场；不复制 `characters` 定义。
 
@@ -324,13 +324,38 @@ created_at
 
 API：`GET/POST /rooms/{id}/characters`；`POST /rooms/{id}/characters/link`（关联全局已有 `characters`，幂等，不复制定义）；列表含 character 摘要 + state 摘要。
 
+## 6.4 character_token_configs（已实现）
+
+用途：角色可复用 Token 配置。角色卡稳定层的一部分，用于定义主要 Token、备用 Token 和 Token 面板初始数据。当前已通过角色编辑页 Token Tab 维护。
+
+核心字段：
+
+```text
+id
+character_id          FK → characters.id，CASCADE DELETE
+is_primary            bool，是否主要 Token
+name                  VARCHAR(100)
+asset_id              FK → assets.id，SET NULL，Token 图片 asset
+library_resource_id   FK → library_resources.id，SET NULL，可复用素材引用
+panel_initial         JSON，Token 面板初始值（HP/AC/PP/六维/技能/物品等）
+sort_order            int
+created_at
+```
+
+说明：
+
+- 创建/更新角色时可通过 `token_configs` upsert。
+- primary config 若缺少 `library_resource_id`，后端会基于 `portrait_asset_id` 自动创建 `library_resources(type=token)` 并写回引用。
+- `library_resource_id` 增减时同步维护 `library_resources.usage_count`。
+- 当前地图上场 Token 仍主要使用 `characters.token_image_asset_id || portrait_asset_id`；选择具体 token config 上场属于下一步深化。
+
 ---
 
-# 6 地图桌面
+# 7 地图桌面
 
-> **MVP（Step 4）**：扁平 room 表 `room_tabletop_settings`、`room_maps`、`room_drawings`（见 §6.0）。§6.1–6.2 的 `scenes` / `scene_maps` 为后续多场景归档预留。
+> **MVP（Step 4）**：扁平 room 表 `room_tabletop_settings`、`room_maps`、`room_drawings`（见 §7.0）。§7.1–7.2 的 `scenes` / `scene_maps` 为后续多场景归档预留。
 
-## 6.0 MVP：room tabletop（已实现中）
+## 7.0 MVP：room tabletop（已实现中）
 
 ### room_tabletop_settings
 
@@ -374,7 +399,7 @@ created_at, updated_at
 
 ---
 
-## 6.1 scenes（后续，非 MVP）
+## 7.1 scenes（后续，非 MVP）
 
 用途：房间内场景。
 
@@ -390,7 +415,7 @@ created_at
 updated_at
 ```
 
-## 6.2 scene_maps
+## 7.2 scene_maps
 
 用途：场景地图配置。
 
@@ -411,20 +436,19 @@ created_at
 updated_at
 ```
 
-## 6.3 tokens
+## 7.3 tokens
 
 用途：地图上的可操作对象。
 
-**MVP 已落地**：表 `room_tokens`（Alembic `20260606_0007`）；扁平 `room_id`，**无** `scene_id`。API：`POST/PATCH/DELETE /rooms/{id}/tokens`；`POST .../characters/{id}/spawn-token`；快照 `GET /rooms/{id}/tabletop` 含 `tokens`（`state_summary` 全量 HP/AC/PP）；WS `token_created/updated/deleted`、`character_state_updated`（`state_summary`）。
+**MVP 已落地**：表 `room_tokens`（Alembic `20260606_0007`）；扁平 `room_id`，**无** `scene_id`。API：`POST/PATCH/DELETE /rooms/{id}/tokens`；`POST .../characters/{id}/spawn-token`；快照 `GET /rooms/{id}/tabletop` 含 `tokens`（`state_summary`，按观看者权限展示 HP/AC/PP/伤害信息）；WS `token_created/updated/deleted`、`character_state_updated`（含 GM 全量 summary 与 public summary）。
 
 核心字段：
 
 ```text
 id
 room_id
-scene_id
-asset_id
-linked_character_id
+asset_id              FK → assets.id，nullable
+linked_character_id   FK → characters.id，SET NULL
 name
 token_type
 x
@@ -445,16 +469,15 @@ updated_at
 索引建议：
 
 ```text
-index(scene_id)
 index(room_id)
 index(linked_character_id)
 ```
 
 ---
 
-# 7 资源
+# 8 资源
 
-## 7.1 assets
+## 8.1 assets
 
 用途：基础图片资产元信息。
 
@@ -482,6 +505,7 @@ feedback_image
 map_background    # Step 4：房间地图底图；同房间成员可读 content
 image
 audio
+token_image       # 角色/桌面 Token 图片
 ```
 
 说明：
@@ -490,13 +514,13 @@ audio
 - 数据库只存储相对路径和元信息。
 - `content_hash` 为上传内容的 SHA-256，用于同类型、同大小、同 MIME 的文件去重。
 - `ref_count` 记录当前有多少业务对象引用该底层文件；归零后才删除数据库记录和物理文件。
-- 当前地基已支持用户资源库中的底层 `image` / `audio` asset；地图、Token 等游戏语义层模型后续再扩展。
+- 当前地基已支持用户资源库中的底层图片 / 音频 asset；地图、Token 等游戏语义层通过 `library_resources` 与业务表引用 asset。
 
 ---
 
-# 8 骰子与日志
+# 9 骰子与日志
 
-## 8.1 dice_rolls
+## 9.1 dice_rolls
 
 用途：骰子记录。
 
@@ -515,7 +539,7 @@ visibility
 created_at
 ```
 
-## 8.2 operation_logs
+## 9.2 operation_logs
 
 用途：关键操作日志。
 
@@ -545,7 +569,7 @@ index(entity_type, entity_id)
 
 ---
 
-# 9 数据库设计原则
+# 10 数据库设计原则
 
 1. 房间相关数据必须包含 room_id 或可追溯到 room_id。
 2. 高频查询字段需要建立索引。

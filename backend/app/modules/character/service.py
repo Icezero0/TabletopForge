@@ -20,8 +20,12 @@ from app.modules.character.schemas import (
     CharacterStateCreate,
     CharacterStatePatch,
     CharacterStateResponse,
+    TokenConfigUpsert,
 )
 from app.modules.character.state_repository import CharacterStateRepository
+from app.modules.character.token_config_repository import TokenConfigRepository
+from app.modules.library.constants import ResourceType
+from app.modules.library.service import LibraryService
 from app.modules.rooms.characters.repository import RoomCharacterRepository
 from app.modules.rooms.constants import GamePermission, GameRole
 from app.modules.rooms.game_permissions import require_game_permission
@@ -33,8 +37,43 @@ class CharacterService:
     def __init__(self) -> None:
         self.repo = CharacterRepository()
         self.state_repo = CharacterStateRepository()
+        self.token_config_repo = TokenConfigRepository()
+        self.library_service = LibraryService()
         self.room_character_repo = RoomCharacterRepository()
         self.membership_repo = RoomMembershipRepository()
+
+    async def _ensure_token_lib_resources(
+        self,
+        db: AsyncSession,
+        *,
+        owner_id: int,
+        character_name: str,
+        portrait_asset_id: int | None,
+        configs: list[TokenConfigUpsert],
+    ) -> list[TokenConfigUpsert]:
+        """Ensure every token config has a library_resource_id.
+
+        For configs that already have one, nothing changes.
+        For configs without one, auto-create a library token resource:
+          - image source: cfg.asset_id first; for primary configs fall back to portrait.
+          - name: cfg.name if set, otherwise character_name.
+        """
+        result: list[TokenConfigUpsert] = []
+        for cfg in configs:
+            if cfg.library_resource_id is None:
+                source_asset_id = cfg.asset_id
+                if source_asset_id is None and cfg.is_primary:
+                    source_asset_id = portrait_asset_id
+                resource = await self.library_service.create_resource_from_asset_id(
+                    db,
+                    owner_id=owner_id,
+                    type=ResourceType.TOKEN,
+                    name=cfg.name or character_name,
+                    asset_id=source_asset_id,
+                )
+                cfg = cfg.model_copy(update={"library_resource_id": resource.id})
+            result.append(cfg)
+        return result
 
     def _require_owner(self, character: Character, user: User) -> None:
         if character.owner_id != user.id:
@@ -140,6 +179,7 @@ class CharacterService:
         spells: dict | None = None,
         equipment: dict | None = None,
         extras: dict | None = None,
+        token_configs: list[TokenConfigUpsert] | None = None,
         state: CharacterStateCreate | None = None,
     ) -> Character:
         user_is_gm = await self.membership_repo.user_is_gm_in_any_room(
@@ -171,9 +211,27 @@ class CharacterService:
             attributes=attributes,
             explicit=state,
         )
+        if token_configs:
+            token_configs = await self._ensure_token_lib_resources(
+                db,
+                owner_id=user.id,
+                character_name=name,
+                portrait_asset_id=portrait_asset_id,
+                configs=token_configs,
+            )
+            _, added_lib_ids, removed_lib_ids = await self.token_config_repo.upsert_all(
+                db,
+                character_id=character.id,
+                configs=token_configs,
+            )
+            for rid in added_lib_ids:
+                await self.library_service.increment_usage(db, resource_id=rid)
+            for rid in removed_lib_ids:
+                await self.library_service.decrement_usage(db, resource_id=rid)
         await db.commit()
-        await db.refresh(character)
-        return character
+        # Reload with token_configs eager-loaded
+        refreshed = await self.repo.get_by_id(db, character_id=character.id)
+        return refreshed or character
 
     async def get_character(
         self,
@@ -244,9 +302,32 @@ class CharacterService:
             user=user,
         )
         self._require_stable_layer_write(character, user, game_role)
+
+        token_configs: list[TokenConfigUpsert] | None = patch_fields.pop("token_configs", None)
         updated = await self.repo.update(db, character=character, **patch_fields)
+
+        if token_configs is not None:
+            token_configs = await self._ensure_token_lib_resources(
+                db,
+                owner_id=user.id,
+                character_name=updated.name,
+                portrait_asset_id=updated.portrait_asset_id,
+                configs=token_configs,
+            )
+            _, added_lib_ids, removed_lib_ids = await self.token_config_repo.upsert_all(
+                db,
+                character_id=character_id,
+                configs=token_configs,
+            )
+            for rid in added_lib_ids:
+                await self.library_service.increment_usage(db, resource_id=rid)
+            for rid in removed_lib_ids:
+                await self.library_service.decrement_usage(db, resource_id=rid)
+
         await db.commit()
-        return updated
+        # Reload with token_configs eager-loaded
+        refreshed = await self.repo.get_by_id(db, character_id=character_id)
+        return refreshed or updated
 
     async def delete_character(
         self,

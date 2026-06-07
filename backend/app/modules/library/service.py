@@ -218,6 +218,33 @@ class LibraryService:
         resource = await self._get_or_404(db, resource_id=resource_id)
         await self.repo.adjust_usage_count(db, resource=resource, delta=-1)
 
+    async def create_resource_from_asset_id(
+        self,
+        db: AsyncSession,
+        *,
+        owner_id: int,
+        type: ResourceType,
+        name: str,
+        asset_id: int | None = None,
+    ) -> LibraryResource:
+        """Create a LibraryResource backed by an already-existing asset (no file upload).
+        The caller is responsible for committing the transaction.
+        If asset_id is provided, its ref_count is incremented to reflect the new reference.
+        """
+        if asset_id is not None:
+            asset = await self.asset_service.get_asset_by_id(db, asset_id)
+            asset.ref_count += 1
+
+        resource = await self.repo.create(
+            db,
+            owner_id=owner_id,
+            type=type.value,
+            name=name,
+            primary_asset_id=asset_id,
+            meta={},
+        )
+        return resource
+
     async def copy_resource(
         self,
         db: AsyncSession,

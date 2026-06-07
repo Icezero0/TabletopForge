@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import {
   defaultIdentity, defaultFlavor, defaultAttributes,
   defaultFeatures, defaultSpells, defaultEquipment,
+  defaultTokenConfig,
 } from "@/features/character/constants";
 import {
   getCharacter, createCharacter, patchCharacter,
@@ -21,7 +22,9 @@ import CharacterFeaturesTab from "@/features/character/components/tabs/Character
 import CharacterSpellsTab from "@/features/character/components/tabs/CharacterSpellsTab.vue";
 import CharacterEquipmentTab from "@/features/character/components/tabs/CharacterEquipmentTab.vue";
 import CharacterExtrasTab from "@/features/character/components/tabs/CharacterExtrasTab.vue";
+import CharacterTokenTab from "@/features/character/components/tabs/CharacterTokenTab.vue";
 import BaseButton from "@/ui/base/BaseButton.vue";
+import type { TokenConfigUpsert } from "@/infra/api/character.api";
 
 const route = useRoute();
 const router = useRouter();
@@ -71,6 +74,7 @@ const TABS = [
   { key: "spells",     label: () => t("character.tabs.spells") },
   { key: "equipment",  label: () => t("character.tabs.equipment") },
   { key: "extras",     label: () => t("character.tabs.extras") },
+  { key: "token",      label: () => t("character.tabs.token") },
 ] as const;
 
 const activeTab = ref<(typeof TABS)[number]["key"]>("identity");
@@ -85,6 +89,7 @@ const formFeatures = ref<Record<string, unknown>>(defaultFeatures() as unknown a
 const formSpells = ref<Record<string, unknown>>(defaultSpells() as unknown as Record<string, unknown>);
 const formEquipment = ref<Record<string, unknown>>(defaultEquipment() as unknown as Record<string, unknown>);
 const formExtras = ref<Record<string, unknown>>({});
+const formTokenConfigs = ref<TokenConfigUpsert[]>([]);
 
 const isLoading = ref(false);
 const isSaving = ref(false);
@@ -105,6 +110,7 @@ const currentSnapshot = computed(() => JSON.stringify({
   spells: formSpells.value,
   equipment: formEquipment.value,
   extras: formExtras.value,
+  tokenConfigs: formTokenConfigs.value,
 }));
 const savedSnapshot = ref<string>("");
 const isDirty = computed(() => currentSnapshot.value !== savedSnapshot.value);
@@ -123,6 +129,14 @@ async function loadCharacter(id: number) {
     formSpells.value = (char.spells as Record<string, unknown> | null) ?? (defaultSpells() as unknown as Record<string, unknown>);
     formEquipment.value = char.equipment as Record<string, unknown>;
     formExtras.value = char.extras as Record<string, unknown>;
+    formTokenConfigs.value = (char.token_configs ?? []).map(tc => ({
+      id: tc.id,
+      is_primary: tc.is_primary,
+      name: tc.name,
+      asset_id: tc.asset_id,
+      panel_initial: tc.panel_initial,
+      sort_order: tc.sort_order,
+    }));
     // Stamp snapshot after data is loaded
     savedSnapshot.value = currentSnapshot.value;
   } catch {
@@ -137,6 +151,11 @@ async function save() {
   if (!charName.value) {
     activeTab.value = "identity";
     toasts.push({ message: t("character.errors.nameRequired"), tone: "danger" });
+    return;
+  }
+  if (formTokenConfigs.value.some(tc => !tc.name?.trim())) {
+    activeTab.value = "token";
+    toasts.push({ message: t("character.errors.tokenNameRequired"), tone: "danger" });
     return;
   }
 
@@ -154,6 +173,7 @@ async function save() {
       spells: formSpells.value,
       equipment: formEquipment.value,
       extras: formExtras.value,
+      token_configs: formTokenConfigs.value,
     };
 
     if (isEdit.value) {
@@ -388,6 +408,15 @@ onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload)
         <CharacterExtrasTab
           v-show="activeTab === 'extras'"
           v-model="formExtras"
+        />
+
+        <CharacterTokenTab
+          v-show="activeTab === 'token'"
+          v-model="formTokenConfigs"
+          :attributes-block="formAttributes"
+          :equipment-block="formEquipment"
+          :character-name="charName"
+          :portrait-asset-id="formPortraitAssetId"
         />
       </div>
     </template>

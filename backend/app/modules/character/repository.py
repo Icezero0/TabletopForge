@@ -1,7 +1,8 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
-from app.modules.character.models import Character
+from app.modules.character.models import Character, CharacterTokenConfig
 
 
 class CharacterRepository:
@@ -52,7 +53,9 @@ class CharacterRepository:
         character_id: int,
     ) -> Character | None:
         result = await db.execute(
-            select(Character).where(Character.id == character_id)
+            select(Character)
+            .options(selectinload(Character.token_configs))
+            .where(Character.id == character_id)
         )
         return result.scalar_one_or_none()
 
@@ -65,7 +68,9 @@ class CharacterRepository:
         if not character_ids:
             return {}
         result = await db.execute(
-            select(Character).where(Character.id.in_(character_ids))
+            select(Character)
+            .options(selectinload(Character.token_configs))
+            .where(Character.id.in_(character_ids))
         )
         return {c.id: c for c in result.scalars().all()}
 
@@ -85,7 +90,11 @@ class CharacterRepository:
         total = count_result.scalar_one()
 
         result = await db.execute(
-            query.order_by(Character.created_at.desc()).offset(offset).limit(limit)
+            query
+            .options(selectinload(Character.token_configs))
+            .order_by(Character.created_at.desc())
+            .offset(offset)
+            .limit(limit)
         )
         return list(result.scalars().all()), total
 
