@@ -382,7 +382,7 @@ function previewLabelPos(p: DrawPreview) {
 
     <g
       v-if="preview && preview.kind !== 'marquee'"
-      class="preview"
+      class="preview previewShape"
       opacity="0.65"
     >
       <path
@@ -434,6 +434,7 @@ function previewLabelPos(p: DrawPreview) {
     </g>
     <rect
       v-else-if="preview?.kind === 'marquee'"
+      class="marqueePreview"
       :x="Number(preview.geometry.x)"
       :y="Number(preview.geometry.y)"
       :width="Number(preview.geometry.width)"
@@ -495,6 +496,12 @@ function previewLabelPos(p: DrawPreview) {
 
 .drawingLayer.drawMode {
   cursor: crosshair;
+}
+
+.drawingLayer :deep(.visibleShape),
+.drawingLayer :deep(.previewShape),
+.drawingLayer :deep(.marqueePreview) {
+  vector-effect: non-scaling-stroke;
 }
 
 .textBoxContent {
