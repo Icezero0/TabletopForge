@@ -4,7 +4,7 @@ import type { RoomDrawing } from "@/infra/api/rooms.api";
 import type { GameRole } from "@/features/room/types";
 import type { TableToolMode } from "@/features/table/types";
 import type { DrawPreview } from "@/features/table/composables/useDrawingTools";
-import { DRAWING_BAND_BASE, DRAWING_PICK_STROKE_HIT } from "@/features/table/constants";
+import { DRAWING_BAND_BASE, DRAWING_PICK_STROKE_HIT, SCENE_ORIGIN, SCENE_SPAN } from "@/features/table/constants";
 import {
   brushPathFromPoints,
   findTopDrawingAt,
@@ -209,9 +209,14 @@ function previewLabelPos(p: DrawPreview) {
       handTool: toolMode === 'hand',
       drawMode: canDraw,
     }"
+    :viewBox="`${SCENE_ORIGIN} ${SCENE_ORIGIN} ${SCENE_SPAN} ${SCENE_SPAN}`"
     :style="{
-      ...(drawCursor ? { cursor: drawCursor } : {}),
+      left: `${SCENE_ORIGIN}px`,
+      top: `${SCENE_ORIGIN}px`,
+      width: `${SCENE_SPAN}px`,
+      height: `${SCENE_SPAN}px`,
       zIndex: DRAWING_BAND_BASE,
+      ...(drawCursor ? { cursor: drawCursor } : {}),
     }"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
@@ -220,6 +225,15 @@ function previewLabelPos(p: DrawPreview) {
     @click="onPickClick"
     @contextmenu="onDrawingContextMenu"
   >
+    <rect
+      v-if="canDraw"
+      :x="SCENE_ORIGIN"
+      :y="SCENE_ORIGIN"
+      :width="SCENE_SPAN"
+      :height="SCENE_SPAN"
+      fill="transparent"
+      pointer-events="all"
+    />
     <g
       v-for="drawing in sortedDrawings"
       v-show="drawing.id !== editingDrawingId"
@@ -259,7 +273,7 @@ function previewLabelPos(p: DrawPreview) {
         stroke-linecap="round"
       />
       <line
-        v-else-if="drawing.kind === 'line'"
+        v-if="drawing.kind === 'line'"
         class="visibleShape"
         :x1="Number(drawing.geometry.x1)"
         :y1="Number(drawing.geometry.y1)"
@@ -281,7 +295,7 @@ function previewLabelPos(p: DrawPreview) {
         :stroke-width="DRAWING_PICK_STROKE_HIT"
       />
       <rect
-        v-else-if="drawing.kind === 'rect'"
+        v-if="drawing.kind === 'rect'"
         class="visibleShape"
         :x="Number(drawing.geometry.width) < 0 ? Number(drawing.geometry.x) + Number(drawing.geometry.width) : Number(drawing.geometry.x)"
         :y="Number(drawing.geometry.height) < 0 ? Number(drawing.geometry.y) + Number(drawing.geometry.height) : Number(drawing.geometry.y)"
@@ -303,7 +317,7 @@ function previewLabelPos(p: DrawPreview) {
         :stroke-width="DRAWING_PICK_STROKE_HIT"
       />
       <ellipse
-        v-else-if="drawing.kind === 'ellipse'"
+        v-if="drawing.kind === 'ellipse'"
         class="visibleShape"
         :cx="Number(drawing.geometry.cx)"
         :cy="Number(drawing.geometry.cy)"
@@ -314,7 +328,7 @@ function previewLabelPos(p: DrawPreview) {
         :stroke-width="strokeW(drawing)"
       />
       <g
-        v-else-if="drawing.kind === 'text'"
+        v-if="drawing.kind === 'text'"
         class="textGroup"
         @dblclick="onTextDblClick(drawing, $event)"
       >
@@ -344,7 +358,7 @@ function previewLabelPos(p: DrawPreview) {
           </div>
         </foreignObject>
         <rect
-          v-else-if="showPickTargets"
+          v-if="!textBox(drawing.geometry) && showPickTargets"
           class="hitTarget fillHit"
           :x="Number(drawing.geometry.x) - 8"
           :y="Number(drawing.geometry.y) - textFontSize(drawing) - 8"
@@ -354,7 +368,7 @@ function previewLabelPos(p: DrawPreview) {
           stroke="transparent"
         />
         <text
-          v-else
+          v-if="!textBox(drawing.geometry)"
           class="visibleShape drawTextLegacy"
           :x="Number(drawing.geometry.x)"
           :y="Number(drawing.geometry.y)"
@@ -368,7 +382,7 @@ function previewLabelPos(p: DrawPreview) {
 
     <g
       v-if="preview && preview.kind !== 'marquee'"
-      class="preview"
+      class="preview previewShape"
       opacity="0.65"
     >
       <path
@@ -420,6 +434,7 @@ function previewLabelPos(p: DrawPreview) {
     </g>
     <rect
       v-else-if="preview?.kind === 'marquee'"
+      class="marqueePreview"
       :x="Number(preview.geometry.x)"
       :y="Number(preview.geometry.y)"
       :width="Number(preview.geometry.width)"
@@ -436,11 +451,10 @@ function previewLabelPos(p: DrawPreview) {
 <style scoped>
 .drawingLayer {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
+  top: 0;
+  left: 0;
   overflow: visible;
+  pointer-events: none;
 }
 
 .drawingLayer.interactive.drawMode {
@@ -482,6 +496,12 @@ function previewLabelPos(p: DrawPreview) {
 
 .drawingLayer.drawMode {
   cursor: crosshair;
+}
+
+.drawingLayer :deep(.visibleShape),
+.drawingLayer :deep(.previewShape),
+.drawingLayer :deep(.marqueePreview) {
+  vector-effect: non-scaling-stroke;
 }
 
 .textBoxContent {

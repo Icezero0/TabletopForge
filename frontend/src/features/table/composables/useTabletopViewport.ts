@@ -28,8 +28,17 @@ export function useTabletopViewport(toolMode: Ref<TableToolMode>) {
   function onWheel(event: WheelEvent) {
     if (toolMode.value !== "hand") return;
     event.preventDefault();
+    const el = event.currentTarget as HTMLElement;
+    const rect = el.getBoundingClientRect();
+    const mx = event.clientX - rect.left;
+    const my = event.clientY - rect.top;
     const delta = -event.deltaY * ZOOM_SENSITIVITY;
-    viewportScale.value = clampScale(viewportScale.value * (1 + delta));
+    const oldScale = viewportScale.value;
+    const newScale = clampScale(oldScale * (1 + delta));
+    if (newScale === oldScale) return;
+    viewportX.value = mx - ((mx - viewportX.value) * newScale) / oldScale;
+    viewportY.value = my - ((my - viewportY.value) * newScale) / oldScale;
+    viewportScale.value = newScale;
   }
 
   function shouldStartPan(event: PointerEvent) {

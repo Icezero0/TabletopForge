@@ -6,7 +6,7 @@ import type { RoomDrawing, RoomMap, RoomToken } from "@/infra/api/rooms.api";
 import type { DrawPreview, TextPlacementRequest } from "@/features/table/composables/useDrawingTools";
 import type { MeasureState } from "@/features/table/composables/useMeasureTool";
 import type { TextEditRequest } from "@/features/table/composables/useTextDrawingEdit";
-import { GRID_LAYER_Z, SCENE_GRID_HALF_EXTENT } from "@/features/table/constants";
+import { GRID_LAYER_Z, SCENE_ORIGIN, SCENE_SPAN } from "@/features/table/constants";
 import { useTabletopViewport } from "@/features/table/composables/useTabletopViewport";
 import MapLayer from "@/features/table/components/MapLayer.vue";
 import TokenLayer from "@/features/table/components/TokenLayer.vue";
@@ -116,8 +116,8 @@ const { viewportTransform, viewportScale, setViewportEl } = useTabletopViewport(
 const patternUid = useId().replace(/:/g, "");
 const minorPatternId = computed(() => `grid-minor-${patternUid}`);
 
-const gridOrigin = -SCENE_GRID_HALF_EXTENT;
-const gridSpan = SCENE_GRID_HALF_EXTENT * 2;
+const gridOrigin = SCENE_ORIGIN;
+const gridSpan = SCENE_SPAN;
 
 const rootRef = ref<HTMLElement | null>(null);
 const drawingLayerRef = ref<InstanceType<typeof DrawingLayer> | null>(null);

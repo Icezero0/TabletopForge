@@ -5,8 +5,8 @@ DEFAULT_GRID_CELL_PX = 52
 
 TOKEN_BAND_BASE = 100
 
-# 绘制与 Token 共用 band 基准（类内 z_index；前端 effectiveZ = base + z_index）
-DRAWING_BAND_BASE = TOKEN_BAND_BASE
+# 绘制 band 基准（类内 z_index；前端 effectiveZ = base + z_index，见 tabletop_scene.md §3.2）
+DRAWING_BAND_BASE = 200
 
 
 class TokenType(StrEnum):
