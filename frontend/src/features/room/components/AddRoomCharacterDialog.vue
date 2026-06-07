@@ -7,13 +7,15 @@ import type { Character } from "@/infra/api/character.api";
 import { buildPathWithReturn } from "@/composables/useNavigationReturn";
 import BaseButton from "@/ui/base/BaseButton.vue";
 import BaseInput from "@/ui/base/BaseInput.vue";
+import BaseNumberInput from "@/ui/base/BaseNumberInput.vue";
 import BaseTextarea from "@/ui/base/BaseTextarea.vue";
 import CharacterPickerItem from "@/features/room/components/CharacterPickerItem.vue";
 import { useToastsStore } from "@/stores/toasts.store";
+import { UserCircleIcon } from "@heroicons/vue/24/outline";
 import AvatarCropDialog from "@/ui/domain/avatar/AvatarCropDialog.vue";
+import AppIcon from "@/ui/base/AppIcon.vue";
 import { uploadAsset } from "@/infra/api/assets.api";
 import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthenticatedAssetUrl";
-import { tokenInitial } from "@/features/table/utils/tokenDisplay";
 
 type Step = "choose" | "pc" | "additional" | "quick" | "pick";
 
@@ -88,11 +90,6 @@ const uploadingAvatar = ref(false);
 const avatarFileInputEl = ref<HTMLInputElement | null>(null);
 const { url: avatarUrl } = useAuthenticatedAssetUrl(avatarAssetId);
 
-const fullEditorKind = computed(() => {
-  if (isGm.value) return "npc";
-  if (step.value === "additional") return "pc_additional";
-  return "pc_main";
-});
 
 const title = computed(() => {
   if (step.value === "pc") return t("room.characters.pcQuickTitle");
@@ -242,12 +239,10 @@ function openFullEditor() {
       ? {
           ...base.query,
           roomId: String(props.roomId),
-          kind: fullEditorKind.value,
           openCharacterPopover: "1",
         }
       : {
           roomId: String(props.roomId),
-          kind: fullEditorKind.value,
           openCharacterPopover: "1",
         };
   void router.push({ path: "/characters/new", query });
@@ -289,17 +284,18 @@ function openFullEditor() {
         </div>
 
         <form v-else-if="step === 'pc'" class="form" @submit.prevent="submitPc">
-          <div class="avatarArea" @click="openAvatarPicker">
-            <div class="avatarCircle" :class="{ uploading: uploadingAvatar }">
-              <img v-if="avatarUrl" :src="avatarUrl" class="avatarImg" alt="" />
-              <span v-else class="avatarInitial">{{ tokenInitial(pcName || "?") }}</span>
+          <div class="nameRow">
+            <div class="avatarArea" @click="openAvatarPicker">
+              <div class="avatarCircle" :class="{ uploading: uploadingAvatar }">
+                <img v-if="avatarUrl" :src="avatarUrl" class="avatarImg" alt="" />
+                <AppIcon v-else :icon="UserCircleIcon" :size="36" class="avatarEmpty" />
+              </div>
             </div>
-            <span class="avatarHint">{{ t("room.characters.changeAvatar") }}</span>
+            <label class="field">
+              <span>{{ t("room.characters.nameLabel") }}</span>
+              <BaseInput v-model="pcName" />
+            </label>
           </div>
-          <label class="field">
-            <span>{{ t("room.characters.nameLabel") }}</span>
-            <BaseInput v-model="pcName" />
-          </label>
           <label class="field">
             <span>{{ t("room.characters.boundPlayer") }}</span>
             <BaseInput :model-value="currentUserDisplayName ?? ''" disabled />
@@ -307,11 +303,11 @@ function openFullEditor() {
           <div class="row">
             <label class="field">
               <span>{{ t("room.characters.maxHpLabel") }}</span>
-              <BaseInput v-model="pcMaxHp" type="number" />
+              <BaseNumberInput v-model="pcMaxHp" :min="0" />
             </label>
             <label class="field">
               <span>{{ t("room.characters.acLabel") }}</span>
-              <BaseInput v-model="pcAc" type="number" />
+              <BaseNumberInput v-model="pcAc" :min="0" />
             </label>
           </div>
           <label class="toggleField">
@@ -340,25 +336,26 @@ function openFullEditor() {
         </form>
 
         <form v-else-if="step === 'quick'" class="form" @submit.prevent="submitQuick">
-          <div class="avatarArea" @click="openAvatarPicker">
-            <div class="avatarCircle" :class="{ uploading: uploadingAvatar }">
-              <img v-if="avatarUrl" :src="avatarUrl" class="avatarImg" alt="" />
-              <span v-else class="avatarInitial">{{ tokenInitial(quickName || "?") }}</span>
+          <div class="nameRow">
+            <div class="avatarArea" @click="openAvatarPicker">
+              <div class="avatarCircle" :class="{ uploading: uploadingAvatar }">
+                <img v-if="avatarUrl" :src="avatarUrl" class="avatarImg" alt="" />
+                <AppIcon v-else :icon="UserCircleIcon" :size="36" class="avatarEmpty" />
+              </div>
             </div>
-            <span class="avatarHint">{{ t("room.characters.changeAvatar") }}</span>
+            <label class="field">
+              <span>{{ t("room.characters.nameLabel") }}</span>
+              <BaseInput v-model="quickName" />
+            </label>
           </div>
-          <label class="field">
-            <span>{{ t("room.characters.nameLabel") }}</span>
-            <BaseInput v-model="quickName" />
-          </label>
           <div class="row">
             <label class="field">
               <span>{{ t("room.characters.maxHpLabel") }}</span>
-              <BaseInput v-model="quickMaxHp" type="number" />
+              <BaseNumberInput v-model="quickMaxHp" :min="0" />
             </label>
             <label class="field">
               <span>{{ t("room.characters.acLabel") }}</span>
-              <BaseInput v-model="quickAc" type="number" />
+              <BaseNumberInput v-model="quickAc" :min="0" />
             </label>
           </div>
           <label class="field">
@@ -388,17 +385,18 @@ function openFullEditor() {
         </form>
 
         <form v-else-if="step === 'additional'" class="form" @submit.prevent="submitAdditional">
-          <div class="avatarArea" @click="openAvatarPicker">
-            <div class="avatarCircle" :class="{ uploading: uploadingAvatar }">
-              <img v-if="avatarUrl" :src="avatarUrl" class="avatarImg" alt="" />
-              <span v-else class="avatarInitial">{{ tokenInitial(addName || "?") }}</span>
+          <div class="nameRow">
+            <div class="avatarArea" @click="openAvatarPicker">
+              <div class="avatarCircle" :class="{ uploading: uploadingAvatar }">
+                <img v-if="avatarUrl" :src="avatarUrl" class="avatarImg" alt="" />
+                <AppIcon v-else :icon="UserCircleIcon" :size="36" class="avatarEmpty" />
+              </div>
             </div>
-            <span class="avatarHint">{{ t("room.characters.changeAvatar") }}</span>
+            <label class="field">
+              <span>{{ t("room.characters.nameLabel") }}</span>
+              <BaseInput v-model="addName" />
+            </label>
           </div>
-          <label class="field">
-            <span>{{ t("room.characters.nameLabel") }}</span>
-            <BaseInput v-model="addName" />
-          </label>
           <div class="row">
             <label class="field">
               <span>{{ t("room.characters.raceLabel") }}</span>
@@ -477,6 +475,7 @@ function openFullEditor() {
     :file="pickedFile"
     :title="t('profile.crop.title')"
     :output-size="512"
+    :z-index="500"
     @done="onCropDone"
     @cancel="onCropCancel"
   />
@@ -550,13 +549,24 @@ function openFullEditor() {
   gap: 12px;
 }
 
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nameRow .field {
+  flex: 1;
+  min-width: 0;
+}
+
 .avatarArea {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   cursor: pointer;
-  padding: 4px 0;
+  flex-shrink: 0;
 }
 
 .avatarCircle {
@@ -567,7 +577,7 @@ function openFullEditor() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--c-accent) 15%, var(--c-bg));
+  background: var(--c-bg);
   border: 2px solid var(--c-border);
   transition: border-color 0.15s, opacity 0.15s;
 }
@@ -586,15 +596,9 @@ function openFullEditor() {
   object-fit: cover;
 }
 
-.avatarInitial {
-  font-size: 22px;
-  font-weight: 700;
-  color: var(--c-accent);
-}
-
-.avatarHint {
-  font-size: 11px;
+.avatarEmpty {
   color: var(--c-text-muted);
+  opacity: 0.4;
 }
 
 .field {
@@ -603,6 +607,7 @@ function openFullEditor() {
   gap: 6px;
   font-size: 13px;
   color: var(--c-text);
+  min-width: 0;
 }
 
 .toggleField {

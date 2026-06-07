@@ -21,12 +21,14 @@ const props = withDefaults(
     outputQuality?: number;
 
     closeOnOverlay?: boolean;
+    zIndex?: number;
   }>(),
   {
     outputSize: 512,
     outputMime: "image/jpeg",
     outputQuality: 0.9,
     closeOnOverlay: false,
+    zIndex: 80,
   },
 );
 
@@ -142,6 +144,7 @@ async function usePhoto() {
     :closeOnOverlay="closeOnOverlay"
     :closeOnEsc="true"
     :maxWidth="760"
+    :zIndex="zIndex"
     ariaLabel="Avatar crop dialog"
     @update:modelValue="(v) => emit('update:modelValue', v)"
     @close="onCancel"

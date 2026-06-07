@@ -10,6 +10,7 @@ import {
   patchRoomTabletopSettings,
   postRoomDrawing,
   postRoomMap,
+  postRoomMapFromAsset,
   postRoomToken,
   spawnRoomCharacterToken,
   type RoomDrawing,
@@ -174,6 +175,12 @@ export const useTabletopStore = defineStore("tabletop", {
 
     async uploadMap(roomId: number, file: File) {
       const map = await postRoomMap(roomId, file);
+      this.applyMapCreated(roomId, map);
+      return map;
+    },
+
+    async addMapFromAsset(roomId: number, assetId: number) {
+      const map = await postRoomMapFromAsset(roomId, assetId);
       this.applyMapCreated(roomId, map);
       return map;
     },

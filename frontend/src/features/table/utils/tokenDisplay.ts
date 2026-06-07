@@ -1,5 +1,4 @@
 import type { GameRole } from "@/features/room/types";
-import type { CharacterKind } from "@/infra/api/roomCharacters.api";
 import type { RoomToken, TokenStateSummary } from "@/infra/api/rooms.api";
 
 export function tokenInitial(name: string): string {
@@ -38,7 +37,7 @@ export function canInspectToken(token: RoomToken): boolean {
 }
 
 export function canSpawnCharacter(
-  entry: { kind: CharacterKind; owner_id: number },
+  entry: { owner_id: number },
   gameRole: GameRole | "unknown",
   currentUserId: number | null | undefined,
 ): boolean {

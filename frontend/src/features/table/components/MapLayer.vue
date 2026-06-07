@@ -27,7 +27,11 @@ const canPickMap = computed(
     (props.toolMode === "select" || props.toolMode === "hand"),
 );
 
-function onMapPointerDown(_map: RoomMap, event: PointerEvent) {
+function isLockedInHandMode(map: RoomMap) {
+  return props.toolMode === "hand" && map.locked;
+}
+
+function onMapPointerDown(map: RoomMap, event: PointerEvent) {
   if (!canPickMap.value) return;
   event.stopPropagation();
 }
@@ -55,6 +59,7 @@ function onMapContextMenu(map: RoomMap, event: MouseEvent) {
       :class="{ inactive: !canPickMap }"
       :style="{
         transform: `translate(${map.x}px, ${map.y}px) scale(${map.scale})`,
+        pointerEvents: isLockedInHandMode(map) ? 'none' : undefined,
       }"
       @pointerdown="onMapPointerDown(map, $event)"
       @click="onMapClick(map, $event)"

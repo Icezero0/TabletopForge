@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { CharacterKind } from "@/infra/api/roomCharacters.api";
 import type { RoomToken } from "@/infra/api/rooms.api";
 import type { GameRole } from "@/features/room/types";
 import type { TableToolMode } from "@/features/table/types";
@@ -16,7 +15,6 @@ const props = defineProps<{
   selectedTokenId?: number | null;
   currentUserId?: number | null;
   characterOwnerById: Map<number, number>;
-  characterKindById?: Map<number, CharacterKind>;
 }>();
 
 const emit = defineEmits<{
@@ -70,11 +68,6 @@ function onTokenContextMenu(token: RoomToken, event: MouseEvent) {
       :selected="selectedTokenId === token.id"
       :inactive="!canPickToken(token)"
       :game-role="gameRole"
-      :character-kind="
-        token.linked_character_id != null
-          ? characterKindById?.get(token.linked_character_id)
-          : undefined
-      "
       @pointerdown="onTokenPointerDown(token, $event)"
       @click="onTokenClick(token, $event)"
       @contextmenu="onTokenContextMenu(token, $event)"

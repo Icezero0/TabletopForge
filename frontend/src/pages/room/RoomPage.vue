@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import {
@@ -27,6 +27,7 @@ import { useRoomMemberActions } from "@/features/room/composables/useRoomMemberA
 import { useRoomRealtimeSession } from "@/features/room/composables/useRoomRealtimeSession";
 import type { RoomRealtimeSessionClosed } from "@/infra/realtime/roomRealtime";
 import BottomAssetBar from "@/features/table/components/BottomAssetBar.vue";
+import LibraryMapPickerDialog from "@/features/table/components/LibraryMapPickerDialog.vue";
 import AddRoomCharacterDialog from "@/features/room/components/AddRoomCharacterDialog.vue";
 import InGameCharacterList from "@/features/room/components/InGameCharacterList.vue";
 import FloatingPanel from "@/features/table/components/FloatingPanel.vue";
@@ -35,6 +36,7 @@ import InfoPanel from "@/features/table/components/InfoPanel.vue";
 import MapViewport from "@/features/table/components/MapViewport.vue";
 import ContextMenu from "@/features/table/components/ContextMenu.vue";
 import DrawToolStrip from "@/features/table/components/DrawToolStrip.vue";
+import MeasureToolStrip from "@/features/table/components/MeasureToolStrip.vue";
 import PersonalMemo from "@/features/table/components/PersonalMemo.vue";
 import TableStage from "@/features/table/components/TableStage.vue";
 import TopToolBar from "@/features/table/components/TopToolBar.vue";
@@ -127,17 +129,32 @@ const {
   decrease: decreaseGrid,
 } = useGridScale(roomId, { canEdit: canEditGrid });
 
+const measureSubTool = ref<"line" | "route">("line");
+
 const {
   measureState,
   measurePointerDown,
   measurePointerMove,
   measurePointerUp,
+  routeClick,
+  routeFinish,
+  routePointerMove,
   clearMeasure,
 } = useMeasureTool({ gridCellPx, gridCellFt });
 
 watch(toolMode, (mode) => {
   if (mode !== "measure") clearMeasure();
 });
+
+watch(measureSubTool, clearMeasure);
+
+function handleMeasurePointerMove(x: number, y: number, event: PointerEvent) {
+  if (measureSubTool.value === "route") {
+    routePointerMove(x, y);
+  } else {
+    measurePointerMove(x, y, event);
+  }
+}
 
 const tabletopMaps = computed(() => tabletopStore.getMaps(roomId.value));
 const tabletopDrawings = computed(() => tabletopStore.getDrawings(roomId.value));
@@ -152,6 +169,7 @@ const mapUploading = ref(false);
 const addCharacterDialogOpen = ref(false);
 const characterPopoverOpen = ref(false);
 const mapPopoverOpen = ref(false);
+const libraryMapPickerOpen = ref(false);
 const libraryCharacters = ref<Character[]>([]);
 const libraryLoading = ref(false);
 
@@ -809,6 +827,36 @@ async function handleContextDeleteToken(tokenId: number) {
   }
 }
 
+function isEditingText() {
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = el.tagName.toLowerCase();
+  if (tag === "input" || tag === "textarea" || tag === "select") return true;
+  return (el as HTMLElement).isContentEditable;
+}
+
+function handleGlobalKeyDown(event: KeyboardEvent) {
+  if (event.key !== "Delete") return;
+  if (isEditingText()) return;
+  if (!selection.value || !roomId.value) return;
+
+  const sel = selection.value;
+  if (sel.type === "map") {
+    if (currentUserGameRole.value === "GM") {
+      void handleContextDeleteMap(sel.id);
+    }
+  } else if (sel.type === "token") {
+    const token = tabletopTokens.value.find((t) => t.id === sel.id);
+    if (token && tokenCanManage(token)) {
+      void handleContextDeleteToken(sel.id);
+    }
+  } else if (sel.type === "drawing") {
+    if (currentUserGameRole.value === "GM" || currentUserGameRole.value === "PL") {
+      void handleContextDeleteDrawing(sel.id);
+    }
+  }
+}
+
 async function handleContextTokenLayer(action: "up" | "down" | "top" | "bottom") {
   const token = selectedToken.value;
   if (!token || !roomId.value || tabletopTokens.value.length <= 1) return;
@@ -864,6 +912,25 @@ function readImageDimensions(file: File) {
 
 function handleAddMapClick() {
   mapUploadInput.value?.click();
+}
+
+async function handlePickLibraryMap(assetId: number) {
+  if (!roomId.value) return;
+  mapUploading.value = true;
+  try {
+    const map = await tabletopStore.addMapFromAsset(roomId.value, assetId);
+    const offset = tabletopMaps.value.length * 24;
+    await tabletopStore.updateMap(roomId.value, map.id, { x: offset, y: offset });
+    selectMap(map.id);
+    toasts.push({ message: t("table.assets.addMapFromLibrarySuccess"), tone: "success" });
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error) || t("table.assets.addMapFromLibraryFailed"),
+      tone: "danger",
+    });
+  } finally {
+    mapUploading.value = false;
+  }
 }
 
 async function handleMapFileChange(event: Event) {
@@ -1066,14 +1133,6 @@ const roomMemberItems = computed(() => entityRoomMembers.value.map((member) => {
 }));
 const roomMemberStatusByUserId = computed<Map<number, MemberStatus>>(() =>
   new Map(roomMemberItems.value.map((member) => [member.id, member.status])));
-
-const characterKindById = computed(() => {
-  const map = new Map<number, (typeof roomCharacters.value)[number]["kind"]>();
-  for (const entry of roomCharacters.value) {
-    map.set(entry.character_id, entry.kind);
-  }
-  return map;
-});
 
 const characterById = computed(() => {
   const map = new Map<number, (typeof roomCharacters.value)[number]>();
@@ -1281,7 +1340,6 @@ async function handleCreateRoomPc(payload: {
   try {
     const hasState = payload.max_hp != null || payload.armor_class != null;
     const entry = await createRoomCharacter({
-      kind: "pc_main",
       name: payload.name,
       player_name: payload.player_name,
       state: hasState
@@ -1333,7 +1391,6 @@ async function handleCreateRoomAdditional(payload: {
     if (payload.backstory) flavor.backstory = payload.backstory;
 
     const entry = await createRoomCharacter({
-      kind: "pc_additional",
       name: payload.name,
       identity,
       flavor,
@@ -1375,7 +1432,6 @@ async function handleCreateRoomQuick(payload: {
     if (payload.backstory) flavor.backstory = payload.backstory;
 
     const entry = await createRoomCharacter({
-      kind: "npc",
       name: payload.name,
       flavor,
       state: hasState
@@ -1412,6 +1468,11 @@ onMounted(() => {
     void tabletopStore.loadSnapshot(roomId.value);
     void fetchRoomCharacters();
   }
+  window.addEventListener("keydown", handleGlobalKeyDown);
+});
+
+onUnmounted(() => {
+  window.removeEventListener("keydown", handleGlobalKeyDown);
 });
 
 watch(roomId, (newId, oldId) => {
@@ -1490,7 +1551,6 @@ watch(
             :player-color-by-user-id="playerColorByUserId"
             :measure-state="measureState"
             :character-owner-by-id="characterOwnerById"
-            :character-kind-by-id="characterKindById"
             @select-map="handleSelectMap"
             @map-context-menu="handleMapContextMenu"
             @select-token="handleSelectToken"
@@ -1515,9 +1575,12 @@ watch(
             @viewport-pointer-move="onViewportPointerMove"
             @viewport-pointer-down="onViewportPointerDown"
             @viewport-pointer-up="onViewportPointerUp"
+            :measure-sub-tool="measureSubTool"
             @measure-pointer-down="measurePointerDown"
-            @measure-pointer-move="measurePointerMove"
+            @measure-pointer-move="handleMeasurePointerMove"
             @measure-pointer-up="measurePointerUp"
+            @measure-route-click="routeClick"
+            @measure-route-finish="routeFinish"
           />
           <ContextMenu
             :open="contextMenuOpen"
@@ -1555,6 +1618,10 @@ watch(
             @create-additional="handleCreateRoomAdditional"
             @create-quick="handleCreateRoomQuick"
             @link-character="handleLinkRoomCharacter"
+          />
+          <LibraryMapPickerDialog
+            v-model="libraryMapPickerOpen"
+            @pick="handlePickLibraryMap"
           />
         </template>
 
@@ -1662,6 +1729,10 @@ watch(
               v-model:stroke-width="strokeWidth"
               v-model:font-size="fontSize"
             />
+            <MeasureToolStrip
+              v-if="toolMode === 'measure'"
+              v-model:sub-tool="measureSubTool"
+            />
           </FloatingPanel>
 
           <FloatingPanel
@@ -1672,21 +1743,13 @@ watch(
             :storage-key="`room-${roomId}-assets`"
           >
             <BottomAssetBar
-              v-model:popover-open="characterPopoverOpen"
               v-model:map-popover-open="mapPopoverOpen"
               :can-add-map="canAddMap"
-              :can-add-character="canAddCharacter"
-              :entries="spawnPopoverEntries"
-              :entries-loading="spawnPopoverLoading"
-              :owner-name-by-user-id="ownerNameByUserId"
               :maps="tabletopMaps"
               :selected-map-id="selectedMapId"
-              :game-role="currentUserGameRole"
-              :current-user-id="currentUserId"
               @add-map="handleAddMapClick"
-              @add-character="openAddCharacterDialog"
-              @spawn="handleSpawnCharacter"
               @select-map="selectMap"
+              @open-library-picker="libraryMapPickerOpen = true"
             />
           </FloatingPanel>
 

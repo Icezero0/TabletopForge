@@ -4,7 +4,6 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, fun
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.modules.character.constants import CharacterKind
 
 
 class Character(Base):
@@ -22,12 +21,6 @@ class Character(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     player_name: Mapped[str] = mapped_column(
         String(255), nullable=False, default="", server_default=""
-    )
-    kind: Mapped[str] = mapped_column(
-        String(16),
-        nullable=False,
-        default=CharacterKind.PC_MAIN.value,
-        server_default=CharacterKind.PC_MAIN.value,
     )
     portrait_asset_id: Mapped[int | None] = mapped_column(
         Integer,

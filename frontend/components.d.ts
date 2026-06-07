@@ -27,6 +27,7 @@ declare module 'vue' {
     BaseListItem: typeof import('./src/ui/base/BaseListItem.vue')['default']
     BaseMediaViewer: typeof import('./src/ui/base/BaseMediaViewer.vue')['default']
     BaseMenuItem: typeof import('./src/ui/base/BaseMenuItem.vue')['default']
+    BaseNumberInput: typeof import('./src/ui/base/BaseNumberInput.vue')['default']
     BasePill: typeof import('./src/ui/base/BasePill.vue')['default']
     BaseSelect: typeof import('./src/ui/base/BaseSelect.vue')['default']
     BaseTagInput: typeof import('./src/ui/base/BaseTagInput.vue')['default']

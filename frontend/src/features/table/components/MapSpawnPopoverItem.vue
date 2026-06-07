@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, toRef } from "vue";
-import { useI18n } from "vue-i18n";
-import type { RoomMap } from "@/infra/api/rooms.api";
+import { toRef } from "vue";
 import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthenticatedAssetUrl";
 
 const props = defineProps<{
-  map: RoomMap;
+  assetId: number;
+  name: string;
   selected?: boolean;
 }>();
 
@@ -13,11 +12,8 @@ const emit = defineEmits<{
   select: [];
 }>();
 
-const { t } = useI18n();
-const assetId = toRef(() => props.map.asset_id);
+const assetId = toRef(() => props.assetId);
 const { url: imageUrl } = useAuthenticatedAssetUrl(assetId);
-
-const label = computed(() => t("table.assets.mapLabel", { id: props.map.id }));
 </script>
 
 <template>
@@ -28,10 +24,10 @@ const label = computed(() => t("table.assets.mapLabel", { id: props.map.id }));
     @click="emit('select')"
   >
     <div class="thumb">
-      <img v-if="imageUrl" :src="imageUrl" class="thumbImg" :alt="label" />
-      <span v-else class="thumbFallback">#{{ map.id }}</span>
+      <img v-if="imageUrl" :src="imageUrl" class="thumbImg" :alt="name" />
+      <span v-else class="thumbFallback">?</span>
     </div>
-    <span class="name">{{ label }}</span>
+    <span class="name">{{ name }}</span>
   </button>
 </template>
 
@@ -86,5 +82,7 @@ const label = computed(() => t("table.assets.mapLabel", { id: props.map.id }));
 .name {
   font-size: 12px;
   font-weight: 500;
+  word-break: break-all;
+  line-height: 1.3;
 }
 </style>

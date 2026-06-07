@@ -77,9 +77,6 @@ async def create_character(
     token_configs = payload.token_configs or None
     state = payload.state
     data = payload.model_dump(exclude={"state", "token_configs"})
-    kind = data.get("kind")
-    if kind is not None:
-        data["kind"] = kind.value if hasattr(kind, "value") else kind
     character = await character_service.create_character(
         db,
         user=current_user,
@@ -113,8 +110,6 @@ async def update_character(
         k: v for k, v in payload.model_dump(exclude={"token_configs"}).items()
         if k in payload.model_fields_set
     }
-    if "kind" in patch_fields and patch_fields["kind"] is not None:
-        patch_fields["kind"] = patch_fields["kind"].value
     if "token_configs" in payload.model_fields_set:
         patch_fields["token_configs"] = payload.token_configs
     character = await character_service.update_character(

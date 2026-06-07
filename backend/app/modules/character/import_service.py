@@ -12,7 +12,6 @@ from pydantic import ValidationError
 from app.core.config import Settings, get_settings
 from app.core.exceptions import AppError, BadRequestError
 from app.core.logging import log_extra
-from app.modules.character.constants import CharacterKind
 from app.modules.character.import_defaults import (
     DND5E_CLASSES,
     default_attributes,
@@ -264,7 +263,6 @@ def parse_and_normalize(
     payload = {
         "name": name,
         "player_name": str(data.get("player_name") or ""),
-        "kind": CharacterKind.PC_MAIN,
         "system": "dnd5e",
         "identity": identity,
         "flavor": flavor,

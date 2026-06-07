@@ -34,6 +34,10 @@ class RoomMapResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class RoomMapFromAssetCreate(BaseModel):
+    asset_id: int
+
+
 class RoomMapPatch(BaseModel):
     x: float | None = None
     y: float | None = None

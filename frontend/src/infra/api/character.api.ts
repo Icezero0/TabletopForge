@@ -1,7 +1,5 @@
 import { http } from "@/infra/http/client";
 
-export type CharacterKind = "pc_main" | "pc_additional" | "npc";
-
 export type TokenPanelInitial = {
   ability_scores?: Partial<Record<string, number>>;
   ac?: number | null;
@@ -43,7 +41,6 @@ export type Character = {
   owner_id: number;
   name: string;
   player_name: string;
-  kind: CharacterKind;
   portrait_asset_id: number | null;
   token_image_asset_id: number | null;
   system: string;
@@ -80,7 +77,6 @@ export type CharacterImportPreview = CharacterPayload & {
 export type CharacterPayload = {
   name: string;
   player_name?: string;
-  kind?: CharacterKind;
   system?: string;
   portrait_asset_id?: number | null;
   token_image_asset_id?: number | null;

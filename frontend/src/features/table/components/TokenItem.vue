@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import type { CharacterKind } from "@/infra/api/roomCharacters.api";
 import type { RoomToken } from "@/infra/api/rooms.api";
 import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthenticatedAssetUrl";
 import { TOKEN_BAND_BASE, sceneBandZ } from "@/features/table/constants";
@@ -14,7 +13,6 @@ const props = defineProps<{
   selected?: boolean;
   inactive?: boolean;
   gameRole?: import("@/features/room/types").GameRole | "unknown";
-  characterKind?: CharacterKind;
 }>();
 
 const emit = defineEmits<{

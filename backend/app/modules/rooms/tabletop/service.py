@@ -312,6 +312,47 @@ class RoomTabletopService:
         await db.commit()
         return RoomMapResponse.model_validate(room_map)
 
+    async def create_map_from_asset(
+        self,
+        db: AsyncSession,
+        *,
+        room_id: int,
+        user: User,
+        asset_id: int,
+        x: float = 0.0,
+        y: float = 0.0,
+        scale: float = 1.0,
+    ) -> RoomMapResponse:
+        game_role = await self._require_member_game_role(db, room_id=room_id, user=user)
+        require_game_permission(game_role, GamePermission.UPLOAD_MAP)
+
+        asset = await self.asset_service.get_asset_by_id(db, asset_id)
+        if asset.owner_id != user.id:
+            raise ForbiddenError(
+                "You do not have permission to use this asset",
+                reason=ErrorReason.ROOM_PERMISSION_DENIED,
+                details={"asset_id": asset_id},
+            )
+
+        existing_maps = await self.repo.list_maps(db, room_id=room_id)
+        next_z_index = (
+            max((m.z_index for m in existing_maps), default=-1) + 1
+            if existing_maps
+            else 0
+        )
+
+        room_map = await self.repo.create_map(
+            db,
+            room_id=room_id,
+            asset_id=asset.id,
+            x=x,
+            y=y,
+            scale=scale,
+            z_index=next_z_index,
+        )
+        await db.commit()
+        return RoomMapResponse.model_validate(room_map)
+
     async def patch_map(
         self,
         db: AsyncSession,

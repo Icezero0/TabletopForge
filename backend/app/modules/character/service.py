@@ -6,11 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.error_reasons import ErrorReason
 from app.core.exceptions import ForbiddenError, NotFoundError
 from app.modules.character.attributes import derived_int
-from app.modules.character.constants import (
-    CharacterKind,
-    assert_global_character_kind,
-    kind_value,
-)
 from app.modules.character.models import Character, CharacterState
 from app.modules.character.presenter import present_character_state
 from app.modules.character.repository import CharacterRepository
@@ -101,7 +96,6 @@ class CharacterService:
         owner_id: int,
         name: str,
         player_name: str = "",
-        kind: str = CharacterKind.PC_MAIN.value,
         system: str = "dnd5e",
         portrait_asset_id: int | None = None,
         token_image_asset_id: int | None = None,
@@ -118,7 +112,6 @@ class CharacterService:
             owner_id=owner_id,
             name=name,
             player_name=player_name,
-            kind=kind,
             system=system,
             portrait_asset_id=portrait_asset_id,
             token_image_asset_id=token_image_asset_id,
@@ -169,7 +162,6 @@ class CharacterService:
         user: User,
         name: str,
         player_name: str = "",
-        kind: str = CharacterKind.PC_MAIN.value,
         system: str = "dnd5e",
         portrait_asset_id: int | None = None,
         token_image_asset_id: int | None = None,
@@ -183,18 +175,11 @@ class CharacterService:
         token_configs: list[TokenConfigUpsert] | None = None,
         state: CharacterStateCreate | None = None,
     ) -> Character:
-        user_is_gm = await self.membership_repo.user_is_gm_in_any_room(
-            db,
-            user_id=user.id,
-        )
-        assert_global_character_kind(kind_value(kind), user_is_gm=user_is_gm)
-
         character = await self._create_character_record(
             db,
             owner_id=user.id,
             name=name,
             player_name=player_name,
-            kind=kind,
             system=system,
             portrait_asset_id=portrait_asset_id,
             token_image_asset_id=token_image_asset_id,
@@ -445,10 +430,7 @@ class CharacterService:
 
         patch_fields = dict(patch_fields)
         if "current_hp" in patch_fields:
-            can_track_damage = game_role == GameRole.GM or (
-                character.owner_id == user.id
-                and character.kind == CharacterKind.NPC.value
-            )
+            can_track_damage = game_role == GameRole.GM or character.owner_id == user.id
             if can_track_damage:
                 old_hp = state.current_hp or 0
                 new_hp = patch_fields["current_hp"]

@@ -7,6 +7,7 @@ import { uploadAsset } from "@/infra/api/assets.api";
 import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthenticatedAssetUrl";
 import AvatarCropDialog from "@/ui/domain/avatar/AvatarCropDialog.vue";
 import BaseInput from "@/ui/base/BaseInput.vue";
+import BaseNumberInput from "@/ui/base/BaseNumberInput.vue";
 import BaseTextarea from "@/ui/base/BaseTextarea.vue";
 import BaseSelect from "@/ui/base/BaseSelect.vue";
 import BaseButton from "@/ui/base/BaseButton.vue";
@@ -281,11 +282,14 @@ function closeViewer() { viewingUrl.value = null; }
             :width="140"
             @update:model-value="updateClass(i, 'name', $event)"
           />
-          <!-- Custom level stepper — no native spinner -->
-          <div class="level-stepper">
-            <button class="step-btn" @click="updateClass(i, 'level', Math.max(1, cls.level - 1))">−</button>
-            <span class="level-val">{{ cls.level }}</span>
-            <button class="step-btn" @click="updateClass(i, 'level', Math.min(20, cls.level + 1))">+</button>
+          <div class="level-wrap">
+            <BaseNumberInput
+              compact
+              :model-value="String(cls.level)"
+              :min="1"
+              :max="20"
+              @update:model-value="updateClass(i, 'level', Math.max(1, Math.min(20, parseInt($event, 10) || 1)))"
+            />
           </div>
           <BaseInput :model-value="cls.subclass" :placeholder="t('character.identity.classSubclass')" @update:model-value="updateClass(i, 'subclass', $event)" />
         </div>
@@ -397,24 +401,7 @@ function closeViewer() { viewingUrl.value = null; }
 .class-row { display: flex; align-items: center; gap: 8px; }
 .class-fields { display: flex; gap: 8px; flex: 1; align-items: center; }
 
-/* Level stepper — replaces native number input */
-.level-stepper {
-  display: flex; align-items: center;
-  border: 1px solid var(--c-border); border-radius: var(--r-1);
-  overflow: hidden; flex-shrink: 0; height: 36px; width: 84px;
-  background: var(--c-surface);
-}
-.step-btn {
-  background: var(--c-surface-raised); border: none; cursor: pointer;
-  padding: 0 9px; height: 100%; font-size: 15px; font-weight: 400;
-  color: var(--c-text-muted); transition: background 0.12s, color 0.12s;
-  flex-shrink: 0; user-select: none;
-}
-.step-btn:hover { background: var(--c-hover); color: var(--c-text); }
-.level-val {
-  flex: 1; text-align: center; font-size: 13px; font-weight: 500;
-  color: var(--c-text); user-select: none;
-}
+.level-wrap { width: 100px; flex-shrink: 0; }
 
 .del-btn {
   background: none; border: none; cursor: pointer; color: var(--c-text-muted);

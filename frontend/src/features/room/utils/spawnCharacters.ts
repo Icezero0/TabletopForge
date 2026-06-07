@@ -1,25 +1,13 @@
-import type { Character, CharacterKind } from "@/infra/api/character.api";
+import type { Character } from "@/infra/api/character.api";
 import { getCharacters } from "@/infra/api/character.api";
 import type { RoomCharacterEntry, SpawnPopoverEntry } from "@/infra/api/roomCharacters.api";
 import type { GameRole } from "@/features/room/types";
-
-const PL_KINDS: CharacterKind[] = ["pc_main", "pc_additional"];
-
-export function isSpawnableLibraryKind(
-  kind: CharacterKind,
-  gameRole: GameRole | "unknown",
-): boolean {
-  if (gameRole === "GM") return kind === "npc";
-  if (gameRole === "PL") return PL_KINDS.includes(kind);
-  return false;
-}
 
 function characterToPopoverEntry(char: Character): SpawnPopoverEntry {
   return {
     room_character_id: 0,
     character_id: char.id,
     owner_id: char.owner_id,
-    kind: char.kind,
     name: char.name,
     player_name: char.player_name,
     token_image_asset_id: char.token_image_asset_id ?? char.portrait_asset_id,
@@ -46,7 +34,6 @@ export function mergeSpawnPopoverEntries(
   }));
   const libraryOnly = libraryCharacters
     .filter((char) => currentUserId != null && char.owner_id === currentUserId)
-    .filter((char) => isSpawnableLibraryKind(char.kind, gameRole))
     .filter((char) => !roomIds.has(char.id))
     .map(characterToPopoverEntry);
   return [...inRoom, ...libraryOnly];

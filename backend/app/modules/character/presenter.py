@@ -1,7 +1,6 @@
 from typing import Any
 
 from app.modules.character.attributes import derived_int
-from app.modules.character.constants import CharacterKind
 from app.modules.character.models import Character, CharacterState
 from app.modules.character.schemas import CharacterStateResponse, CharacterStateSummary
 from app.modules.rooms.constants import GamePermission, GameRole
@@ -25,8 +24,6 @@ def viewer_sees_exact_hp(
         return True
     if _can_view_exact_hp(game_role):
         return True
-    if character.kind == CharacterKind.NPC.value:
-        return False
     return True
 
 
@@ -153,19 +150,7 @@ def build_character_state_broadcast(
         game_role=GameRole.GM,
         viewer_user_id=character.owner_id,
     )
-    is_npc = character.kind == CharacterKind.NPC.value
-    if is_npc:
-        public_summary = present_token_state_summary(
-            character,
-            state,
-            game_role=GameRole.PL,
-            viewer_user_id=None,
-        )
-    else:
-        public_summary = gm_summary
     result: dict[str, Any] = {
         "state_summary": gm_summary.model_dump(mode="json"),
     }
-    if is_npc:
-        result["state_summary_public"] = public_summary.model_dump(mode="json")
     return result

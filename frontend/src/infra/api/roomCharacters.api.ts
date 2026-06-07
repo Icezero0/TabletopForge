@@ -1,7 +1,5 @@
 import { http } from "@/infra/http/client";
 
-export type CharacterKind = "pc_main" | "pc_additional" | "npc";
-
 export type CharacterStateSummary = {
   current_hp: number | null;
   max_hp: number | null;
@@ -13,7 +11,6 @@ export type RoomCharacterEntry = {
   room_character_id: number;
   character_id: number;
   owner_id: number;
-  kind: CharacterKind;
   name: string;
   player_name: string;
   token_image_asset_id: number | null;
@@ -34,7 +31,6 @@ export type RoomCharacterStateInput = {
 };
 
 export type RoomCharacterCreatePayload = {
-  kind: CharacterKind;
   name: string;
   player_name?: string;
   system?: string;
@@ -82,7 +78,6 @@ export async function patchRoomCharacterVisibility(
 
 export async function postRoomCharacter(roomId: number, payload: RoomCharacterCreatePayload) {
   const form = new FormData();
-  form.append("kind", payload.kind);
   form.append("name", payload.name);
   if (payload.player_name != null) form.append("player_name", payload.player_name);
   if (payload.system != null) form.append("system", payload.system);

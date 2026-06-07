@@ -5,6 +5,7 @@ import type { TableToolMode, TabletopSelection } from "@/features/table/types";
 import type { RoomDrawing, RoomMap, RoomToken } from "@/infra/api/rooms.api";
 import type { DrawPreview, TextPlacementRequest } from "@/features/table/composables/useDrawingTools";
 import type { MeasureState } from "@/features/table/composables/useMeasureTool";
+import type { MeasureSubTool } from "@/features/table/types";
 import type { TextEditRequest } from "@/features/table/composables/useTextDrawingEdit";
 import { GRID_LAYER_Z, SCENE_ORIGIN, SCENE_SPAN } from "@/features/table/constants";
 import { useTabletopViewport } from "@/features/table/composables/useTabletopViewport";
@@ -42,9 +43,9 @@ const props = withDefaults(
     remoteCursors?: RemoteCursor[];
     remoteLasers?: RemoteLaser[];
     measureState?: MeasureState | null;
+    measureSubTool?: MeasureSubTool;
     currentUserId?: number | null;
     characterOwnerById?: Map<number, number>;
-    characterKindById?: Map<number, import("@/infra/api/roomCharacters.api").CharacterKind>;
     playerColorByUserId?: Map<number, string>;
   }>(),
   {
@@ -68,9 +69,9 @@ const props = withDefaults(
     remoteCursors: () => [],
     remoteLasers: () => [],
     measureState: null,
+    measureSubTool: "line",
     currentUserId: null,
     characterOwnerById: () => new Map<number, number>(),
-    characterKindById: () => new Map(),
   },
 );
 
@@ -108,6 +109,8 @@ const emit = defineEmits<{
   measurePointerDown: [x: number, y: number, event: PointerEvent];
   measurePointerMove: [x: number, y: number, event: PointerEvent];
   measurePointerUp: [x: number, y: number, event: PointerEvent];
+  measureRouteClick: [x: number, y: number];
+  measureRouteFinish: [];
 }>();
 
 const toolModeRef = computed(() => props.toolMode);
@@ -160,8 +163,11 @@ function onViewportPointerDown(event: PointerEvent) {
   }
   if (measureMode.value && event.button === 0) {
     event.preventDefault();
-    const pt = scenePointFromClient(event.clientX, event.clientY);
-    emit("measurePointerDown", pt.x, pt.y, event);
+    if (props.measureSubTool === "line") {
+      const pt = scenePointFromClient(event.clientX, event.clientY);
+      emit("measurePointerDown", pt.x, pt.y, event);
+    }
+    // Route mode is handled via click events (onViewportClick)
   }
 }
 
@@ -198,7 +204,18 @@ function onTokenSelectionContextMenu(event: MouseEvent) {
 }
 
 function onViewportClick(event: MouseEvent) {
-  if (props.toolMode === "draw" || props.toolMode === "pointer" || props.toolMode === "measure") return;
+  if (props.toolMode === "draw" || props.toolMode === "pointer") return;
+  if (props.toolMode === "measure") {
+    if (props.measureSubTool === "route" && event.button === 0) {
+      const pt = scenePointFromClient(event.clientX, event.clientY);
+      if (event.detail >= 2) {
+        emit("measureRouteFinish");
+      } else {
+        emit("measureRouteClick", pt.x, pt.y);
+      }
+    }
+    return;
+  }
   const target = event.target as Element;
   if (
     target.closest(
@@ -261,7 +278,6 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
         :selected-token-id="selectedTokenId"
         :current-user-id="currentUserId"
         :character-owner-by-id="characterOwnerById"
-        :character-kind-by-id="characterKindById"
         @select-token="emit('selectToken', $event)"
         @token-context-menu="(id, ev) => emit('tokenContextMenu', id, ev)"
       />

@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { RoomMap } from "@/infra/api/rooms.api";
 import MapSpawnPopoverItem from "@/features/table/components/MapSpawnPopoverItem.vue";
-import { PlusIcon } from "@heroicons/vue/24/outline";
+import { FolderOpenIcon, ArrowUpTrayIcon } from "@heroicons/vue/24/outline";
 
 const props = defineProps<{
   open: boolean;
@@ -16,6 +16,7 @@ const emit = defineEmits<{
   close: [];
   selectMap: [mapId: number];
   addMap: [];
+  openLibraryPicker: [];
 }>();
 
 const { t } = useI18n();
@@ -55,6 +56,12 @@ function onSelect(mapId: number) {
 
 function onAddMap() {
   emit("addMap");
+  emit("close");
+}
+
+function onOpenLibraryPicker() {
+  emit("openLibraryPicker");
+  emit("close");
 }
 
 function onKeydown(event: KeyboardEvent) {
@@ -108,13 +115,18 @@ const showPopover = computed(() => props.open && props.anchorEl != null);
         <MapSpawnPopoverItem
           v-for="map in maps"
           :key="map.id"
-          :map="map"
+          :asset-id="map.asset_id"
+          :name="t('table.assets.mapLabel', { id: map.id })"
           :selected="selectedMapId === map.id"
           @select="onSelect(map.id)"
         />
+        <button type="button" class="addCard" @click="onOpenLibraryPicker">
+          <FolderOpenIcon class="addIcon" aria-hidden="true" />
+          <span>{{ t("table.assets.mapFromLibrary") }}</span>
+        </button>
         <button type="button" class="addCard" @click="onAddMap">
-          <PlusIcon class="addIcon" aria-hidden="true" />
-          <span>{{ t("table.assets.mapPopoverAdd") }}</span>
+          <ArrowUpTrayIcon class="addIcon" aria-hidden="true" />
+          <span>{{ t("table.assets.mapDirectUpload") }}</span>
         </button>
       </div>
     </div>
@@ -155,7 +167,7 @@ const showPopover = computed(() => props.open && props.anchorEl != null);
 }
 
 .addCard {
-  flex: 0 0 132px;
+  flex: 0 0 100px;
   display: flex;
   flex-direction: column;
   align-items: center;

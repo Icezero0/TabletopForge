@@ -423,6 +423,11 @@ export async function postRoomMap(roomId: number, file: File) {
   return data;
 }
 
+export async function postRoomMapFromAsset(roomId: number, assetId: number) {
+  const { data } = await http.post<RoomMap>(`/rooms/${roomId}/maps/from-asset`, { asset_id: assetId });
+  return data;
+}
+
 export async function patchRoomMap(
   roomId: number,
   mapId: number,

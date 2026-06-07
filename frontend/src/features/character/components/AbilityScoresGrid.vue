@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
 import { ABILITY_KEYS, ABILITY_LABEL_KEYS, abilityMod, fmtMod } from "@/features/character/constants";
+import BaseNumberInput from "@/ui/base/BaseNumberInput.vue";
 
 const props = defineProps<{
   modelValue: Record<string, number>;
@@ -20,21 +21,14 @@ function setScore(ability: string, raw: string) {
   <div class="scores-grid">
     <div v-for="ability in ABILITY_KEYS" :key="ability" class="score-box">
       <div class="score-label">{{ t(ABILITY_LABEL_KEYS[ability]) }}</div>
-      <div class="score-stepper">
-        <button
-          class="score-step-btn"
-          @click="setScore(ability, String(Math.max(1, (modelValue[ability] ?? 10) - 1)))"
-        >−</button>
-        <input
-          type="number"
-          class="score-input"
-          :value="modelValue[ability] ?? 10"
-          @change="setScore(ability, ($event.target as HTMLInputElement).value)"
+      <div class="score-input-wrap">
+        <BaseNumberInput
+          compact
+          :model-value="String(modelValue[ability] ?? 10)"
+          :min="1"
+          :max="30"
+          @update:model-value="setScore(ability, $event)"
         />
-        <button
-          class="score-step-btn"
-          @click="setScore(ability, String(Math.min(30, (modelValue[ability] ?? 10) + 1)))"
-        >+</button>
       </div>
       <div class="score-mod">{{ fmtMod(abilityMod(modelValue[ability] ?? 10)) }}</div>
     </div>
@@ -62,37 +56,6 @@ function setScore(ability: string, raw: string) {
   color: var(--c-text-muted);
   text-align: center;
 }
-.score-stepper { display: flex; align-items: center; gap: 2px; }
-.score-step-btn {
-  background: var(--c-surface-raised);
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-1);
-  color: var(--c-text-muted);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1;
-  padding: 2px 6px;
-  height: 32px;
-  transition: background 0.12s, color 0.12s;
-  flex-shrink: 0;
-}
-.score-step-btn:hover { background: var(--c-hover); color: var(--c-text); }
-.score-input {
-  width: 36px;
-  text-align: center;
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-1);
-  background: var(--c-surface-raised);
-  color: var(--c-text);
-  font-size: 16px;
-  font-weight: 600;
-  padding: 4px 2px;
-  outline: none;
-  -moz-appearance: textfield;
-}
-.score-input:focus { border-color: var(--c-accent); }
-.score-input::-webkit-outer-spin-button,
-.score-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.score-input-wrap { width: 100px; }
 .score-mod { font-size: 14px; font-weight: 500; color: var(--c-text); }
 </style>

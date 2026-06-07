@@ -36,6 +36,7 @@ from app.modules.rooms.tabletop.schemas import (
     RoomDrawingPatch,
     RoomDrawingResponse,
     RoomDrawingsBulkDelete,
+    RoomMapFromAssetCreate,
     RoomMapPatch,
     RoomMapResponse,
     RoomTabletopSettingsPatch,
@@ -278,6 +279,31 @@ async def create_room_map(
     return room_map
 
 
+@router.post(
+    "/{room_id}/maps/from-asset",
+    response_model=RoomMapResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_room_map_from_asset(
+    room_id: int,
+    payload: RoomMapFromAssetCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> RoomMapResponse:
+    room_map = await tabletop_service.create_map_from_asset(
+        db,
+        room_id=room_id,
+        user=current_user,
+        asset_id=payload.asset_id,
+    )
+    await publisher.publish_map_created(
+        room_id=room_id,
+        map_data=room_map.model_dump(mode="json"),
+    )
+    return room_map
+
+
 @router.patch("/{room_id}/maps/{map_id}", response_model=RoomMapResponse)
 async def patch_room_map(
     room_id: int,
@@ -486,7 +512,6 @@ async def get_room_characters(
 )
 async def create_room_character(
     room_id: int,
-    kind: str = Form(...),
     name: str = Form(...),
     player_name: str = Form(""),
     system: str = Form("dnd5e"),
@@ -505,7 +530,6 @@ async def create_room_character(
     current_user: User = Depends(get_current_user),
 ) -> RoomCharacterEntryResponse:
     payload = RoomCharacterService.parse_room_character_create(
-        kind=kind,
         name=name,
         player_name=player_name,
         system=system,

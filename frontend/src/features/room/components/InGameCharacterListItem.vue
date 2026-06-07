@@ -31,10 +31,7 @@ const canRemove = computed(
 );
 
 const ownerDisplay = computed(() => {
-  if (props.entry.kind === "pc_main" && props.entry.player_name?.trim()) {
-    return props.entry.player_name.trim();
-  }
-  return props.ownerLabel;
+  return props.entry.player_name?.trim() || props.ownerLabel;
 });
 
 const CLOSE_ALL_EVENT = "character-list-item:close-menu";
@@ -98,7 +95,6 @@ function onRemove() {
     <div class="meta">
       <div class="nameRow">
         <span class="name">{{ entry.name }}</span>
-        <span v-if="entry.kind !== 'pc_main'" class="kind">{{ t(`room.characters.kindTag.${entry.kind}`) }}</span>
         <span class="owner">{{ ownerDisplay }}</span>
         <span v-if="entry.is_hidden" class="hiddenBadge">{{ t("table.characterList.hidden") }}</span>
       </div>
@@ -189,14 +185,6 @@ function onRemove() {
 .name {
   font-size: 14px;
   font-weight: 600;
-}
-
-.kind {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--c-accent) 15%, transparent);
-  color: var(--c-text-muted);
 }
 
 .hiddenBadge {

@@ -10,7 +10,6 @@ import {
 import {
   getCharacter, createCharacter, patchCharacter,
   type CharacterImportPreview,
-  type CharacterKind,
 } from "@/infra/api/character.api";
 import { postRoomCharacter } from "@/infra/api/roomCharacters.api";
 import { usePageReturnTo, RETURN_TO_QUERY } from "@/composables/useNavigationReturn";
@@ -44,15 +43,6 @@ const roomIdFromQuery = computed(() => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 });
 
-function normalizeKindFromQuery(raw: unknown): CharacterKind {
-  if (raw === "pc_main" || raw === "pc_additional" || raw === "npc") return raw;
-  if (raw === "pc") return "pc_main";
-  if (raw === "additional") return "pc_additional";
-  return "pc_main";
-}
-
-const kindFromQuery = computed(() => normalizeKindFromQuery(route.query.kind));
-
 function routeQueryWithReturn() {
   const query: Record<string, string> = {};
   if (typeof route.query[RETURN_TO_QUERY] === "string") {
@@ -60,9 +50,6 @@ function routeQueryWithReturn() {
   }
   if (roomIdFromQuery.value != null) {
     query.roomId = String(roomIdFromQuery.value);
-  }
-  if (kindFromQuery.value !== "pc_main") {
-    query.kind = kindFromQuery.value;
   }
   return query;
 }
@@ -185,10 +172,7 @@ async function save() {
         await router.push({ path: backTo.value });
       }
     } else if (roomIdFromQuery.value != null) {
-      await postRoomCharacter(roomIdFromQuery.value, {
-        kind: kindFromQuery.value,
-        ...payload,
-      });
+      await postRoomCharacter(roomIdFromQuery.value, payload);
       savedSnapshot.value = currentSnapshot.value;
       toasts.push({ message: t("room.characters.created"), tone: "success" });
       if (backTo.value.startsWith("/rooms/")) {

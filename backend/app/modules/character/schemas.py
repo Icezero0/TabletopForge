@@ -3,8 +3,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.modules.character.constants import CharacterKind
-
 
 class TokenConfigResponse(BaseModel):
     id: int
@@ -73,7 +71,6 @@ class CharacterResponse(BaseModel):
     owner_id: int
     name: str
     player_name: str
-    kind: str
     portrait_asset_id: int | None
     token_image_asset_id: int | None
     system: str
@@ -106,7 +103,6 @@ class CharacterImportPreviewRequest(BaseModel):
 class CharacterImportPreviewResponse(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     player_name: str = Field(default="", max_length=255)
-    kind: CharacterKind = CharacterKind.PC_MAIN
     system: str = Field(default="dnd5e", max_length=50)
     identity: dict[str, Any] = Field(default_factory=dict)
     flavor: dict[str, Any] = Field(default_factory=dict)
@@ -121,7 +117,6 @@ class CharacterImportPreviewResponse(BaseModel):
 class CharacterCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     player_name: str = Field(default="", max_length=255)
-    kind: CharacterKind = CharacterKind.PC_MAIN
     system: str = Field(default="dnd5e", max_length=50)
     portrait_asset_id: int | None = None
     token_image_asset_id: int | None = None
@@ -141,7 +136,6 @@ class CharacterPatch(BaseModel):
     For spells and portrait_asset_id, sending null explicitly clears the value."""
     name: str | None = Field(default=None, min_length=1, max_length=255)
     player_name: str | None = None
-    kind: CharacterKind | None = None
     portrait_asset_id: int | None = None
     token_image_asset_id: int | None = None
     system: str | None = Field(default=None, max_length=50)

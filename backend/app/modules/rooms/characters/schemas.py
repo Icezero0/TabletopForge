@@ -3,7 +3,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.modules.character.constants import CharacterKind
 from app.modules.character.schemas import (
     CharacterStateCreate,
     CharacterStateSummary,
@@ -14,7 +13,6 @@ class RoomCharacterEntryResponse(BaseModel):
     room_character_id: int
     character_id: int
     owner_id: int
-    kind: str
     name: str
     player_name: str
     token_image_asset_id: int | None
@@ -35,7 +33,6 @@ class RoomCharacterVisibilityPatch(BaseModel):
 class RoomCharacterCreate(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     player_name: str = Field(default="", max_length=255)
-    kind: CharacterKind
     system: str = Field(default="dnd5e", max_length=50)
     portrait_asset_id: int | None = None
     token_image_asset_id: int | None = None

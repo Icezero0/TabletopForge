@@ -18,13 +18,11 @@ class RoomCharacterRepository:
         *,
         room_id: int,
         character_id: int,
-        kind: str,
         added_by_user_id: int,
     ) -> RoomCharacter:
         entry = RoomCharacter(
             room_id=room_id,
             character_id=character_id,
-            kind=kind,
             added_by_user_id=added_by_user_id,
         )
         db.add(entry)

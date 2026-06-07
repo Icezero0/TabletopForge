@@ -39,7 +39,6 @@ function onClick() {
       <span v-else class="thumbInitial">{{ tokenInitial(entry.name) }}</span>
     </div>
     <span class="name">{{ entry.name }}</span>
-    <span class="kind">{{ t(`room.characters.kindTag.${entry.kind}`) }}</span>
     <span v-if="!entry.inRoom" class="notInRoom">{{ t("room.characters.notInRoom") }}</span>
     <span v-if="entry.player_name" class="sub">{{ entry.player_name }}</span>
     <span v-if="ownerLabel" class="creator">
@@ -105,14 +104,6 @@ function onClick() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.kind {
-  font-size: 10px;
-  padding: 2px 6px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--c-accent) 15%, transparent);
-  color: var(--c-text-muted);
 }
 
 .notInRoom {
