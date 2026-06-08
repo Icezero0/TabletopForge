@@ -24,6 +24,7 @@ const emit = defineEmits<{
   openLibraryPicker: [];
   spawnToken: [characterId: number, tokenConfigId: number];
   spawnAll: [characterId: number];
+  addCharacter: [];
 }>();
 
 const { t } = useI18n();
@@ -84,6 +85,7 @@ function onSelectMap(mapId: number) {
         @close="closeTokenPopover"
         @spawn-token="(cid, cfgId) => emit('spawnToken', cid, cfgId)"
         @spawn-all="(cid) => emit('spawnAll', cid)"
+        @add-character="emit('addCharacter')"
       />
     </div>
   </div>

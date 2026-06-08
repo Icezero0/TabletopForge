@@ -281,6 +281,7 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
         :selected-token-id="selectedTokenId"
         :current-user-id="currentUserId"
         :character-owner-by-id="characterOwnerById"
+        :player-color-by-user-id="playerColorByUserId"
         @select-token="emit('selectToken', $event)"
         @token-context-menu="(id, ev) => emit('tokenContextMenu', id, ev)"
       />

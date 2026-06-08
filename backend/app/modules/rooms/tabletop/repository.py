@@ -361,6 +361,27 @@ class RoomTabletopRepository:
         await db.delete(token)
         await db.flush()
 
+    async def delete_tokens_by_character(
+        self,
+        db: AsyncSession,
+        *,
+        room_id: int,
+        character_id: int,
+    ) -> list[int]:
+        result = await db.execute(
+            select(RoomToken.id).where(
+                RoomToken.room_id == room_id,
+                RoomToken.linked_character_id == character_id,
+            )
+        )
+        token_ids = [row[0] for row in result.all()]
+        if token_ids:
+            await db.execute(
+                delete(RoomToken).where(RoomToken.id.in_(token_ids))
+            )
+            await db.flush()
+        return token_ids
+
     async def user_can_read_token_asset(
         self,
         db: AsyncSession,

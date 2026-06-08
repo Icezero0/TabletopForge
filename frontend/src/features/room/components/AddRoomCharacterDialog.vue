@@ -17,7 +17,7 @@ import AppIcon from "@/ui/base/AppIcon.vue";
 import { uploadAsset } from "@/infra/api/assets.api";
 import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthenticatedAssetUrl";
 
-type Step = "choose" | "pc" | "additional" | "quick" | "pick";
+type Step = "choose" | "quick" | "pick";
 
 const props = defineProps<{
   open: boolean;
@@ -32,22 +32,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
-  createPc: [payload: {
-    name: string;
-    player_name: string;
-    max_hp: number | null;
-    armor_class: number | null;
-    portrait_asset_id: number | null;
-    spawnAfterCreate?: boolean;
-  }];
-  createAdditional: [payload: {
-    name: string;
-    race: string;
-    class_name: string;
-    backstory: string;
-    portrait_asset_id: number | null;
-    spawnAfterCreate?: boolean;
-  }];
   createQuick: [payload: {
     name: string;
     max_hp: number | null;
@@ -63,23 +47,11 @@ const { t } = useI18n();
 const router = useRouter();
 const toasts = useToastsStore();
 
-const isGm = computed(() => props.gameRole === "GM");
-
 const step = ref<Step>("choose");
-const pcName = ref("");
-const pcMaxHp = ref("");
-const pcAc = ref("");
-
-const addName = ref("");
-const addRace = ref("");
-const addClass = ref("");
-const addBackstory = ref("");
-
 const quickName = ref("");
 const quickMaxHp = ref("");
 const quickAc = ref("");
 const quickBackstory = ref("");
-
 const pickSearch = ref("");
 const spawnAfterCreate = ref(false);
 
@@ -90,10 +62,7 @@ const uploadingAvatar = ref(false);
 const avatarFileInputEl = ref<HTMLInputElement | null>(null);
 const { url: avatarUrl } = useAuthenticatedAssetUrl(avatarAssetId);
 
-
 const title = computed(() => {
-  if (step.value === "pc") return t("room.characters.pcQuickTitle");
-  if (step.value === "additional") return t("room.characters.additionalTitle");
   if (step.value === "quick") return t("room.characters.gmQuickTitle");
   if (step.value === "pick") return t("room.characters.pickFromLibrary");
   return t("room.characters.chooseTitle");
@@ -108,13 +77,6 @@ const filteredLibrary = computed(() => {
 
 function resetForm() {
   step.value = "choose";
-  pcName.value = "";
-  pcMaxHp.value = "";
-  pcAc.value = "";
-  addName.value = "";
-  addRace.value = "";
-  addClass.value = "";
-  addBackstory.value = "";
   quickName.value = "";
   quickMaxHp.value = "";
   quickAc.value = "";
@@ -173,38 +135,6 @@ function parseOptionalInt(raw: string | number | null | undefined): number | nul
   return Number.isFinite(value) ? value : null;
 }
 
-function submitPc() {
-  const name = pcName.value.trim();
-  if (!name) {
-    toasts.push({ message: t("table.assets.nameRequired"), tone: "warning" });
-    return;
-  }
-  emit("createPc", {
-    name,
-    player_name: props.currentUserDisplayName?.trim() ?? "",
-    max_hp: parseOptionalInt(pcMaxHp.value),
-    armor_class: parseOptionalInt(pcAc.value),
-    portrait_asset_id: avatarAssetId.value,
-    spawnAfterCreate: spawnAfterCreate.value,
-  });
-}
-
-function submitAdditional() {
-  const name = addName.value.trim();
-  if (!name) {
-    toasts.push({ message: t("table.assets.nameRequired"), tone: "warning" });
-    return;
-  }
-  emit("createAdditional", {
-    name,
-    race: addRace.value.trim(),
-    class_name: addClass.value.trim(),
-    backstory: addBackstory.value.trim(),
-    portrait_asset_id: avatarAssetId.value,
-    spawnAfterCreate: spawnAfterCreate.value,
-  });
-}
-
 function submitQuick() {
   const name = quickName.value.trim();
   if (!name) {
@@ -261,79 +191,15 @@ function openFullEditor() {
             <span class="choiceTitle">{{ t("room.characters.pickFromLibrary") }}</span>
             <span class="choiceHint">{{ t("room.characters.pickFromLibraryHint") }}</span>
           </button>
-          <template v-if="isGm">
-            <button type="button" class="choiceCard" @click="step = 'quick'">
-              <span class="choiceTitle">{{ t("room.characters.gmQuick") }}</span>
-              <span class="choiceHint">{{ t("room.characters.gmQuickHint") }}</span>
-            </button>
-            <button type="button" class="choiceCard" @click="openFullEditor">
-              <span class="choiceTitle">{{ t("room.characters.gmFull") }}</span>
-              <span class="choiceHint">{{ t("room.characters.gmFullHint") }}</span>
-            </button>
-          </template>
-          <template v-else>
-            <button type="button" class="choiceCard" @click="step = 'pc'">
-              <span class="choiceTitle">{{ t("room.characters.kindPc") }}</span>
-              <span class="choiceHint">{{ t("room.characters.kindPcHint") }}</span>
-            </button>
-            <button type="button" class="choiceCard" @click="step = 'additional'">
-              <span class="choiceTitle">{{ t("room.characters.kindAdditional") }}</span>
-              <span class="choiceHint">{{ t("room.characters.kindAdditionalHint") }}</span>
-            </button>
-          </template>
+          <button type="button" class="choiceCard" @click="step = 'quick'">
+            <span class="choiceTitle">{{ t("room.characters.gmQuick") }}</span>
+            <span class="choiceHint">{{ t("room.characters.gmQuickHint") }}</span>
+          </button>
+          <button type="button" class="choiceCard" @click="openFullEditor">
+            <span class="choiceTitle">{{ t("room.characters.gmFull") }}</span>
+            <span class="choiceHint">{{ t("room.characters.gmFullHint") }}</span>
+          </button>
         </div>
-
-        <form v-else-if="step === 'pc'" class="form" @submit.prevent="submitPc">
-          <div class="nameRow">
-            <div class="avatarArea" @click="openAvatarPicker">
-              <div class="avatarCircle" :class="{ uploading: uploadingAvatar }">
-                <img v-if="avatarUrl" :src="avatarUrl" class="avatarImg" alt="" />
-                <AppIcon v-else :icon="UserCircleIcon" :size="36" class="avatarEmpty" />
-              </div>
-            </div>
-            <label class="field">
-              <span>{{ t("room.characters.nameLabel") }}</span>
-              <BaseInput v-model="pcName" />
-            </label>
-          </div>
-          <label class="field">
-            <span>{{ t("room.characters.boundPlayer") }}</span>
-            <BaseInput :model-value="currentUserDisplayName ?? ''" disabled />
-          </label>
-          <div class="row">
-            <label class="field">
-              <span>{{ t("room.characters.maxHpLabel") }}</span>
-              <BaseNumberInput v-model="pcMaxHp" :min="0" />
-            </label>
-            <label class="field">
-              <span>{{ t("room.characters.acLabel") }}</span>
-              <BaseNumberInput v-model="pcAc" :min="0" />
-            </label>
-          </div>
-          <label class="toggleField">
-            <span>{{ t("table.assets.spawnAfterCreate") }}</span>
-            <span class="toggle" :class="{ on: spawnAfterCreate }" @click="spawnAfterCreate = !spawnAfterCreate">
-              <span class="toggleThumb" />
-            </span>
-          </label>
-          <BaseButton type="button" variant="default" @click="openFullEditor">
-            {{ t("room.characters.fullEditor") }}
-          </BaseButton>
-          <div class="actions">
-            <BaseButton type="button" variant="default" @click="step = 'choose'">
-              {{ t("common.back") }}
-            </BaseButton>
-            <BaseButton
-              type="button"
-              variant="primary"
-              :disabled="submitting"
-              :loading="submitting"
-              @click="submitPc"
-            >
-              {{ t("room.characters.create") }}
-            </BaseButton>
-          </div>
-        </form>
 
         <form v-else-if="step === 'quick'" class="form" @submit.prevent="submitQuick">
           <div class="nameRow">
@@ -378,55 +244,6 @@ function openFullEditor() {
               :disabled="submitting"
               :loading="submitting"
               @click="submitQuick"
-            >
-              {{ t("room.characters.create") }}
-            </BaseButton>
-          </div>
-        </form>
-
-        <form v-else-if="step === 'additional'" class="form" @submit.prevent="submitAdditional">
-          <div class="nameRow">
-            <div class="avatarArea" @click="openAvatarPicker">
-              <div class="avatarCircle" :class="{ uploading: uploadingAvatar }">
-                <img v-if="avatarUrl" :src="avatarUrl" class="avatarImg" alt="" />
-                <AppIcon v-else :icon="UserCircleIcon" :size="36" class="avatarEmpty" />
-              </div>
-            </div>
-            <label class="field">
-              <span>{{ t("room.characters.nameLabel") }}</span>
-              <BaseInput v-model="addName" />
-            </label>
-          </div>
-          <div class="row">
-            <label class="field">
-              <span>{{ t("room.characters.raceLabel") }}</span>
-              <BaseInput v-model="addRace" />
-            </label>
-            <label class="field">
-              <span>{{ t("room.characters.classLabel") }}</span>
-              <BaseInput v-model="addClass" />
-            </label>
-          </div>
-          <label class="field">
-            <span>{{ t("room.characters.backstoryLabel") }}</span>
-            <BaseTextarea v-model="addBackstory" :rows="4" min-height="80px" />
-          </label>
-          <label class="toggleField">
-            <span>{{ t("table.assets.spawnAfterCreate") }}</span>
-            <span class="toggle" :class="{ on: spawnAfterCreate }" @click="spawnAfterCreate = !spawnAfterCreate">
-              <span class="toggleThumb" />
-            </span>
-          </label>
-          <div class="actions">
-            <BaseButton type="button" variant="default" @click="step = 'choose'">
-              {{ t("common.back") }}
-            </BaseButton>
-            <BaseButton
-              type="button"
-              variant="primary"
-              :disabled="submitting"
-              :loading="submitting"
-              @click="submitAdditional"
             >
               {{ t("room.characters.create") }}
             </BaseButton>
@@ -674,11 +491,6 @@ function openFullEditor() {
   font-size: 13px;
   color: var(--c-text-muted);
   margin: 0;
-}
-
-.hint {
-  font-size: 12px;
-  margin-top: 4px;
 }
 
 .pickList {

@@ -83,6 +83,14 @@ export function useRoomCharacters(roomId: Ref<number | null>) {
     return updated;
   }
 
+  function applyVisibilityUpdate(entry: RoomCharacterEntry, isGM: boolean) {
+    if (entry.is_hidden && !isGM) {
+      characters.value = characters.value.filter((e) => e.character_id !== entry.character_id);
+    } else {
+      upsertEntry(entry);
+    }
+  }
+
   return {
     characters,
     isLoading,
@@ -93,6 +101,7 @@ export function useRoomCharacters(roomId: Ref<number | null>) {
     updateEntryState,
     removeEntry,
     setVisibility,
+    applyVisibilityUpdate,
     refresh: fetchCharacters,
   };
 }

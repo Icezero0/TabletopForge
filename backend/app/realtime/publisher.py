@@ -206,6 +206,18 @@ class RealtimePublisher:
             data={"room_id": room_id, "token_id": token_id},
         )
 
+    async def publish_room_character_updated(
+        self,
+        *,
+        room_id: int,
+        entry: dict[str, Any],
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.ROOM_CHARACTER_UPDATED,
+            data={"room_id": room_id, "entry": entry},
+        )
+
     async def publish_character_state_updated(
         self,
         *,

@@ -399,6 +399,7 @@ export type RoomToken = {
   panel?: Record<string, unknown> | null;
   owner_user_id: number;
   linked_character_owner_id?: number | null;
+  character_hidden?: boolean;
   state_summary: TokenStateSummary | null;
   created_at: string | null;
   updated_at: string | null;

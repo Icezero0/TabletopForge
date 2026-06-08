@@ -15,6 +15,7 @@ const props = defineProps<{
   selectedTokenId?: number | null;
   currentUserId?: number | null;
   characterOwnerById: Map<number, number>;
+  playerColorByUserId?: Map<number, string>;
 }>();
 
 const emit = defineEmits<{
@@ -22,9 +23,20 @@ const emit = defineEmits<{
   tokenContextMenu: [tokenId: number, event: MouseEvent];
 }>();
 
-const sortedTokens = computed(() =>
-  [...props.tokens].filter((t) => t.visible).sort((a, b) => a.z_index - b.z_index || a.id - b.id),
-);
+const sortedTokens = computed(() => {
+  const isGM = props.gameRole === "GM";
+  return [...props.tokens]
+    .filter((t) => {
+      if (!t.visible) return false;
+      if (!isGM && t.character_hidden) return false;
+      return true;
+    })
+    .sort((a, b) => a.z_index - b.z_index || a.id - b.id);
+});
+
+function isTokenDimmed(token: RoomToken): boolean {
+  return props.gameRole === "GM" && !!token.character_hidden;
+}
 
 const canPick = computed(
   () => props.toolMode === "select" || props.toolMode === "hand",
@@ -67,7 +79,9 @@ function onTokenContextMenu(token: RoomToken, event: MouseEvent) {
       :grid-cell-px="gridCellPx"
       :selected="selectedTokenId === token.id"
       :inactive="!canPickToken(token)"
+      :dimmed="isTokenDimmed(token)"
       :game-role="gameRole"
+      :player-color-by-user-id="playerColorByUserId"
       @pointerdown="onTokenPointerDown(token, $event)"
       @click="onTokenClick(token, $event)"
       @contextmenu="onTokenContextMenu(token, $event)"

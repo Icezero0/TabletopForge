@@ -45,6 +45,7 @@ class WsEventType(StrEnum):
     TOKEN_UPDATED = "token_updated"
     TOKEN_DELETED = "token_deleted"
     CHARACTER_STATE_UPDATED = "character_state_updated"
+    ROOM_CHARACTER_UPDATED = "room_character_updated"
     POINTER_PRESENCE = "pointer_presence"
     POINTER_LASER = "pointer_laser"
 

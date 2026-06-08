@@ -25,6 +25,7 @@ export type WSEventName =
   | "token_updated"
   | "token_deleted"
   | "character_state_updated"
+  | "room_character_updated"
   | "pointer_presence"
   | "pointer_laser";
 

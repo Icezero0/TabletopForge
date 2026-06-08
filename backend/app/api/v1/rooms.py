@@ -583,13 +583,16 @@ async def delete_room_character(
     room_character_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
 ) -> None:
-    await room_characters_service.remove_room_character(
+    deleted_token_ids = await room_characters_service.remove_room_character(
         db,
         room_id=room_id,
         room_character_id=room_character_id,
         user=current_user,
     )
+    for token_id in deleted_token_ids:
+        await publisher.publish_token_deleted(room_id=room_id, token_id=token_id)
 
 
 @router.patch(
@@ -602,14 +605,20 @@ async def patch_room_character_visibility(
     payload: RoomCharacterVisibilityPatch,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
 ) -> RoomCharacterEntryResponse:
-    return await room_characters_service.set_visibility(
+    entry = await room_characters_service.set_visibility(
         db,
         room_id=room_id,
         room_character_id=room_character_id,
         user=current_user,
         payload=payload,
     )
+    await publisher.publish_room_character_updated(
+        room_id=room_id,
+        entry=entry.model_dump(mode="json"),
+    )
+    return entry
 
 
 @router.post(

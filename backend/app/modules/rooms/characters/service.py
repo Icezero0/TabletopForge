@@ -13,6 +13,7 @@ from app.modules.character.presenter import present_character_state_summary
 from app.modules.character.schemas import CharacterStateCreate, TokenConfigUpsert
 from app.modules.character.service import CharacterService
 from app.modules.rooms.characters.repository import RoomCharacterRepository
+from app.modules.rooms.tabletop.repository import RoomTabletopRepository
 from app.modules.rooms.characters.schemas import (
     RoomCharacterCreate,
     RoomCharacterEntryResponse,
@@ -30,6 +31,7 @@ from app.modules.users.models import User
 class RoomCharacterService:
     def __init__(self) -> None:
         self.repo = RoomCharacterRepository()
+        self.tabletop_repo = RoomTabletopRepository()
         self.character_service = CharacterService()
         self.membership_service = RoomMembershipService()
         self.room_service = RoomService()
@@ -129,7 +131,7 @@ class RoomCharacterService:
         room_id: int,
         room_character_id: int,
         user: User,
-    ) -> None:
+    ) -> list[int]:
         game_role = await self._require_member_game_role(db, room_id=room_id, user=user)
         entry = await self.repo.get_by_id_and_room(
             db,
@@ -148,12 +150,18 @@ class RoomCharacterService:
                 reason=ErrorReason.CHARACTER_PERMISSION_DENIED,
                 details={"room_character_id": room_character_id},
             )
+        deleted_token_ids = await self.tabletop_repo.delete_tokens_by_character(
+            db,
+            room_id=room_id,
+            character_id=entry.character_id,
+        )
         await self.repo.delete_by_id_and_room(
             db,
             room_character_id=room_character_id,
             room_id=room_id,
         )
         await db.commit()
+        return deleted_token_ids
 
     async def set_visibility(
         self,

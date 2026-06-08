@@ -95,6 +95,7 @@ const {
   upsertEntry: upsertRoomCharacter,
   updateEntryState: updateRoomCharacterState,
   setVisibility: setRoomCharacterVisibility,
+  applyVisibilityUpdate: applyRoomCharacterVisibility,
   removeEntry: removeRoomCharacter,
 } = useRoomCharacters(roomId);
 
@@ -108,6 +109,7 @@ const characterOwnerById = computed(() => {
   return map;
 });
 
+
 const canManageRoomRequests = computed(() =>
   currentUserRoomRole.value === "owner" || currentUserRoomRole.value === "manager");
 const canManageRoomSettings = computed(() =>
@@ -118,7 +120,15 @@ const currentUserCanRemoveMembers = computed(() =>
 const memberDangerActionDisabled = computed(() => currentUserRoomRole.value === "unknown");
 
 const canAddMap = computed(() => currentUserGameRole.value === "GM");
-const canAddToken = computed(() => currentUserGameRole.value === "GM");
+const canAddToken = computed(() => currentUserGameRole.value === "GM" || currentUserGameRole.value === "PL");
+
+const tokenSpawnCharacters = computed(() => {
+  if (currentUserGameRole.value === "GM") return roomCharacters.value;
+  if (currentUserGameRole.value === "PL") {
+    return roomCharacters.value.filter((e) => e.owner_id === currentUserId.value);
+  }
+  return [];
+});
 const canAddCharacter = computed(() =>
   currentUserGameRole.value === "GM" || currentUserGameRole.value === "PL");
 const canEditGrid = computed(() => currentUserGameRole.value === "GM");
@@ -555,16 +565,15 @@ async function handleSpawnAllTokens(characterId: number) {
   if (configs.length === 0) return;
 
   const center = viewportCenterPoint();
-  const step = gridCellFt.value;
-  const startX = center.x - ((configs.length - 1) / 2) * step;
+  const step = gridCellPx.value;
+  const startX = center.x - (configs.length / 2) * step;
 
   for (let i = 0; i < configs.length; i++) {
     const cfg = configs[i];
-    const cx = viewportCenterPoint();
     try {
       await tabletopStore.spawnCharacterToken(roomId.value, characterId, {
         x: startX + i * step,
-        y: cx.y,
+        y: center.y,
         token_config_id: cfg.id,
       });
       toasts.push({ message: t("table.characterList.spawned"), tone: "success" });
@@ -1165,6 +1174,10 @@ const realtime = useRoomRealtimeSession({
   onCharacterStateUpdated: (characterId, summary) => {
     updateRoomCharacterState(characterId, summary);
   },
+  onRoomCharacterUpdated: (entry) => {
+    applyRoomCharacterVisibility(entry, currentUserGameRole.value === "GM");
+    tabletopStore.applyCharacterVisibilityChanged(roomId.value, entry.character_id, entry.is_hidden);
+  },
   onSessionClosed: handleRealtimeSessionClosed,
   onPointerPresence: handlePointerPresence,
   onPointerLaser: handlePointerLaser,
@@ -1450,95 +1463,6 @@ function applyOpenCharacterPopoverFromQuery() {
   void router.replace({ query: nextQuery });
 }
 
-async function handleCreateRoomPc(payload: {
-  name: string;
-  player_name: string;
-  max_hp: number | null;
-  armor_class: number | null;
-  portrait_asset_id: number | null;
-  spawnAfterCreate?: boolean;
-}) {
-  if (!roomId.value) {
-    toasts.push({ message: t("room.invalidId"), tone: "danger" });
-    return;
-  }
-  if (characterSubmitting.value) return;
-  characterSubmitting.value = true;
-  try {
-    const hasState = payload.max_hp != null || payload.armor_class != null;
-    const entry = await createRoomCharacter({
-      name: payload.name,
-      player_name: payload.player_name,
-      state: hasState
-        ? {
-            max_hp: payload.max_hp,
-            current_hp: payload.max_hp,
-            armor_class: payload.armor_class,
-          }
-        : undefined,
-      portrait_asset_id: payload.portrait_asset_id ?? undefined,
-    });
-    closeAddCharacterDialog();
-    characterPopoverOpen.value = true;
-    toasts.push({ message: t("room.characters.created"), tone: "success" });
-    if (payload.spawnAfterCreate) {
-      await handleSpawnCharacter(entry.character_id);
-    }
-  } catch (error) {
-    toasts.push({
-      message: getBackendErrorMessage(error) || t("room.characters.createFailed"),
-      tone: "danger",
-    });
-  } finally {
-    characterSubmitting.value = false;
-  }
-}
-
-async function handleCreateRoomAdditional(payload: {
-  name: string;
-  race: string;
-  class_name: string;
-  backstory: string;
-  portrait_asset_id: number | null;
-  spawnAfterCreate?: boolean;
-}) {
-  if (!roomId.value) {
-    toasts.push({ message: t("room.invalidId"), tone: "danger" });
-    return;
-  }
-  if (characterSubmitting.value) return;
-  characterSubmitting.value = true;
-  try {
-    const identity: Record<string, unknown> = {};
-    if (payload.race) identity.race = payload.race;
-    if (payload.class_name) {
-      identity.classes = [{ name: payload.class_name, level: 1, subclass: "" }];
-    }
-    const flavor: Record<string, unknown> = {};
-    if (payload.backstory) flavor.backstory = payload.backstory;
-
-    const entry = await createRoomCharacter({
-      name: payload.name,
-      identity,
-      flavor,
-      portrait_asset_id: payload.portrait_asset_id ?? undefined,
-    });
-    closeAddCharacterDialog();
-    characterPopoverOpen.value = true;
-    toasts.push({ message: t("room.characters.created"), tone: "success" });
-    if (payload.spawnAfterCreate) {
-      await handleSpawnCharacter(entry.character_id);
-    }
-  } catch (error) {
-    toasts.push({
-      message: getBackendErrorMessage(error) || t("room.characters.createFailed"),
-      tone: "danger",
-    });
-  } finally {
-    characterSubmitting.value = false;
-  }
-}
-
 async function handleCreateRoomQuick(payload: {
   name: string;
   max_hp: number | null;
@@ -1743,8 +1667,6 @@ watch(
             :library-loading="libraryLoading"
             :in-room-character-ids="inRoomCharacterIds"
             @close="closeAddCharacterDialog"
-            @create-pc="handleCreateRoomPc"
-            @create-additional="handleCreateRoomAdditional"
             @create-quick="handleCreateRoomQuick"
             @link-character="handleLinkRoomCharacter"
           />
@@ -1809,7 +1731,6 @@ watch(
             :loading="roomCharactersLoading"
             :game-role="currentUserGameRole"
             @inspect="handleInspectCharacter"
-            @add-character="openAddCharacterDialog"
             @toggle-visibility="handleToggleCharacterVisibility"
             @remove="handleRemoveRoomCharacter"
           />
@@ -1885,12 +1806,13 @@ watch(
               :can-add-token="canAddToken"
               :maps="tabletopMaps"
               :selected-map-id="selectedMapId"
-              :characters="roomCharacters"
+              :characters="tokenSpawnCharacters"
               @add-map="handleAddMapClick"
               @select-map="selectMap"
               @open-library-picker="libraryMapPickerOpen = true"
               @spawn-token="(cid, cfgId) => handleSpawnCharacter(cid, cfgId)"
               @spawn-all="(cid) => handleSpawnAllTokens(cid)"
+              @add-character="openAddCharacterDialog"
             />
           </FloatingPanel>
 

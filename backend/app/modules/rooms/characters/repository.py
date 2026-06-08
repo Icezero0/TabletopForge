@@ -127,6 +127,20 @@ class RoomCharacterRepository:
         await db.delete(entry)
         return True
 
+    async def get_hidden_character_ids_for_room(
+        self,
+        db: AsyncSession,
+        *,
+        room_id: int,
+    ) -> set[int]:
+        result = await db.execute(
+            select(RoomCharacter.character_id).where(
+                RoomCharacter.room_id == room_id,
+                RoomCharacter.is_hidden.is_(True),
+            )
+        )
+        return {row[0] for row in result.all()}
+
     async def is_character_in_room(
         self,
         db: AsyncSession,

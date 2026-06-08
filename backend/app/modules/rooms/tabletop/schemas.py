@@ -147,6 +147,7 @@ class RoomTokenResponse(BaseModel):
     panel: dict[str, Any] | None = None
     owner_user_id: int
     linked_character_owner_id: int | None = None
+    character_hidden: bool = False
     state_summary: TokenStateSummary | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None

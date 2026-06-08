@@ -158,6 +158,22 @@ export const useTabletopStore = defineStore("tabletop", {
       };
     },
 
+    applyCharacterVisibilityChanged(
+      roomId: number,
+      characterId: number,
+      isHidden: boolean,
+    ) {
+      const state = this.ensureRoom(roomId);
+      if (!state.snapshot) return;
+      state.snapshot = {
+        ...state.snapshot,
+        tokens: state.snapshot.tokens.map((token) => {
+          if (token.linked_character_id !== characterId) return token;
+          return { ...token, character_hidden: isHidden };
+        }),
+      };
+    },
+
     async loadSnapshot(roomId: number) {
       if (!roomId) return;
       const state = this.ensureRoom(roomId);

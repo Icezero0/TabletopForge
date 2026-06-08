@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { ChevronLeftIcon } from "@heroicons/vue/24/outline";
+import { ChevronLeftIcon, UserPlusIcon } from "@heroicons/vue/24/outline";
 import type { RoomCharacterEntry } from "@/infra/api/roomCharacters.api";
 import CharacterTokenCard from "@/features/table/components/CharacterTokenCard.vue";
 import TokenConfigCard from "@/features/table/components/TokenConfigCard.vue";
@@ -16,6 +16,7 @@ const emit = defineEmits<{
   close: [];
   spawnToken: [characterId: number, tokenConfigId: number];
   spawnAll: [characterId: number];
+  addCharacter: [];
 }>();
 
 const { t } = useI18n();
@@ -114,18 +115,19 @@ function onSpawnAll() {
       <!-- Level 1: character list -->
       <template v-if="!selectedCharacter">
         <div class="popoverHeader">
-          <span class="popoverTitle">{{ t("table.assets.addToken") }}</span>
+          <span class="popoverTitle">{{ t("table.assets.tokenPopoverTitle") }}</span>
         </div>
         <div class="track">
-          <p v-if="characters.length === 0" class="muted">
-            {{ t("table.assets.tokenPopoverEmpty") }}
-          </p>
           <CharacterTokenCard
             v-for="entry in characters"
             :key="entry.character_id"
             :entry="entry"
             @select="selectCharacter(entry)"
           />
+          <button type="button" class="addCard" @click="emit('addCharacter'); emit('close')">
+            <UserPlusIcon class="addIcon" aria-hidden="true" />
+            <span>{{ t("table.characterList.addCharacter") }}</span>
+          </button>
         </div>
       </template>
 
@@ -172,7 +174,6 @@ function onSpawnAll() {
 }
 
 .popover {
-  min-width: 220px;
   max-width: min(90vw, 680px);
   padding: 10px;
   border-radius: 14px;
@@ -261,5 +262,32 @@ function onSpawnAll() {
   padding: 12px 4px;
   font-size: 13px;
   color: var(--c-text-muted);
+}
+
+.addCard {
+  flex: 0 0 80px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 8px;
+  border-radius: 12px;
+  border: 1px dashed var(--c-border);
+  background: transparent;
+  color: var(--c-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.addCard:hover {
+  border-color: color-mix(in srgb, var(--c-accent) 45%, var(--c-border));
+  color: var(--c-text);
+  background: color-mix(in srgb, var(--c-accent) 6%, transparent);
+}
+
+.addIcon {
+  width: 22px;
+  height: 22px;
 }
 </style>

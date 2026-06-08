@@ -18,6 +18,7 @@ import type {
   TokenStateSummary,
 } from "@/infra/api/rooms.api";
 import type { MessageResponse } from "@/infra/api/messages.api";
+import type { RoomCharacterEntry } from "@/infra/api/roomCharacters.api";
 import { useAuthStore } from "@/stores/auth.store";
 import { useMessagesStore } from "@/stores/messages.store";
 import { useTabletopStore } from "@/stores/tabletop.store";
@@ -34,6 +35,7 @@ type UseRoomRealtimeSessionOptions = {
   refreshRoomMembers: () => void | Promise<void>;
   refreshRoomRequests: () => void | Promise<void>;
   onCharacterStateUpdated?: (characterId: number, summary: TokenStateSummary) => void;
+  onRoomCharacterUpdated?: (entry: RoomCharacterEntry) => void;
   onSessionClosed?: (payload: RoomRealtimeSessionClosed) => void;
   onPointerPresence?: (payload: PointerPresencePayload) => void;
   onPointerLaser?: (payload: PointerLaserPayload) => void;
@@ -245,6 +247,13 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
         );
         options.onCharacterStateUpdated?.(payload.character_id, summary);
       }),
+      wsClient.onEvent<{ room_id: number; entry: RoomCharacterEntry }>(
+        "room_character_updated",
+        (payload) => {
+          if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+          options.onRoomCharacterUpdated?.(payload.entry);
+        },
+      ),
       wsClient.onEvent<PointerPresencePayload>("pointer_presence", (payload) => {
         if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
         options.onPointerPresence?.(payload);

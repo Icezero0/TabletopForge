@@ -12,7 +12,9 @@ const props = defineProps<{
   gridCellPx: number;
   selected?: boolean;
   inactive?: boolean;
+  dimmed?: boolean;
   gameRole?: import("@/features/room/types").GameRole | "unknown";
+  playerColorByUserId?: Map<number, string>;
 }>();
 
 const emit = defineEmits<{
@@ -41,12 +43,18 @@ const previewText = computed(() => {
     damageLabel: t("room.characters.damageTakenShort"),
   });
 });
+
+const ownerColor = computed(() => {
+  const ownerId = props.token.linked_character_owner_id;
+  if (ownerId == null || !props.playerColorByUserId) return undefined;
+  return props.playerColorByUserId.get(ownerId) ?? undefined;
+});
 </script>
 
 <template>
   <div
     class="tokenWrap"
-    :class="{ inactive, selected }"
+    :class="{ inactive, selected, dimmed }"
     :style="{
       transform: `translate(${token.x}px, ${token.y}px) rotate(${token.rotation}deg)`,
       zIndex: sceneBandZ(token.z_index, TOKEN_BAND_BASE),
@@ -61,6 +69,7 @@ const previewText = computed(() => {
       :style="{
         width: `${displaySize}px`,
         height: `${displaySize}px`,
+        '--owner-color': ownerColor,
       }"
     >
       <img v-if="imageUrl" class="tokenImage" :src="imageUrl" alt="" draggable="false" />
@@ -82,6 +91,10 @@ const previewText = computed(() => {
   pointer-events: none;
 }
 
+.tokenWrap.dimmed {
+  opacity: 0.7;
+}
+
 .tokenWrap:not(.inactive) {
   pointer-events: auto;
   cursor: default;
@@ -93,8 +106,8 @@ const previewText = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-surface-elevated, #2a2a32);
-  border: 2px solid var(--color-border-strong, #555);
+  background: var(--c-surface);
+  border: 2px solid var(--owner-color, var(--c-border));
   box-sizing: border-box;
   pointer-events: none;
 }

@@ -168,6 +168,10 @@ class RoomTabletopService:
     ) -> list[RoomTokenResponse]:
         if not tokens:
             return []
+        room_id = tokens[0].room_id
+        hidden_ids = await self.room_character_repo.get_hidden_character_ids_for_room(
+            db, room_id=room_id
+        )
         character_ids = [
             t.linked_character_id for t in tokens if t.linked_character_id is not None
         ]
@@ -176,21 +180,16 @@ class RoomTabletopService:
         for token in tokens:
             base = RoomTokenResponse.model_validate(token)
             state_summary = self._build_panel_state_summary(token)
-            if token.linked_character_id is None:
-                responses.append(base.model_copy(update={"state_summary": state_summary}))
-                continue
-            character = characters.get(token.linked_character_id)
-            if character is None:
-                responses.append(base.model_copy(update={"state_summary": state_summary}))
-                continue
-            responses.append(
-                base.model_copy(
-                    update={
-                        "state_summary": state_summary,
-                        "linked_character_owner_id": character.owner_id,
-                    }
-                )
+            character_hidden = (
+                token.linked_character_id is not None
+                and token.linked_character_id in hidden_ids
             )
+            updates: dict = {"state_summary": state_summary, "character_hidden": character_hidden}
+            if token.linked_character_id is not None:
+                character = characters.get(token.linked_character_id)
+                if character is not None:
+                    updates["linked_character_owner_id"] = character.owner_id
+            responses.append(base.model_copy(update=updates))
         return responses
 
     async def _token_response(
