@@ -12,6 +12,7 @@ const props = defineProps<{
   ownerLabel: string;
   gameRole?: GameRole | "unknown";
   currentUserId?: number;
+  selected?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -84,7 +85,7 @@ function onRemove() {
 <template>
   <li
     class="row"
-    :class="{ hidden: entry.is_hidden }"
+    :class="{ hidden: entry.is_hidden, selected }"
     @click="onClickRow"
     @contextmenu="openMenu"
   >
@@ -144,6 +145,11 @@ function onRemove() {
 .row.hidden {
   opacity: 0.55;
   border-style: dashed;
+}
+
+.row.selected {
+  border-color: var(--c-accent);
+  background: color-mix(in srgb, var(--c-accent) 8%, var(--c-bg-subtle));
 }
 
 .thumb {

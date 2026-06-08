@@ -22,6 +22,7 @@ from app.modules.character.token_config_repository import TokenConfigRepository
 from app.modules.library.constants import ResourceType
 from app.modules.library.service import LibraryService
 from app.modules.rooms.characters.repository import RoomCharacterRepository
+from app.modules.rooms.tabletop.repository import RoomTabletopRepository
 from app.modules.rooms.constants import GamePermission, GameRole
 from app.modules.rooms.game_permissions import require_game_permission
 from app.modules.rooms.membership.repository import RoomMembershipRepository
@@ -35,6 +36,7 @@ class CharacterService:
         self.token_config_repo = TokenConfigRepository()
         self.library_service = LibraryService()
         self.room_character_repo = RoomCharacterRepository()
+        self.tabletop_repo = RoomTabletopRepository()
         self.membership_repo = RoomMembershipRepository()
 
     async def _ensure_token_lib_resources(
@@ -326,6 +328,8 @@ class CharacterService:
         self._require_owner(character, user)
         token_configs = await self.token_config_repo.list_by_character(db, character_id=character_id)
         lib_ids = {cfg.library_resource_id for cfg in token_configs if cfg.library_resource_id is not None}
+        await self.tabletop_repo.delete_all_tokens_by_character(db, character_id=character_id)
+        await self.room_character_repo.delete_by_character(db, character_id=character_id)
         await self.repo.delete(db, character=character)
         for rid in lib_ids:
             await self.library_service.decrement_usage(db, resource_id=rid)

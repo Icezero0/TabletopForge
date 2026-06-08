@@ -250,8 +250,7 @@ function openFullEdit() {
       </button>
     </div>
 
-    <p v-if="!inspection" class="empty">{{ t("table.inspector.infoEmpty") }}</p>
-    <p v-else-if="loading" class="empty">{{ t("common.loading") }}</p>
+    <p v-if="loading" class="empty">{{ t("common.loading") }}</p>
     <p v-else-if="error" class="empty">{{ error }}</p>
     <template v-else-if="character">
       <header class="hero">
@@ -358,8 +357,15 @@ function openFullEdit() {
 .infoPanel {
   display: grid;
   gap: 12px;
-  min-height: 0;
   color: var(--c-text);
+  width: min(280px, calc(100vw - 24px));
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--c-border) 72%, transparent);
+  background: color-mix(in srgb, var(--c-surface) 94%, var(--c-bg));
+  box-shadow: 0 10px 28px rgb(15 23 42 / 0.12);
+  padding: 10px 14px 14px;
 }
 
 .empty {

@@ -12,6 +12,7 @@ const props = defineProps<{
   currentUserId?: number;
   loading?: boolean;
   gameRole?: GameRole | "unknown";
+  selectedCharacterId?: number | null;
 }>();
 
 const emit = defineEmits<{
@@ -44,6 +45,7 @@ const { t } = useI18n();
           :owner-label="(entry.owner_id != null ? ownerNameByUserId.get(entry.owner_id) : null) ?? `User #${entry.owner_id}`"
           :game-role="gameRole"
           :current-user-id="currentUserId"
+          :selected="entry.character_id === selectedCharacterId"
           @inspect="emit('inspect', $event)"
           @toggle-visibility="emit('toggleVisibility', $event)"
           @remove="emit('remove', $event)"

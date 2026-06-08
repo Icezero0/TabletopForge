@@ -361,6 +361,17 @@ class RoomTabletopRepository:
         await db.delete(token)
         await db.flush()
 
+    async def delete_all_tokens_by_character(
+        self,
+        db: AsyncSession,
+        *,
+        character_id: int,
+    ) -> None:
+        await db.execute(
+            delete(RoomToken).where(RoomToken.linked_character_id == character_id)
+        )
+        await db.flush()
+
     async def delete_tokens_by_character(
         self,
         db: AsyncSession,

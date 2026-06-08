@@ -112,6 +112,7 @@ class RoomCharacterService:
     ) -> list[RoomCharacterEntryResponse]:
         game_role = await self._require_member_game_role(db, room_id=room_id, user=user)
         entries = await self.repo.list_by_room(db, room_id=room_id)
+        entries = [e for e in entries if e.character is not None]
         if game_role != GameRole.GM:
             entries = [e for e in entries if not e.is_hidden]
         return [

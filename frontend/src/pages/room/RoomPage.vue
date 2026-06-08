@@ -232,7 +232,7 @@ watch(characterPopoverOpen, async (open) => {
 const selectedMapId = computed(() =>
   selection.value?.type === "map" ? selection.value.id : null,
 );
-const infoPanelCollapsed = ref(false);
+const selectedCharacterListId = ref<number | null>(null);
 const characterSubmitting = ref(false);
 
 const currentUserDisplayName = computed(
@@ -350,7 +350,11 @@ watch(tabletopMaps, (maps) => {
 watch(tabletopTokens, (tokens) => {
   if (selection.value?.type === "token") {
     const exists = tokens.some((t) => t.id === selection.value!.id);
-    if (!exists) clearSelection();
+    if (!exists) {
+      const prevTokenId = selection.value.id;
+      clearSelection();
+      if (activeInspection.value?.tokenId === prevTokenId) clearInspection();
+    }
   }
 });
 
@@ -447,12 +451,15 @@ function handleSelectToken(tokenId: number) {
   const token = tabletopTokens.value.find((t) => t.id === tokenId);
   if (!token || !tokenCanInteract(token)) return;
   selectToken(tokenId);
-  if (!infoPanelCollapsed.value && token.linked_character_id != null && canInspectToken(token)) {
+  selectedCharacterListId.value = null;
+  if (token.linked_character_id != null && canInspectToken(token)) {
     inspectCharacter({
       characterId: token.linked_character_id,
       tokenId: token.id,
       tokenInstanceName: token.name,
     });
+  } else {
+    clearInspection();
   }
 }
 
@@ -469,6 +476,7 @@ function handleTokenContextMenu(tokenId: number, event: MouseEvent) {
 function handleInspectToken(tokenId: number) {
   const token = tabletopTokens.value.find((t) => t.id === tokenId);
   if (!token?.linked_character_id) return;
+  selectedCharacterListId.value = null;
   inspectCharacter({
     characterId: token.linked_character_id,
     tokenId: token.id,
@@ -476,11 +484,19 @@ function handleInspectToken(tokenId: number) {
   });
 }
 
-function handleInspectCharacter(payload: {
-  characterId: number;
-  tokenId?: number;
-  tokenInstanceName?: string;
-}) {
+function handleCloseInspection() {
+  clearInspection();
+  clearSelection();
+  selectedCharacterListId.value = null;
+}
+
+function handleInspectCharacter(payload: { characterId: number }) {
+  if (selectedCharacterListId.value === payload.characterId) {
+    handleCloseInspection();
+    return;
+  }
+  clearSelection();
+  selectedCharacterListId.value = payload.characterId;
   inspectCharacter(payload);
 }
 
@@ -678,6 +694,8 @@ function closeContextMenu() {
 function handleClearSelection() {
   clearSelection();
   closeContextMenu();
+  clearInspection();
+  selectedCharacterListId.value = null;
 }
 
 async function handleContextAlignMapToGrid(mapId: number) {
@@ -913,6 +931,13 @@ function isEditingText() {
 }
 
 function handleGlobalKeyDown(event: KeyboardEvent) {
+  if (event.key === "Escape") {
+    if (activeInspection.value) {
+      event.preventDefault();
+      handleCloseInspection();
+      return;
+    }
+  }
   if (event.key !== "Delete") return;
   if (isEditingText()) return;
   if (!selection.value || !roomId.value) return;
@@ -1730,6 +1755,7 @@ watch(
             :current-user-id="currentUserId ?? undefined"
             :loading="roomCharactersLoading"
             :game-role="currentUserGameRole"
+            :selected-character-id="selectedCharacterListId"
             @inspect="handleInspectCharacter"
             @toggle-visibility="handleToggleCharacterVisibility"
             @remove="handleRemoveRoomCharacter"
@@ -1817,22 +1843,16 @@ watch(
           </FloatingPanel>
 
           <div class="rightStack">
-            <FloatingPanel
-              v-model:collapsed="infoPanelCollapsed"
-              :title="t('table.inspector.infoTitle')"
-              inline
-              collapse-to="right"
-              variant="info"
-              :storage-key="`room-${roomId}-info`"
-            >
+            <Transition name="infoPanel">
               <InfoPanel
+                v-if="activeInspection"
                 :inspection="activeInspection"
                 :room-id="roomId"
                 :game-role="currentUserGameRole"
                 :current-user-id="currentUserId"
-                @close="clearInspection"
+                @close="handleCloseInspection"
               />
-            </FloatingPanel>
+            </Transition>
 
             <FloatingPanel
               class="memoPanel"
@@ -1911,6 +1931,16 @@ watch(
 
 .rightStack > .memoPanel {
   margin-top: auto;
+}
+
+.infoPanel-enter-active,
+.infoPanel-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.infoPanel-enter-from,
+.infoPanel-leave-to {
+  opacity: 0;
 }
 
 .leftStack {

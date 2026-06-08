@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -107,6 +107,28 @@ class RoomCharacterRepository:
         await db.flush()
         await db.refresh(entry)
         return entry
+
+    async def get_room_ids_by_character(
+        self,
+        db: AsyncSession,
+        *,
+        character_id: int,
+    ) -> list[int]:
+        result = await db.execute(
+            select(RoomCharacter.room_id).where(RoomCharacter.character_id == character_id)
+        )
+        return [row[0] for row in result.all()]
+
+    async def delete_by_character(
+        self,
+        db: AsyncSession,
+        *,
+        character_id: int,
+    ) -> None:
+        await db.execute(
+            delete(RoomCharacter).where(RoomCharacter.character_id == character_id)
+        )
+        await db.flush()
 
     async def delete_by_id_and_room(
         self,
