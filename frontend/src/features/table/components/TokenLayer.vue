@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import type { RoomToken } from "@/infra/api/rooms.api";
 import type { GameRole } from "@/features/room/types";
-import type { TableToolMode } from "@/features/table/types";
+import type { RemoteObjectSelection, TableToolMode } from "@/features/table/types";
 import TokenItem from "@/features/table/components/TokenItem.vue";
 import { canInspectToken, canManageToken } from "@/features/table/utils/tokenDisplay";
 
@@ -16,6 +16,7 @@ const props = defineProps<{
   currentUserId?: number | null;
   characterOwnerById: Map<number, number>;
   playerColorByUserId?: Map<number, string>;
+  remoteSelections?: RemoteObjectSelection[];
 }>();
 
 const emit = defineEmits<{
@@ -52,10 +53,15 @@ const canPick = computed(
 
 function canPickToken(token: RoomToken): boolean {
   if (!canPick.value) return false;
+  if (remoteSelectionFor(token.id)) return false;
   return (
     canInspectToken(token) ||
     canManageToken(token, props.gameRole, props.currentUserId, props.characterOwnerById)
   );
+}
+
+function remoteSelectionFor(tokenId: number) {
+  return props.remoteSelections?.find((claim) => claim.type === "token" && claim.id === tokenId) ?? null;
 }
 
 function onTokenPointerDown(token: RoomToken, event: PointerEvent) {
@@ -86,6 +92,7 @@ function onTokenContextMenu(token: RoomToken, event: MouseEvent) {
       :grid-cell-ft="gridCellFt"
       :grid-cell-px="gridCellPx"
       :selected="selectedTokenId === token.id"
+      :remote-selection-color="remoteSelectionFor(token.id)?.color"
       :inactive="!canPickToken(token)"
       :dimmed="isTokenDimmed(token)"
       :game-role="gameRole"

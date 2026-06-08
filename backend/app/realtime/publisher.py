@@ -238,6 +238,29 @@ class RealtimePublisher:
             exclude_connection_ids=exclude_connection_ids,
         )
 
+    async def publish_object_selection(
+        self,
+        *,
+        room_id: int,
+        user_id: int,
+        object_type: str,
+        object_id: int | None,
+        active: bool,
+        exclude_connection_ids: set[str] | None = None,
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.OBJECT_SELECTION,
+            data={
+                "room_id": room_id,
+                "user_id": user_id,
+                "object_type": object_type,
+                "object_id": object_id,
+                "active": active,
+            },
+            exclude_connection_ids=exclude_connection_ids,
+        )
+
     async def publish_room_character_updated(
         self,
         *,

@@ -28,7 +28,11 @@ import { useRoomInspection } from "@/features/room/composables/useRoomInspection
 import { useRoomMemberActions } from "@/features/room/composables/useRoomMemberActions";
 import { useRoomRealtimeSession } from "@/features/room/composables/useRoomRealtimeSession";
 import type { RoomRealtimeSessionClosed } from "@/infra/realtime/roomRealtime";
-import { sendTokenTransformPreview } from "@/infra/realtime/tabletopRealtime";
+import {
+  sendObjectSelection,
+  sendTokenTransformPreview,
+  type ObjectSelectionPayload,
+} from "@/infra/realtime/tabletopRealtime";
 import BottomAssetBar from "@/features/table/components/BottomAssetBar.vue";
 import LibraryMapPickerDialog from "@/features/table/components/LibraryMapPickerDialog.vue";
 import MapGridAnnotationDialog from "@/features/table/components/MapGridAnnotationDialog.vue";
@@ -52,6 +56,7 @@ import { useTabletopSelection } from "@/features/table/composables/useTabletopSe
 import { useTableToolMode } from "@/features/table/composables/useTableToolMode";
 import { useTabletopPointer } from "@/features/table/composables/useTabletopPointer";
 import { useRealtimePreviewChannel } from "@/features/table/composables/useRealtimePreviewChannel";
+import type { ClaimableObjectSelection, RemoteObjectSelection } from "@/features/table/types";
 import { nextDrawingZIndex } from "@/features/table/drawingTypes";
 import { computeMapScaleForViewport } from "@/features/table/utils/mapScale";
 import { canInspectToken, canManageToken } from "@/features/table/utils/tokenDisplay";
@@ -178,6 +183,13 @@ const tabletopDrawings = computed(() => tabletopStore.getDrawings(roomId.value))
 const tabletopTokens = computed(() => tabletopStore.getTokens(roomId.value));
 const currentUserId = computed(() => auth.me?.id ?? null);
 const { selection, selectMap, selectDrawing, selectToken, clearSelection } = useTabletopSelection();
+const OBJECT_SELECTION_LEASE_MS = 30_000;
+const OBJECT_SELECTION_RENEW_MS = 10_000;
+const remoteObjectSelectionByKey = ref<Record<string, RemoteObjectSelection>>({});
+const objectSelectionNow = ref(Date.now());
+let lastClaimedSelection: ClaimableObjectSelection | null = null;
+let objectSelectionRenewTimer: ReturnType<typeof window.setInterval> | null = null;
+let objectSelectionCleanupTimer: ReturnType<typeof window.setInterval> | null = null;
 const mapNaturalSizes = ref<Record<number, { w: number; h: number }>>({});
 const mapViewportRef = ref<InstanceType<typeof MapViewport> | null>(null);
 const mapUploadInput = ref<HTMLInputElement | null>(null);
@@ -400,9 +412,119 @@ async function flushMapPatch() {
   }
 }
 
+function claimKey(selectionLike: ClaimableObjectSelection) {
+  return `${selectionLike.type}:${selectionLike.id}`;
+}
+
+function isClaimableSelection(value: typeof selection.value): value is ClaimableObjectSelection {
+  return value?.type === "token" || value?.type === "drawing";
+}
+
+function remoteClaimFor(selectionLike: ClaimableObjectSelection) {
+  const claim = remoteObjectSelectionByKey.value[claimKey(selectionLike)];
+  if (!claim || claim.userId === currentUserId.value) return null;
+  return claim;
+}
+
+function isObjectClaimedByOther(selectionLike: ClaimableObjectSelection) {
+  return remoteClaimFor(selectionLike) != null;
+}
+
+function releaseLocalObjectSelection() {
+  if (!roomId.value || !lastClaimedSelection) return;
+  sendObjectSelection(roomId.value, {
+    object_type: lastClaimedSelection.type,
+    object_id: lastClaimedSelection.id,
+    active: false,
+  });
+  lastClaimedSelection = null;
+}
+
+function sendLocalObjectSelectionClaim(selectionLike: ClaimableObjectSelection) {
+  if (!roomId.value) return;
+  sendObjectSelection(roomId.value, {
+    object_type: selectionLike.type,
+    object_id: selectionLike.id,
+    active: true,
+  });
+}
+
+function claimLocalObjectSelection(next: ClaimableObjectSelection) {
+  if (!roomId.value) return;
+  if (
+    lastClaimedSelection &&
+    lastClaimedSelection.type === next.type &&
+    lastClaimedSelection.id === next.id
+  ) {
+    sendLocalObjectSelectionClaim(next);
+    return;
+  }
+  releaseLocalObjectSelection();
+  lastClaimedSelection = next;
+  sendLocalObjectSelectionClaim(next);
+}
+
+function handleObjectSelection(payload: ObjectSelectionPayload) {
+  if (payload.user_id === currentUserId.value) return;
+  const objectType = payload.object_type;
+  const objectId = payload.object_id;
+  remoteObjectSelectionByKey.value = Object.fromEntries(
+    Object.entries(remoteObjectSelectionByKey.value).filter(([, claim]) => claim.userId !== payload.user_id),
+  );
+  if (!payload.active || objectId == null) return;
+  const color = playerColorByUserId.value.get(payload.user_id) ?? null;
+  remoteObjectSelectionByKey.value = {
+    ...remoteObjectSelectionByKey.value,
+    [`${objectType}:${objectId}`]: {
+      type: objectType,
+      id: objectId,
+      userId: payload.user_id,
+      color,
+      expiresAt: Date.now() + OBJECT_SELECTION_LEASE_MS,
+    },
+  };
+}
+
+watch(selection, (next) => {
+  if (isClaimableSelection(next)) {
+    claimLocalObjectSelection(next);
+    return;
+  }
+  releaseLocalObjectSelection();
+});
+
+onUnmounted(() => {
+  releaseLocalObjectSelection();
+  if (objectSelectionRenewTimer != null) {
+    window.clearInterval(objectSelectionRenewTimer);
+    objectSelectionRenewTimer = null;
+  }
+  if (objectSelectionCleanupTimer != null) {
+    window.clearInterval(objectSelectionCleanupTimer);
+    objectSelectionCleanupTimer = null;
+  }
+});
+
+objectSelectionRenewTimer = window.setInterval(() => {
+  if (lastClaimedSelection) {
+    sendLocalObjectSelectionClaim(lastClaimedSelection);
+  }
+}, OBJECT_SELECTION_RENEW_MS);
+
+objectSelectionCleanupTimer = window.setInterval(() => {
+  const now = Date.now();
+  objectSelectionNow.value = now;
+  const nextEntries = Object.entries(remoteObjectSelectionByKey.value)
+    .filter(([, claim]) => claim.expiresAt == null || claim.expiresAt > now);
+  if (nextEntries.length !== Object.keys(remoteObjectSelectionByKey.value).length) {
+    remoteObjectSelectionByKey.value = Object.fromEntries(nextEntries);
+  }
+}, 1_000);
+
 function handleSelectMap(mapId: number) {
   if (toolMode.value !== "select" && toolMode.value !== "hand") return;
   if (currentUserGameRole.value !== "GM") return;
+  releaseLocalObjectSelection();
   selectMap(mapId);
   clearInspection();
   selectedCharacterListId.value = null;
@@ -422,7 +544,10 @@ function handleMapContextMenu(mapId: number, event: MouseEvent) {
 function handleSelectDrawing(drawingId: number) {
   if (toolMode.value !== "select" && toolMode.value !== "hand") return;
   if (!canDraw.value) return;
+  const next = { type: "drawing", id: drawingId } as const;
+  if (isObjectClaimedByOther(next)) return;
   selectDrawing(drawingId);
+  claimLocalObjectSelection(next);
   clearInspection();
   selectedCharacterListId.value = null;
 }
@@ -430,7 +555,10 @@ function handleSelectDrawing(drawingId: number) {
 function handleDrawingContextMenu(drawingId: number, event: MouseEvent) {
   if (toolMode.value === "draw" || toolMode.value === "measure") return;
   if (!canDraw.value) return;
+  const next = { type: "drawing", id: drawingId } as const;
+  if (isObjectClaimedByOther(next)) return;
   selectDrawing(drawingId);
+  claimLocalObjectSelection(next);
   clearInspection();
   selectedCharacterListId.value = null;
   contextMenuX.value = event.clientX;
@@ -460,7 +588,10 @@ function handleSelectToken(tokenId: number) {
   if (toolMode.value !== "select" && toolMode.value !== "hand") return;
   const token = tabletopTokens.value.find((t) => t.id === tokenId);
   if (!token || !tokenCanInteract(token)) return;
+  const next = { type: "token", id: tokenId } as const;
+  if (isObjectClaimedByOther(next)) return;
   selectToken(tokenId);
+  claimLocalObjectSelection(next);
   selectedCharacterListId.value = null;
   if (token.linked_character_id != null && canInspectToken(token)) {
     inspectCharacter({
@@ -477,7 +608,11 @@ function handleTokenContextMenu(tokenId: number, event: MouseEvent) {
   if (toolMode.value === "draw" || toolMode.value === "measure") return;
   const token = tabletopTokens.value.find((t) => t.id === tokenId);
   if (!token || !tokenCanInteract(token)) return;
+  const next = { type: "token", id: tokenId } as const;
+  if (isObjectClaimedByOther(next)) return;
   selectToken(tokenId);
+  claimLocalObjectSelection(next);
+  selectedCharacterListId.value = null;
   contextMenuX.value = event.clientX;
   contextMenuY.value = event.clientY;
   contextMenuOpen.value = true;
@@ -702,6 +837,7 @@ function closeContextMenu() {
 }
 
 function handleClearSelection() {
+  releaseLocalObjectSelection();
   clearSelection();
   closeContextMenu();
   clearInspection();
@@ -1223,6 +1359,7 @@ const realtime = useRoomRealtimeSession({
   onSessionClosed: handleRealtimeSessionClosed,
   onPointerPresence: handlePointerPresence,
   onPointerLaser: handlePointerLaser,
+  onObjectSelection: handleObjectSelection,
 });
 
 function scenePointFromViewport(clientX: number, clientY: number) {
@@ -1292,6 +1429,16 @@ watch(selfPlayerColor, (color) => {
 }, { immediate: true });
 
 const presentUserIds = computed(() => new Set(realtime.presentUserIds.value));
+const remoteObjectSelections = computed<RemoteObjectSelection[]>(() =>
+  Object.values(remoteObjectSelectionByKey.value)
+    .filter((claim) => claim.userId !== currentUserId.value)
+    .filter((claim) => claim.expiresAt == null || claim.expiresAt > objectSelectionNow.value)
+    .filter((claim) => !realtime.hasPresenceSnapshot.value || presentUserIds.value.has(claim.userId))
+    .map((claim) => ({
+      ...claim,
+      color: claim.color ?? playerColorByUserId.value.get(claim.userId) ?? null,
+    })),
+);
 const roomMemberItems = computed(() => entityRoomMembers.value.map((member) => {
   const user = entitiesStore.getUser(member.user_id);
   const memberStatus: MemberStatus =
@@ -1642,6 +1789,7 @@ watch(
             :draw-font-size="fontSize"
             :remote-cursors="remoteCursors"
             :remote-lasers="remoteLasers"
+            :remote-object-selections="remoteObjectSelections"
             :player-color-by-user-id="playerColorByUserId"
             :measure-state="measureState"
             :character-owner-by-id="characterOwnerById"

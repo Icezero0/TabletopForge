@@ -26,6 +26,7 @@ import { useTabletopStore } from "@/stores/tabletop.store";
 import type {
   PointerLaserPayload,
   PointerPresencePayload,
+  ObjectSelectionPayload,
   TokenTransformPreviewPayload,
 } from "@/infra/realtime/tabletopRealtime";
 
@@ -41,6 +42,7 @@ type UseRoomRealtimeSessionOptions = {
   onSessionClosed?: (payload: RoomRealtimeSessionClosed) => void;
   onPointerPresence?: (payload: PointerPresencePayload) => void;
   onPointerLaser?: (payload: PointerLaserPayload) => void;
+  onObjectSelection?: (payload: ObjectSelectionPayload) => void;
 };
 
 function payloadRoomId(payload: unknown) {
@@ -281,6 +283,10 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
       wsClient.onEvent<PointerLaserPayload>("pointer_laser", (payload) => {
         if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
         options.onPointerLaser?.(payload);
+      }),
+      wsClient.onEvent<ObjectSelectionPayload>("object_selection", (payload) => {
+        if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+        options.onObjectSelection?.(payload);
       }),
     ];
   }

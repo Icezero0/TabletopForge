@@ -6,7 +6,8 @@ export type WSCommandAction =
   | "room_presence_get"
   | "pointer_presence"
   | "pointer_laser"
-  | "token_transform_preview";
+  | "token_transform_preview"
+  | "object_selection";
 
 export type WSEventName =
   | "notification"
@@ -30,7 +31,8 @@ export type WSEventName =
   | "room_character_updated"
   | "pointer_presence"
   | "pointer_laser"
-  | "token_transform_preview";
+  | "token_transform_preview"
+  | "object_selection";
 
 export type WSErrorCode =
   | "unauthorized"

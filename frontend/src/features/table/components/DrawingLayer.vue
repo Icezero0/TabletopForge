@@ -2,7 +2,7 @@
 import { computed, ref } from "vue";
 import type { RoomDrawing } from "@/infra/api/rooms.api";
 import type { GameRole } from "@/features/room/types";
-import type { TableToolMode } from "@/features/table/types";
+import type { RemoteObjectSelection, TableToolMode } from "@/features/table/types";
 import type { DrawPreview } from "@/features/table/composables/useDrawingTools";
 import { DRAWING_BAND_BASE, DRAWING_PICK_STROKE_HIT, SCENE_ORIGIN, SCENE_SPAN } from "@/features/table/constants";
 import {
@@ -17,6 +17,7 @@ const props = defineProps<{
   gameRole: GameRole | "unknown";
   preview: DrawPreview;
   selectedDrawingId?: number | null;
+  remoteSelections?: RemoteObjectSelection[];
   editingDrawingId?: number | null;
   interactive?: boolean;
   subTool?: string;
@@ -53,6 +54,18 @@ const drawCursor = computed(() => (canDraw.value ? "crosshair" : undefined));
 
 const showPickTargets = computed(() => canPickDrawing.value && !canDraw.value);
 
+function remoteSelectionFor(drawingId: number) {
+  return props.remoteSelections?.find((claim) => claim.type === "drawing" && claim.id === drawingId) ?? null;
+}
+
+function isRemoteSelected(drawingId: number) {
+  return remoteSelectionFor(drawingId) != null;
+}
+
+function remoteSelectionColor(drawingId: number) {
+  return remoteSelectionFor(drawingId)?.color ?? "var(--c-primary)";
+}
+
 const sortedDrawings = computed(() =>
   [...props.drawings].sort((a, b) => a.z_index - b.z_index || a.id - b.id),
 );
@@ -86,6 +99,7 @@ function onPointerDown(event: PointerEvent) {
   if (canPickDrawing.value) {
     const hit = findTopDrawingAt(props.drawings, pt.x, pt.y);
     if (hit) {
+      if (isRemoteSelected(hit.id)) return;
       event.preventDefault();
       event.stopPropagation();
       pickPointerId = event.pointerId;
@@ -118,6 +132,7 @@ function onPointerUp(event: PointerEvent) {
     const pt = scenePoint(event);
     const hit = findTopDrawingAt(props.drawings, pt.x, pt.y);
     if (hit) {
+      if (isRemoteSelected(hit.id)) return;
       event.preventDefault();
       event.stopPropagation();
       emit("selectDrawing", hit.id);
@@ -137,7 +152,7 @@ function onPickClick(event: MouseEvent) {
   event.stopPropagation();
   const pt = scenePointFromClient(event.clientX, event.clientY);
   const hit = findTopDrawingAt(props.drawings, pt.x, pt.y);
-  if (hit) emit("selectDrawing", hit.id);
+  if (hit && !isRemoteSelected(hit.id)) emit("selectDrawing", hit.id);
 }
 
 function onDrawingContextMenu(event: MouseEvent) {
@@ -145,6 +160,7 @@ function onDrawingContextMenu(event: MouseEvent) {
   const pt = scenePointFromClient(event.clientX, event.clientY);
   const hit = findTopDrawingAt(props.drawings, pt.x, pt.y);
   if (!hit) return;
+  if (isRemoteSelected(hit.id)) return;
   event.preventDefault();
   event.stopPropagation();
   emit("selectDrawing", hit.id);
@@ -153,6 +169,7 @@ function onDrawingContextMenu(event: MouseEvent) {
 
 function onTextDblClick(drawing: RoomDrawing, event: MouseEvent) {
   if (!canPickDrawing.value || drawing.kind !== "text") return;
+  if (isRemoteSelected(drawing.id)) return;
   event.preventDefault();
   event.stopPropagation();
   emit("editText", drawing.id);
@@ -239,7 +256,8 @@ function previewLabelPos(p: DrawPreview) {
       v-show="drawing.id !== editingDrawingId"
       :key="drawing.id"
       class="drawingItem"
-      :class="{ selected: selectedDrawingId === drawing.id }"
+      :class="{ selected: selectedDrawingId === drawing.id, remoteSelected: isRemoteSelected(drawing.id) }"
+      :style="{ '--remote-selection-color': remoteSelectionColor(drawing.id) }"
     >
       <path
         v-if="drawing.kind === 'brush' && showPickTargets"
@@ -489,9 +507,20 @@ function previewLabelPos(p: DrawPreview) {
   filter: drop-shadow(0 0 4px color-mix(in srgb, var(--c-primary) 80%, transparent));
 }
 
+.drawingLayer :deep(.drawingItem.remoteSelected .visibleShape) {
+  filter:
+    drop-shadow(0 0 3px color-mix(in srgb, var(--remote-selection-color, var(--c-primary)) 90%, transparent))
+    drop-shadow(0 0 7px color-mix(in srgb, var(--remote-selection-color, var(--c-primary)) 62%, transparent));
+}
+
 .drawingLayer.pickMode :deep(.drawingItem:hover .textGroup .textBoxContent),
 .drawingLayer.pickMode :deep(.drawingItem.selected .textGroup .textBoxContent) {
   filter: drop-shadow(0 0 3px color-mix(in srgb, var(--c-primary) 55%, transparent));
+}
+
+.drawingLayer :deep(.drawingItem.remoteSelected .textGroup .textBoxContent) {
+  outline: 2px solid var(--remote-selection-color, var(--c-primary));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--remote-selection-color, var(--c-primary)) 48%, transparent);
 }
 
 .drawingLayer.drawMode {

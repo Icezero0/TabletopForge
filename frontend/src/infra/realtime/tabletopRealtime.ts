@@ -29,6 +29,14 @@ export type TokenTransformPreviewPayload = {
   };
 };
 
+export type ObjectSelectionPayload = {
+  room_id: number;
+  user_id: number;
+  object_type: "token" | "drawing";
+  object_id: number | null;
+  active: boolean;
+};
+
 export function sendPointerPresence(roomId: number, x: number, y: number) {
   wsClient.sendCommand("pointer_presence", { room_id: roomId, x, y });
 }
@@ -53,5 +61,19 @@ export function sendTokenTransformPreview(
     room_id: roomId,
     token_id: tokenId,
     ...transform,
+  });
+}
+
+export function sendObjectSelection(
+  roomId: number,
+  payload: {
+    object_type: ObjectSelectionPayload["object_type"];
+    object_id: number | null;
+    active: boolean;
+  },
+) {
+  wsClient.sendCommand("object_selection", {
+    room_id: roomId,
+    ...payload,
   });
 }

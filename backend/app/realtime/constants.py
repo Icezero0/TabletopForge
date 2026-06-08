@@ -22,6 +22,7 @@ class WsCommandAction(StrEnum):
     POINTER_PRESENCE = "pointer_presence"
     POINTER_LASER = "pointer_laser"
     TOKEN_TRANSFORM_PREVIEW = "token_transform_preview"
+    OBJECT_SELECTION = "object_selection"
 
 
 class WsEventType(StrEnum):
@@ -51,6 +52,7 @@ class WsEventType(StrEnum):
     POINTER_PRESENCE = "pointer_presence"
     POINTER_LASER = "pointer_laser"
     TOKEN_TRANSFORM_PREVIEW = "token_transform_preview"
+    OBJECT_SELECTION = "object_selection"
 
 
 class WsErrorCode(StrEnum):

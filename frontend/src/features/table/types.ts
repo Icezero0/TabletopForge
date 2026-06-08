@@ -9,6 +9,14 @@ export type TabletopSelection =
   | { type: "drawing"; id: number }
   | null;
 
+export type ClaimableObjectSelection = Exclude<TabletopSelection, { type: "map"; id: number } | null>;
+
+export type RemoteObjectSelection = ClaimableObjectSelection & {
+  userId: number;
+  color?: string | null;
+  expiresAt?: number;
+};
+
 export type FloatingAnchor =
   | "top-left"
   | "bottom-left"

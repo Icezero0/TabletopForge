@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, toRef, useId, watch } from "vue";
 import type { GameRole } from "@/features/room/types";
-import type { TableToolMode, TabletopSelection } from "@/features/table/types";
+import type { RemoteObjectSelection, TableToolMode, TabletopSelection } from "@/features/table/types";
 import type { RoomDrawing, RoomMap, RoomToken } from "@/infra/api/rooms.api";
 import type { DrawPreview, TextPlacementRequest } from "@/features/table/composables/useDrawingTools";
 import type { MeasureState } from "@/features/table/composables/useMeasureTool";
@@ -42,6 +42,7 @@ const props = withDefaults(
     drawFontSize?: number;
     remoteCursors?: RemoteCursor[];
     remoteLasers?: RemoteLaser[];
+    remoteObjectSelections?: RemoteObjectSelection[];
     measureState?: MeasureState | null;
     measureSubTool?: MeasureSubTool;
     currentUserId?: number | null;
@@ -69,6 +70,7 @@ const props = withDefaults(
     drawFontSize: 16,
     remoteCursors: () => [],
     remoteLasers: () => [],
+    remoteObjectSelections: () => [],
     measureState: null,
     measureSubTool: "line",
     currentUserId: null,
@@ -286,6 +288,7 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
         :current-user-id="currentUserId"
         :character-owner-by-id="characterOwnerById"
         :player-color-by-user-id="playerColorByUserId"
+        :remote-selections="remoteObjectSelections.filter((claim) => claim.type === 'token')"
         @select-token="emit('selectToken', $event)"
         @token-context-menu="(id, ev) => emit('tokenContextMenu', id, ev)"
       />
@@ -296,6 +299,7 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
         :game-role="gameRole"
         :preview="drawPreview"
         :selected-drawing-id="selectedDrawingId"
+        :remote-selections="remoteObjectSelections.filter((claim) => claim.type === 'drawing')"
         :editing-drawing-id="editingDrawingId"
         :interactive="drawInteractive"
         :sub-tool="drawSubTool"

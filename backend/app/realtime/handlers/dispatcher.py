@@ -179,6 +179,7 @@ class RealtimeMessageHandler:
             WsCommandAction.POINTER_PRESENCE,
             WsCommandAction.POINTER_LASER,
             WsCommandAction.TOKEN_TRANSFORM_PREVIEW,
+            WsCommandAction.OBJECT_SELECTION,
         }:
             await self.tabletop_handler.handle(
                 db=db,

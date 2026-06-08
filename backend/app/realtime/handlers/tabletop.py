@@ -60,6 +60,15 @@ class TabletopCommandHandler:
             )
             return
 
+        if command.action == WsCommandAction.OBJECT_SELECTION:
+            await self._handle_object_selection(
+                db=db,
+                publisher=publisher,
+                connection=connection,
+                command=command,
+            )
+            return
+
         raise BadRequestError(
             f"Unsupported tabletop command action: {command.action}",
             reason=ErrorReason.UNSUPPORTED_COMMAND_ACTION,
@@ -300,5 +309,50 @@ class TabletopCommandHandler:
             token_id=token_id,
             transform=transform,
             user_id=connection.user_id,
+            exclude_connection_ids={connection.connection_id},
+        )
+
+    async def _handle_object_selection(
+        self,
+        *,
+        db: AsyncSession,
+        publisher: RealtimePublisher,
+        connection: WsConnection,
+        command: WsCommandPayload,
+    ) -> None:
+        room_id = await self._require_pointer_room(
+            db,
+            connection=connection,
+            command=command,
+        )
+        data = command.data or {}
+        try:
+            active = bool(data["active"])
+            object_type = str(data.get("object_type") or "")
+            raw_object_id = data.get("object_id")
+            object_id = int(raw_object_id) if raw_object_id is not None else None
+        except (KeyError, TypeError, ValueError) as exc:
+            raise BadRequestError(
+                "Invalid object selection payload",
+                reason=ErrorReason.INVALID_PAYLOAD,
+            ) from exc
+
+        if object_type not in {"token", "drawing"}:
+            raise BadRequestError(
+                "Invalid object selection payload",
+                reason=ErrorReason.INVALID_PAYLOAD,
+            )
+        if active and object_id is None:
+            raise BadRequestError(
+                "Invalid object selection payload",
+                reason=ErrorReason.INVALID_PAYLOAD,
+            )
+
+        await publisher.publish_object_selection(
+            room_id=room_id,
+            user_id=connection.user_id,
+            object_type=object_type,
+            object_id=object_id,
+            active=active,
             exclude_connection_ids={connection.connection_id},
         )

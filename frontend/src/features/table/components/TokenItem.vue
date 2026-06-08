@@ -13,6 +13,7 @@ const props = defineProps<{
   selected?: boolean;
   inactive?: boolean;
   dimmed?: boolean;
+  remoteSelectionColor?: string | null;
   gameRole?: import("@/features/room/types").GameRole | "unknown";
   playerColorByUserId?: Map<number, string>;
 }>();
@@ -65,11 +66,12 @@ const ownerColor = computed(() => {
   >
     <div
       class="tokenItem"
-      :class="{ hasImage: !!imageUrl }"
+      :class="{ hasImage: !!imageUrl, remoteSelected: !!remoteSelectionColor }"
       :style="{
         width: `${displaySize}px`,
         height: `${displaySize}px`,
         '--owner-color': ownerColor,
+        '--remote-selection-color': remoteSelectionColor ?? undefined,
       }"
     >
       <img v-if="imageUrl" class="tokenImage" :src="imageUrl" alt="" draggable="false" />
@@ -118,6 +120,13 @@ const ownerColor = computed(() => {
 
 .tokenWrap.selected .tokenItem {
   border-color: var(--color-accent, #6b9fff);
+}
+
+.tokenItem.remoteSelected {
+  border-color: var(--remote-selection-color, var(--c-primary));
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--remote-selection-color, var(--c-primary)) 42%, transparent),
+    0 0 12px color-mix(in srgb, var(--remote-selection-color, var(--c-primary)) 48%, transparent);
 }
 
 .tokenImage {
