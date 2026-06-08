@@ -846,6 +846,8 @@ async function handleContextMapLayer(action: "up" | "down" | "top" | "bottom") {
 }
 
 let tokenPatchTimer: ReturnType<typeof setTimeout> | null = null;
+let lastTokenPatchTime = 0;
+const TOKEN_PATCH_THROTTLE_MS = 50;
 const pendingTokenPatch = ref<{
   tokenId: number;
   payload: {
@@ -878,10 +880,19 @@ function scheduleTokenPatch(
   } else {
     pendingTokenPatch.value = { tokenId, payload };
   }
-  if (tokenPatchTimer) clearTimeout(tokenPatchTimer);
-  tokenPatchTimer = setTimeout(() => {
+  const now = Date.now();
+  const elapsed = now - lastTokenPatchTime;
+  if (elapsed >= TOKEN_PATCH_THROTTLE_MS) {
+    if (tokenPatchTimer) { clearTimeout(tokenPatchTimer); tokenPatchTimer = null; }
+    lastTokenPatchTime = now;
     void flushTokenPatch();
-  }, 150);
+  } else if (!tokenPatchTimer) {
+    tokenPatchTimer = setTimeout(() => {
+      tokenPatchTimer = null;
+      lastTokenPatchTime = Date.now();
+      void flushTokenPatch();
+    }, TOKEN_PATCH_THROTTLE_MS - elapsed);
+  }
 }
 
 async function flushTokenPatch() {

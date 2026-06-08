@@ -106,6 +106,7 @@ const laserItems = computed(() =>
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
+  transition: transform 60ms linear;
 }
 
 .cursorDot {

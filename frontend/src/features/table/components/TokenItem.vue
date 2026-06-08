@@ -87,6 +87,10 @@ const ownerColor = computed(() => {
   user-select: none;
 }
 
+.tokenWrap:not(.selected) {
+  transition: transform 80ms linear;
+}
+
 .tokenWrap.inactive {
   pointer-events: none;
 }
