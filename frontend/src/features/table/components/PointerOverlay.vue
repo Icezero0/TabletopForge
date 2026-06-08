@@ -23,31 +23,52 @@ const cursorItems = computed(() =>
 );
 
 const laserItems = computed(() =>
-  props.lasers.map((l) => ({
-    ...l,
-    color: cursorColor(l.userId),
-    x: Math.min(l.x1, l.x2),
-    y: Math.min(l.y1, l.y2),
-    width: Math.max(2, Math.abs(l.x2 - l.x1)),
-    height: Math.max(2, Math.abs(l.y2 - l.y1)),
-  })),
+  props.lasers.map((l) => {
+    const color = cursorColor(l.userId);
+    const segments = l.trail.slice(1).map((point, index) => {
+      const prev = l.trail[index]!;
+      const dx = point.x - prev.x;
+      const dy = point.y - prev.y;
+      const length = Math.max(1, Math.hypot(dx, dy));
+      const angle = Math.atan2(dy, dx);
+      return {
+        id: point.id,
+        style: {
+          width: `${length}px`,
+          opacity: point.opacity,
+          transform: `translate(${prev.x}px, ${prev.y}px) rotate(${angle}rad)`,
+          "--laser-color": color,
+        },
+      };
+    });
+    return {
+      ...l,
+      color,
+      style: {
+        transform: `translate(${l.x}px, ${l.y}px)`,
+        "--laser-color": color,
+      },
+      segments,
+    };
+  }),
 );
 </script>
 
 <template>
   <div class="pointerOverlay" aria-hidden="true">
-    <svg class="laserLayer">
-      <line
-        v-for="laser in laserItems"
-        :key="`laser-${laser.userId}`"
-        :x1="laser.x1"
-        :y1="laser.y1"
-        :x2="laser.x2"
-        :y2="laser.y2"
-        class="laserLine"
-        :style="{ stroke: laser.color }"
+    <template v-for="laser in laserItems" :key="`laser-${laser.userId}`">
+      <span
+        v-for="segment in laser.segments"
+        :key="`laser-trail-${laser.userId}-${segment.id}`"
+        class="laserTrailSegment"
+        :style="segment.style"
       />
-    </svg>
+      <span
+        v-if="laser.active"
+        class="laserSpot"
+        :style="laser.style"
+      />
+    </template>
     <div
       v-for="cursor in cursorItems"
       :key="cursor.userId"
@@ -80,22 +101,6 @@ const laserItems = computed(() =>
   z-index: 210;
 }
 
-.laserLayer {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  pointer-events: none;
-}
-
-.laserLine {
-  stroke-width: 3;
-  stroke-linecap: round;
-  opacity: 0.85;
-  filter: drop-shadow(0 0 4px currentColor);
-}
-
 .remoteCursor {
   position: absolute;
   top: 0;
@@ -107,6 +112,40 @@ const laserItems = computed(() =>
   align-items: flex-start;
   gap: 2px;
   transition: transform 60ms linear;
+}
+
+.laserSpot,
+.laserTrailSegment {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  transform-origin: 0 50%;
+}
+
+.laserSpot {
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  background: color-mix(in srgb, var(--laser-color) 70%, white);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--laser-color) 30%, transparent),
+    0 0 10px 3px var(--laser-color),
+    0 0 22px 7px color-mix(in srgb, var(--laser-color) 40%, transparent);
+}
+
+.laserTrailSegment {
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--laser-color) 10%, transparent),
+    var(--laser-color)
+  );
+  box-shadow:
+    0 0 8px 2px color-mix(in srgb, var(--laser-color) 70%, transparent),
+    0 0 16px 4px color-mix(in srgb, var(--laser-color) 35%, transparent);
 }
 
 .cursorDot {

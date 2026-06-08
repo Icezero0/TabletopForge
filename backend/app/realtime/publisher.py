@@ -70,6 +70,17 @@ class RealtimePublisher:
             data=None,
         )
 
+    async def publish_room_characters(
+        self,
+        *,
+        room_id: int,
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.ROOM_CHARACTERS,
+            data={"room_id": room_id},
+        )
+
     # =========================
     # data events
     # =========================
@@ -206,6 +217,27 @@ class RealtimePublisher:
             data={"room_id": room_id, "token_id": token_id},
         )
 
+    async def publish_token_transform_preview(
+        self,
+        *,
+        room_id: int,
+        token_id: int,
+        transform: dict[str, Any],
+        user_id: int,
+        exclude_connection_ids: set[str] | None = None,
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.TOKEN_TRANSFORM_PREVIEW,
+            data={
+                "room_id": room_id,
+                "token_id": token_id,
+                "transform": transform,
+                "user_id": user_id,
+            },
+            exclude_connection_ids=exclude_connection_ids,
+        )
+
     async def publish_room_character_updated(
         self,
         *,
@@ -269,23 +301,17 @@ class RealtimePublisher:
         user_id: int,
         display_name: str,
         active: bool,
-        x1: float,
-        y1: float,
-        x2: float | None = None,
-        y2: float | None = None,
+        x: float,
+        y: float,
     ) -> None:
         data: dict[str, Any] = {
             "room_id": room_id,
             "user_id": user_id,
             "display_name": display_name,
             "active": active,
-            "x1": x1,
-            "y1": y1,
+            "x": x,
+            "y": y,
         }
-        if x2 is not None:
-            data["x2"] = x2
-        if y2 is not None:
-            data["y2"] = y2
         await self._publish_event(
             channel=room_channel(room_id),
             event=WsEventType.POINTER_LASER,

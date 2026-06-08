@@ -28,14 +28,22 @@ const sortedTokens = computed(() => {
   return [...props.tokens]
     .filter((t) => {
       if (!t.visible) return false;
-      if (!isGM && t.character_hidden) return false;
+      if (t.character_hidden && !isGM && !isOwnHiddenToken(t)) return false;
       return true;
     })
     .sort((a, b) => a.z_index - b.z_index || a.id - b.id);
 });
 
+function isOwnHiddenToken(token: RoomToken): boolean {
+  if (props.gameRole !== "PL" || props.currentUserId == null) return false;
+  const ownerId =
+    token.linked_character_owner_id ??
+    props.characterOwnerById.get(token.linked_character_id);
+  return ownerId === props.currentUserId;
+}
+
 function isTokenDimmed(token: RoomToken): boolean {
-  return props.gameRole === "GM" && !!token.character_hidden;
+  return !!token.character_hidden && (props.gameRole === "GM" || isOwnHiddenToken(token));
 }
 
 const canPick = computed(

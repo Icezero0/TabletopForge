@@ -21,7 +21,11 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  patchToken: [
+  previewToken: [
+    tokenId: number,
+    payload: { x?: number; y?: number; width?: number; height?: number },
+  ];
+  commitToken: [
     tokenId: number,
     payload: { x?: number; y?: number; width?: number; height?: number },
   ];
@@ -83,6 +87,7 @@ let dragStartX = 0;
 let dragStartY = 0;
 let dragOriginX = 0;
 let dragOriginY = 0;
+let lastDragPayload: { x?: number; y?: number } | null = null;
 
 let resizePointerId: number | null = null;
 let resizeCorner: Corner | null = null;
@@ -94,6 +99,7 @@ let resizeStartClientX = 0;
 let resizeStartClientY = 0;
 let resizeStartCornerX = 0;
 let resizeStartCornerY = 0;
+let lastResizePayload: { x?: number; y?: number; width?: number; height?: number } | null = null;
 
 function pxToFt(px: number) {
   if (props.gridCellPx <= 0) return px;
@@ -108,6 +114,7 @@ function beginDrag(event: PointerEvent, token: RoomToken, captureEl: HTMLElement
   dragStartY = event.clientY;
   dragOriginX = token.x;
   dragOriginY = token.y;
+  lastDragPayload = null;
   captureEl.setPointerCapture(event.pointerId);
 }
 
@@ -122,13 +129,18 @@ function onDragMove(event: PointerEvent) {
   const vs = props.viewportScale ?? 1;
   const dx = (event.clientX - dragStartX) / vs;
   const dy = (event.clientY - dragStartY) / vs;
-  emit("patchToken", dragTargetId, { x: dragOriginX + dx, y: dragOriginY + dy });
+  lastDragPayload = { x: dragOriginX + dx, y: dragOriginY + dy };
+  emit("previewToken", dragTargetId, lastDragPayload);
 }
 
 function onDragUp(event: PointerEvent) {
   if (dragPointerId !== event.pointerId) return;
+  if (dragTargetId != null && lastDragPayload) {
+    emit("commitToken", dragTargetId, lastDragPayload);
+  }
   dragPointerId = null;
   dragTargetId = null;
+  lastDragPayload = null;
   (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
 }
 
@@ -182,7 +194,8 @@ function patchSizeForCorner(token: RoomToken, corner: Corner, nextSizeFt: number
       payload.y = token.y + curH - h;
       break;
   }
-  emit("patchToken", token.id, payload);
+  lastResizePayload = payload;
+  emit("previewToken", token.id, payload);
 }
 
 function onResizeDown(corner: Corner, event: PointerEvent) {
@@ -225,8 +238,13 @@ function onResizeMove(event: PointerEvent) {
 
 function onResizeUp(event: PointerEvent) {
   if (resizePointerId !== event.pointerId) return;
+  const token = selectedToken.value;
+  if (token && lastResizePayload) {
+    emit("commitToken", token.id, lastResizePayload);
+  }
   resizePointerId = null;
   resizeCorner = null;
+  lastResizePayload = null;
   (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
 }
 function onContextMenu(event: MouseEvent) {

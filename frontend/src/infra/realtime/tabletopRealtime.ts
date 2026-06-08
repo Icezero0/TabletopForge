@@ -13,10 +13,20 @@ export type PointerLaserPayload = {
   user_id: number;
   display_name: string;
   active: boolean;
-  x1: number;
-  y1: number;
-  x2?: number;
-  y2?: number;
+  x: number;
+  y: number;
+};
+
+export type TokenTransformPreviewPayload = {
+  room_id: number;
+  token_id: number;
+  user_id: number;
+  transform: {
+    x?: number;
+    y?: number;
+    width?: number;
+    height?: number;
+  };
 };
 
 export function sendPointerPresence(roomId: number, x: number, y: number) {
@@ -27,11 +37,21 @@ export function sendPointerLaser(
   roomId: number,
   payload: {
     active: boolean;
-    x1: number;
-    y1: number;
-    x2?: number;
-    y2?: number;
+    x: number;
+    y: number;
   },
 ) {
   wsClient.sendCommand("pointer_laser", { room_id: roomId, ...payload });
+}
+
+export function sendTokenTransformPreview(
+  roomId: number,
+  tokenId: number,
+  transform: TokenTransformPreviewPayload["transform"],
+) {
+  wsClient.sendCommand("token_transform_preview", {
+    room_id: roomId,
+    token_id: tokenId,
+    ...transform,
+  });
 }

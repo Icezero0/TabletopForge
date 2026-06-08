@@ -177,17 +177,20 @@ class RoomTabletopService:
         characters = await self.character_repo.get_by_ids(db, character_ids=character_ids)
         responses: list[RoomTokenResponse] = []
         for token in tokens:
-            base = RoomTokenResponse.model_validate(token)
-            state_summary = self._build_panel_state_summary(token)
+            character = (
+                characters.get(token.linked_character_id)
+                if token.linked_character_id is not None
+                else None
+            )
             character_hidden = (
                 token.linked_character_id is not None
                 and token.linked_character_id in hidden_ids
             )
+            base = RoomTokenResponse.model_validate(token)
+            state_summary = self._build_panel_state_summary(token)
             updates: dict = {"state_summary": state_summary, "character_hidden": character_hidden}
-            if token.linked_character_id is not None:
-                character = characters.get(token.linked_character_id)
-                if character is not None:
-                    updates["linked_character_owner_id"] = character.owner_id
+            if character is not None:
+                updates["linked_character_owner_id"] = character.owner_id
             responses.append(base.model_copy(update=updates))
         return responses
 

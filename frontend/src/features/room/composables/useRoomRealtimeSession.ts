@@ -26,6 +26,7 @@ import { useTabletopStore } from "@/stores/tabletop.store";
 import type {
   PointerLaserPayload,
   PointerPresencePayload,
+  TokenTransformPreviewPayload,
 } from "@/infra/realtime/tabletopRealtime";
 
 type UseRoomRealtimeSessionOptions = {
@@ -34,6 +35,7 @@ type UseRoomRealtimeSessionOptions = {
   refreshRoom: () => void | Promise<void>;
   refreshRoomMembers: () => void | Promise<void>;
   refreshRoomRequests: () => void | Promise<void>;
+  refreshRoomCharacters?: () => void | Promise<void>;
   onCharacterStateUpdated?: (characterId: number, summary: TokenStateSummary) => void;
   onRoomCharacterUpdated?: (entry: RoomCharacterEntry) => void;
   onSessionClosed?: (payload: RoomRealtimeSessionClosed) => void;
@@ -183,6 +185,12 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
           void options.refreshRoomRequests();
         });
       }),
+      wsClient.onEvent("room_characters", (payload) => {
+        refreshIfCurrentRoom(payload, () => {
+          void options.refreshRoomCharacters?.();
+          void tabletopStore.loadSnapshot(options.roomId.value);
+        });
+      }),
       wsClient.onEvent<RoomRealtimePresenceState>("room_user_presence", handlePresence),
       wsClient.onEvent<MessageResponse>("message", handleMessage),
       wsClient.onEvent<RoomRealtimeSessionClosed>("session_closed", handleSessionClosed),
@@ -229,6 +237,17 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
         if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
         tabletopStore.applyTokenDeleted(options.roomId.value, payload.token_id);
       }),
+      wsClient.onEvent<TokenTransformPreviewPayload>(
+        "token_transform_preview",
+        (payload) => {
+          if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+          tabletopStore.applyTokenPatch(
+            options.roomId.value,
+            payload.token_id,
+            payload.transform,
+          );
+        },
+      ),
       wsClient.onEvent<{
         room_id: number;
         character_id: number;
@@ -252,6 +271,7 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
         (payload) => {
           if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
           options.onRoomCharacterUpdated?.(payload.entry);
+          void tabletopStore.loadSnapshot(options.roomId.value);
         },
       ),
       wsClient.onEvent<PointerPresencePayload>("pointer_presence", (payload) => {

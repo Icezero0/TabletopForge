@@ -136,6 +136,21 @@ export const useTabletopStore = defineStore("tabletop", {
       this.applyTokenCreated(roomId, token);
     },
 
+    applyTokenPatch(
+      roomId: number,
+      tokenId: number,
+      payload: Partial<Pick<RoomToken, "x" | "y" | "width" | "height">>,
+    ) {
+      const state = this.ensureRoom(roomId);
+      if (!state.snapshot) return;
+      state.snapshot = {
+        ...state.snapshot,
+        tokens: state.snapshot.tokens.map((token) =>
+          token.id === tokenId ? { ...token, ...payload } : token,
+        ),
+      };
+    },
+
     applyTokenDeleted(roomId: number, tokenId: number) {
       const state = this.ensureRoom(roomId);
       if (!state.snapshot) return;

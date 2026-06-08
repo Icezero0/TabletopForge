@@ -83,7 +83,11 @@ const emit = defineEmits<{
   tokenContextMenu: [tokenId: number, event: MouseEvent];
   selectDrawing: [drawingId: number];
   patchMap: [mapId: number, payload: { x?: number; y?: number; scale?: number; locked?: boolean }];
-  patchToken: [
+  previewToken: [
+    tokenId: number,
+    payload: { x?: number; y?: number; width?: number; height?: number },
+  ];
+  commitToken: [
     tokenId: number,
     payload: { x?: number; y?: number; width?: number; height?: number },
   ];
@@ -355,7 +359,8 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
         :current-user-id="currentUserId"
         :character-owner-by-id="characterOwnerById"
         :viewport-scale="viewportScale"
-        @patch-token="(id, p) => emit('patchToken', id, p)"
+        @preview-token="(id, p) => emit('previewToken', id, p)"
+        @commit-token="(id, p) => emit('commitToken', id, p)"
         @token-context-menu="onTokenSelectionContextMenu"
       />
       <DrawingSelectionOverlay

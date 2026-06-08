@@ -178,6 +178,7 @@ class RealtimeMessageHandler:
         if command.action in {
             WsCommandAction.POINTER_PRESENCE,
             WsCommandAction.POINTER_LASER,
+            WsCommandAction.TOKEN_TRANSFORM_PREVIEW,
         }:
             await self.tabletop_handler.handle(
                 db=db,

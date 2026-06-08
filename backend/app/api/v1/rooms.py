@@ -536,6 +536,7 @@ async def create_room_character(
     file: UploadFile | None = File(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
 ) -> RoomCharacterEntryResponse:
     payload = RoomCharacterService.parse_room_character_create(
         name=name,
@@ -552,13 +553,15 @@ async def create_room_character(
         extras_json=extras_json,
         state_json=state_json,
     )
-    return await room_characters_service.create_room_character(
+    entry = await room_characters_service.create_room_character(
         db,
         room_id=room_id,
         user=current_user,
         payload=payload,
         file=file,
     )
+    await publisher.publish_room_characters(room_id=room_id)
+    return entry
 
 
 @router.post(
@@ -570,13 +573,16 @@ async def link_room_character(
     payload: RoomCharacterLinkRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
 ) -> RoomCharacterEntryResponse:
-    return await room_characters_service.link_room_character(
+    entry = await room_characters_service.link_room_character(
         db,
         room_id=room_id,
         user=current_user,
         character_id=payload.character_id,
     )
+    await publisher.publish_room_characters(room_id=room_id)
+    return entry
 
 
 @router.delete(
@@ -598,6 +604,7 @@ async def delete_room_character(
     )
     for token_id in deleted_token_ids:
         await publisher.publish_token_deleted(room_id=room_id, token_id=token_id)
+    await publisher.publish_room_characters(room_id=room_id)
 
 
 @router.patch(
@@ -619,10 +626,7 @@ async def patch_room_character_visibility(
         user=current_user,
         payload=payload,
     )
-    await publisher.publish_room_character_updated(
-        room_id=room_id,
-        entry=entry.model_dump(mode="json"),
-    )
+    await publisher.publish_room_characters(room_id=room_id)
     return entry
 
 

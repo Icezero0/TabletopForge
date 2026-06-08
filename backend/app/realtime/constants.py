@@ -21,6 +21,7 @@ class WsCommandAction(StrEnum):
     ROOM_PRESENCE_GET = "room_presence_get"
     POINTER_PRESENCE = "pointer_presence"
     POINTER_LASER = "pointer_laser"
+    TOKEN_TRANSFORM_PREVIEW = "token_transform_preview"
 
 
 class WsEventType(StrEnum):
@@ -28,6 +29,7 @@ class WsEventType(StrEnum):
 
     ROOM_INFO = "room_info"
     ROOM_MEMBERS = "room_members"
+    ROOM_CHARACTERS = "room_characters"
 
     ROOM_USER_PRESENCE = "room_user_presence"
     SESSION_CLOSED = "session_closed"
@@ -48,6 +50,7 @@ class WsEventType(StrEnum):
     ROOM_CHARACTER_UPDATED = "room_character_updated"
     POINTER_PRESENCE = "pointer_presence"
     POINTER_LASER = "pointer_laser"
+    TOKEN_TRANSFORM_PREVIEW = "token_transform_preview"
 
 
 class WsErrorCode(StrEnum):

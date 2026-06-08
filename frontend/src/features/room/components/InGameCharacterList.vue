@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import type { GameRole } from "@/features/room/types";
 import type { RoomCharacterEntry } from "@/infra/api/roomCharacters.api";
@@ -22,6 +23,17 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+
+const visibleEntries = computed(() =>
+  props.entries.filter((entry) => {
+    if (!entry.is_hidden) return true;
+    if (props.gameRole === "GM") return true;
+    if (props.gameRole === "PL") {
+      return props.currentUserId != null && entry.owner_id === props.currentUserId;
+    }
+    return false;
+  }),
+);
 </script>
 
 <template>
@@ -34,12 +46,12 @@ const { t } = useI18n();
   >
     <div class="listBody">
       <p v-if="loading" class="muted">{{ t("common.loading") }}</p>
-      <p v-else-if="entries.length === 0" class="muted empty">
+      <p v-else-if="visibleEntries.length === 0" class="muted empty">
         {{ t("table.characterList.empty") }}
       </p>
       <ul v-else class="list">
         <InGameCharacterListItem
-          v-for="entry in entries"
+          v-for="entry in visibleEntries"
           :key="entry.room_character_id"
           :entry="entry"
           :owner-label="(entry.owner_id != null ? ownerNameByUserId.get(entry.owner_id) : null) ?? `User #${entry.owner_id}`"

@@ -5,12 +5,14 @@ export type WSCommandAction =
   | "room_leave"
   | "room_presence_get"
   | "pointer_presence"
-  | "pointer_laser";
+  | "pointer_laser"
+  | "token_transform_preview";
 
 export type WSEventName =
   | "notification"
   | "room_info"
   | "room_members"
+  | "room_characters"
   | "room_user_presence"
   | "session_closed"
   | "message"
@@ -27,7 +29,8 @@ export type WSEventName =
   | "character_state_updated"
   | "room_character_updated"
   | "pointer_presence"
-  | "pointer_laser";
+  | "pointer_laser"
+  | "token_transform_preview";
 
 export type WSErrorCode =
   | "unauthorized"

@@ -28,6 +28,7 @@ import { useRoomInspection } from "@/features/room/composables/useRoomInspection
 import { useRoomMemberActions } from "@/features/room/composables/useRoomMemberActions";
 import { useRoomRealtimeSession } from "@/features/room/composables/useRoomRealtimeSession";
 import type { RoomRealtimeSessionClosed } from "@/infra/realtime/roomRealtime";
+import { sendTokenTransformPreview } from "@/infra/realtime/tabletopRealtime";
 import BottomAssetBar from "@/features/table/components/BottomAssetBar.vue";
 import LibraryMapPickerDialog from "@/features/table/components/LibraryMapPickerDialog.vue";
 import MapGridAnnotationDialog from "@/features/table/components/MapGridAnnotationDialog.vue";
@@ -50,6 +51,7 @@ import { useMeasureTool } from "@/features/table/composables/useMeasureTool";
 import { useTabletopSelection } from "@/features/table/composables/useTabletopSelection";
 import { useTableToolMode } from "@/features/table/composables/useTableToolMode";
 import { useTabletopPointer } from "@/features/table/composables/useTabletopPointer";
+import { useRealtimePreviewChannel } from "@/features/table/composables/useRealtimePreviewChannel";
 import { nextDrawingZIndex } from "@/features/table/drawingTypes";
 import { computeMapScaleForViewport } from "@/features/table/utils/mapScale";
 import { canInspectToken, canManageToken } from "@/features/table/utils/tokenDisplay";
@@ -853,63 +855,49 @@ async function handleContextMapLayer(action: "up" | "down" | "top" | "bottom") {
   }
 }
 
-let tokenPatchTimer: ReturnType<typeof setTimeout> | null = null;
-let lastTokenPatchTime = 0;
-const TOKEN_PATCH_THROTTLE_MS = 50;
-const pendingTokenPatch = ref<{
+const TOKEN_PREVIEW_THROTTLE_MS = 33;
+
+type TokenTransformPreview = {
   tokenId: number;
   payload: {
     x?: number;
     y?: number;
     width?: number;
     height?: number;
-    z_index?: number;
   };
-} | null>(null);
+};
 
-function scheduleTokenPatch(
+const tokenTransformPreview = useRealtimePreviewChannel<TokenTransformPreview>({
+  throttleMs: TOKEN_PREVIEW_THROTTLE_MS,
+  key: (preview) => preview.tokenId,
+  canSend: () => !!roomId.value,
+  applyLocal: (preview) => {
+    const token = tabletopTokens.value.find((t) => t.id === preview.tokenId);
+    if (!token || !roomId.value) return;
+    tabletopStore.applyTokenPatch(roomId.value, preview.tokenId, preview.payload);
+  },
+  merge: (pending, next) => ({
+    tokenId: next.tokenId,
+    payload: { ...pending.payload, ...next.payload },
+  }),
+  send: (preview) => {
+    if (!roomId.value) return;
+    sendTokenTransformPreview(roomId.value, preview.tokenId, preview.payload);
+  },
+});
+
+async function commitTokenTransform(
   tokenId: number,
   payload: {
     x?: number;
     y?: number;
     width?: number;
     height?: number;
-    z_index?: number;
   },
 ) {
-  const token = tabletopTokens.value.find((t) => t.id === tokenId);
-  if (!token || !roomId.value) return;
-  tabletopStore.applyTokenUpdated(roomId.value, { ...token, ...payload });
-  if (pendingTokenPatch.value?.tokenId === tokenId) {
-    pendingTokenPatch.value = {
-      tokenId,
-      payload: { ...pendingTokenPatch.value.payload, ...payload },
-    };
-  } else {
-    pendingTokenPatch.value = { tokenId, payload };
-  }
-  const now = Date.now();
-  const elapsed = now - lastTokenPatchTime;
-  if (elapsed >= TOKEN_PATCH_THROTTLE_MS) {
-    if (tokenPatchTimer) { clearTimeout(tokenPatchTimer); tokenPatchTimer = null; }
-    lastTokenPatchTime = now;
-    void flushTokenPatch();
-  } else if (!tokenPatchTimer) {
-    tokenPatchTimer = setTimeout(() => {
-      tokenPatchTimer = null;
-      lastTokenPatchTime = Date.now();
-      void flushTokenPatch();
-    }, TOKEN_PATCH_THROTTLE_MS - elapsed);
-  }
-}
-
-async function flushTokenPatch() {
-  const pending = pendingTokenPatch.value;
-  pendingTokenPatch.value = null;
-  tokenPatchTimer = null;
-  if (!pending || !roomId.value) return;
+  if (!roomId.value) return;
   try {
-    await tabletopStore.updateToken(roomId.value, pending.tokenId, pending.payload);
+    await tabletopStore.updateToken(roomId.value, tokenId, payload);
   } catch (error) {
     toasts.push({
       message: getBackendErrorMessage(error),
@@ -919,11 +907,19 @@ async function flushTokenPatch() {
   }
 }
 
-function handlePatchToken(
+function handlePreviewToken(
   tokenId: number,
   payload: { x?: number; y?: number; width?: number; height?: number },
 ) {
-  scheduleTokenPatch(tokenId, payload);
+  tokenTransformPreview.preview({ tokenId, payload });
+}
+
+function handleCommitToken(
+  tokenId: number,
+  payload: { x?: number; y?: number; width?: number; height?: number },
+) {
+  tokenTransformPreview.cancel();
+  void commitTokenTransform(tokenId, payload);
 }
 
 async function handleContextDeleteToken(tokenId: number) {
@@ -1206,6 +1202,7 @@ const {
 } = useTabletopPointer({
   roomId,
   selfUserId,
+  selfDisplayName: currentUserDisplayName,
   canSend: canDraw,
 });
 
@@ -1215,11 +1212,12 @@ const realtime = useRoomRealtimeSession({
   refreshRoom: () => fetchRoom({ silent: true }),
   refreshRoomMembers: fetchRoomMembers,
   refreshRoomRequests: () => fetchRoomRequests({ force: true }),
+  refreshRoomCharacters: fetchRoomCharacters,
   onCharacterStateUpdated: (characterId, summary) => {
     updateRoomCharacterState(characterId, summary);
   },
   onRoomCharacterUpdated: (entry) => {
-    applyRoomCharacterVisibility(entry, currentUserGameRole.value === "GM");
+    applyRoomCharacterVisibility(entry);
     tabletopStore.applyCharacterVisibilityChanged(roomId.value, entry.character_id, entry.is_hidden);
   },
   onSessionClosed: handleRealtimeSessionClosed,
@@ -1655,7 +1653,8 @@ watch(
             @drawing-context-menu="handleDrawingContextMenu"
             @text-placement-resize="handleTextPlacementResize"
             @patch-map="handlePatchMap"
-            @patch-token="handlePatchToken"
+            @preview-token="handlePreviewToken"
+            @commit-token="handleCommitToken"
             @patch-drawing="handlePatchDrawing"
             @confirm-text="confirmText"
             @cancel-text="cancelText"
