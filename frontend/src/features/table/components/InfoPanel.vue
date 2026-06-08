@@ -4,7 +4,7 @@ import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import type { GameRole } from "@/features/room/types";
 import type { ActiveInspection } from "@/features/room/composables/useRoomInspection";
-import { getCharacter, type Character } from "@/infra/api/character.api";
+import { getCharacter, type Character, type TokenPanelInitial } from "@/infra/api/character.api";
 import {
   ABILITY_KEYS, ABILITY_LABEL_KEYS, DND5E_SKILLS, DND5E_ALIGNMENT_OPTIONS,
   abilityMod, fmtMod,
@@ -25,7 +25,6 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
-  tokenRenamed: [tokenId: number, name: string];
 }>();
 
 const { t, te } = useI18n();
@@ -35,7 +34,6 @@ const tabletopStore = useTabletopStore();
 const character = ref<Character | null>(null);
 const loading = ref(false);
 const saving = ref(false);
-const renamingToken = ref(false);
 const error = ref("");
 const saveError = ref("");
 const saveSuccess = ref(false);
@@ -43,11 +41,15 @@ const saveSuccess = ref(false);
 const editCurrentHp = ref("");
 const editMaxHp = ref("");
 const editAc = ref("");
-const editInstanceName = ref("");
+const editSpeed = ref("");
+const editPp = ref("");
+const savingResourceIndex = ref<number | null>(null);
 
-// ── Tab state (character-only view, no tokenId) ──────────────────────────
+// ── Tab state ─────────────────────────────────────────────────────────────
 type TabId = "identity" | "attributes" | "features" | "spells";
 const activeTab = ref<TabId>("identity");
+type TokenTabId = "overview" | "skillsSaves" | "spells" | "resources" | "inventory";
+const activeTokenTab = ref<TokenTabId>("overview");
 const expandedSpellLevels = ref(new Set<string>());
 
 const TABS: { id: TabId; labelKey: string }[] = [
@@ -55,6 +57,13 @@ const TABS: { id: TabId; labelKey: string }[] = [
   { id: "attributes", labelKey: "table.inspector.tabAttributes" },
   { id: "features",   labelKey: "table.inspector.tabFeatures"   },
   { id: "spells",     labelKey: "table.inspector.tabSpells"     },
+];
+const TOKEN_TABS: { id: TokenTabId; labelKey: string }[] = [
+  { id: "overview",    labelKey: "character.token.panelTab.overview"     },
+  { id: "skillsSaves", labelKey: "character.token.panelTab.skillsSaves"  },
+  { id: "spells",      labelKey: "character.token.panelTab.spells"       },
+  { id: "resources",   labelKey: "character.token.panelTab.resources"    },
+  { id: "inventory",   labelKey: "character.token.panelTab.inventory"    },
 ];
 
 // ── Portrait ─────────────────────────────────────────────────────────────
@@ -69,6 +78,11 @@ const tokenInStore = computed(() => {
 });
 
 const tokenStateSummary = computed(() => tokenInStore.value?.state_summary ?? null);
+const tokenPanel = computed<TokenPanelInitial | null>(() => {
+  const panel = tokenInStore.value?.panel;
+  if (!panel || typeof panel !== "object") return null;
+  return panel as TokenPanelInitial;
+});
 
 const canEditState = computed(() => {
   if (!character.value || props.inspection?.tokenId == null) return false;
@@ -78,10 +92,6 @@ const canEditState = computed(() => {
   }
   return false;
 });
-
-const canEditInstanceName = computed(
-  () => props.gameRole === "GM" && props.inspection?.tokenId != null,
-);
 
 const canFullEdit = computed(() => {
   if (!character.value || props.currentUserId == null) return false;
@@ -99,43 +109,16 @@ const displayName = computed(() => {
   return character.value?.name ?? "";
 });
 
-const identitySummary = computed(() => {
-  const identity = character.value?.identity ?? {};
-  const parts: string[] = [];
-  const race = identity.race;
-  if (typeof race === "string" && race.trim()) parts.push(race);
-  const classes = identity.classes;
-  if (Array.isArray(classes) && classes.length > 0) {
-    const labels = classes
-      .map((entry) => {
-        if (!entry || typeof entry !== "object") return "";
-        const name = (entry as { name?: string }).name ?? "";
-        const level = (entry as { level?: number }).level;
-        return level ? `${name} ${level}` : name;
-      })
-      .filter(Boolean);
-    if (labels.length) parts.push(labels.join(" / "));
-  }
-  return parts.join(" · ");
-});
-
-const ABILITY_SHORT: Record<string, string> = {
-  strength: "STR", dexterity: "DEX", constitution: "CON",
-  intelligence: "INT", wisdom: "WIS", charisma: "CHA",
-};
-
-const primaryPanel = computed(() =>
-  character.value?.token_configs?.find(tc => tc.is_primary)?.panel_initial ?? null
-);
-
 type SaveThrowRow = { key: (typeof ABILITY_KEYS)[number]; value: number };
 const savingThrows = computed<SaveThrowRow[]>(() => {
-  const st = primaryPanel.value?.saving_throws as Record<string, number | null> | undefined;
-  if (!st) return [];
+  const st = tokenPanel.value?.saving_throws as Record<string, number | null> | undefined;
+  const profs = tokenPanel.value?.saving_throw_profs as Record<string, boolean> | undefined;
   const rows: SaveThrowRow[] = [];
   for (const key of ABILITY_KEYS) {
-    const value = st[key] ?? null;
-    if (value != null) rows.push({ key, value });
+    rows.push({
+      key,
+      value: panelNumber(st?.[key]) ?? abilityMod(abilityScoreValue(key)) + (profs?.[key] ? tokenProfBonusValue() : 0),
+    });
   }
   return rows;
 });
@@ -146,31 +129,63 @@ type SkillRow = {
   value: number;
 };
 const skillRows = computed<SkillRow[]>(() => {
-  const sk = primaryPanel.value?.skills as Record<string, number | null> | undefined;
-  if (!sk) return [];
+  const sk = tokenPanel.value?.skills as Record<string, number | null> | undefined;
+  const profs = tokenPanel.value?.skill_profs as Record<string, string> | undefined;
   const rows: SkillRow[] = [];
   for (const s of DND5E_SKILLS) {
-    const value = sk[s.key] ?? null;
-    if (value != null) rows.push({ key: s.key, labelKey: s.labelKey, value });
+    const prof = profs?.[s.key] ?? "none";
+    const multiplier = prof === "proficient" ? 1 : (prof === "expert" || prof === "expertise") ? 2 : 0;
+    rows.push({
+      key: s.key,
+      labelKey: s.labelKey,
+      value: panelNumber(sk?.[s.key]) ?? abilityMod(abilityScoreValue(s.ability)) + tokenProfBonusValue() * multiplier,
+    });
   }
   return rows;
 });
 
 const inventoryItems = computed(() =>
-  (primaryPanel.value?.items ?? []) as { name: string; quantity: number; notes: string }[]
+  (tokenPanel.value?.items ?? []) as { name: string; quantity: number; notes: string }[]
 );
 
-const abilityScores = computed(() => {
-  const abilities = character.value?.attributes?.abilities;
-  if (!abilities || typeof abilities !== "object") return [];
-  return Object.entries(abilities as Record<string, unknown>)
-    .map(([key, value]) => {
-      if (!value || typeof value !== "object") return null;
-      const score = (value as { score?: number }).score;
-      return score != null ? { key, score } : null;
-    })
-    .filter((item): item is { key: string; score: number } => item != null);
+type TokenResourceState = { name: string; max: number; current?: number; recovery: string };
+const tokenResources = computed(() =>
+  (tokenPanel.value?.resources ?? []) as TokenResourceState[]
+);
+
+function resourceCurrent(resource: TokenResourceState) {
+  const max = Math.max(0, Number(resource.max) || 0);
+  const current = resource.current ?? max;
+  return Math.min(Math.max(0, Number(current) || 0), max);
+}
+
+type AbilityScoreRow = { key: (typeof ABILITY_KEYS)[number]; score: number };
+const abilityScores = computed<AbilityScoreRow[]>(() => {
+  const scores = tokenPanel.value?.ability_scores as Record<string, number | null> | undefined;
+  const rows: AbilityScoreRow[] = [];
+  for (const key of ABILITY_KEYS) {
+    rows.push({ key, score: panelNumber(scores?.[key]) ?? 10 });
+  }
+  return rows;
 });
+
+function panelNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function abilityScoreValue(key: (typeof ABILITY_KEYS)[number]) {
+  const scores = tokenPanel.value?.ability_scores as Record<string, number | null> | undefined;
+  return panelNumber(scores?.[key]) ?? 10;
+}
+
+function tokenProfBonusValue() {
+  return panelNumber(tokenPanel.value?.proficiency_bonus) ?? 2;
+}
 
 // ── Character-view computed ──────────────────────────────────────────────
 
@@ -337,6 +352,31 @@ const spellLevelRows = computed(() => {
   return rows;
 });
 
+const tokenSpellcastingAbilityLabel = computed(() => {
+  const ability = tokenPanel.value?.spellcasting_ability;
+  if (!ability) return "";
+  const key = `character.abilities.${ability}`;
+  return te(key) ? t(key) : ability;
+});
+
+const tokenSpellSaveDC = computed(() => tokenPanel.value?.spell_save_dc?.value ?? null);
+const tokenSpellAttackBonus = computed(() => tokenPanel.value?.spell_attack_bonus?.value ?? null);
+
+const tokenSpellLevelRows = computed(() => {
+  const book = tokenPanel.value?.spellbook ?? {};
+  const rows: { lvl: string; label: string; spells: string[] }[] = [];
+  for (const lvl of ["0","1","2","3","4","5","6","7","8","9"]) {
+    const spells = book[lvl] ?? [];
+    if (!spells.length) continue;
+    rows.push({
+      lvl,
+      label: lvl === "0" ? "0 环 (戏法)" : `${lvl} 环`,
+      spells,
+    });
+  }
+  return rows;
+});
+
 function toggleSpellLevel(lvl: string) {
   const s = new Set(expandedSpellLevels.value);
   s.has(lvl) ? s.delete(lvl) : s.add(lvl);
@@ -349,6 +389,8 @@ function syncEditFieldsFromSummary() {
   editCurrentHp.value = s?.current_hp != null ? String(s.current_hp) : "";
   editMaxHp.value     = s?.max_hp     != null ? String(s.max_hp)     : "";
   editAc.value        = s?.ac         != null ? String(s.ac)         : "";
+  editSpeed.value     = tokenPanel.value?.speed != null ? String(tokenPanel.value.speed) : "";
+  editPp.value        = tokenPanel.value?.pp    != null ? String(tokenPanel.value.pp)    : "";
 }
 
 async function loadInspection() {
@@ -365,7 +407,6 @@ async function loadInspection() {
     const char = await getCharacter(inspection.characterId);
     character.value = char;
     syncEditFieldsFromSummary();
-    editInstanceName.value = inspection.tokenInstanceName ?? char.name;
   } catch (e) {
     error.value = e instanceof Error ? e.message : t("table.inspector.loadFailed");
     character.value = null;
@@ -378,6 +419,12 @@ watch(() => props.inspection, loadInspection, { immediate: true });
 
 watch(() => props.inspection?.characterId, () => {
   activeTab.value = "identity";
+  activeTokenTab.value = "overview";
+  expandedSpellLevels.value = new Set();
+});
+
+watch(() => props.inspection?.tokenId, () => {
+  activeTokenTab.value = "overview";
   expandedSpellLevels.value = new Set();
 });
 
@@ -385,7 +432,11 @@ watch(tokenStateSummary, () => {
   if (!saving.value) syncEditFieldsFromSummary();
 });
 
-watch([editCurrentHp, editMaxHp, editAc], () => {
+watch(tokenPanel, () => {
+  if (!saving.value) syncEditFieldsFromSummary();
+});
+
+watch([editCurrentHp, editMaxHp, editAc, editSpeed, editPp], () => {
   saveSuccess.value = false;
   saveError.value = "";
 });
@@ -412,6 +463,8 @@ async function saveState() {
         hp_current: parseOptionalInt(editCurrentHp.value),
         hp_max:     parseOptionalInt(editMaxHp.value),
         ac:         parseOptionalInt(editAc.value),
+        speed:      parseOptionalInt(editSpeed.value),
+        pp:         parseOptionalInt(editPp.value),
       },
     });
     tabletopStore.applyTokenUpdated(props.roomId, updated);
@@ -423,19 +476,63 @@ async function saveState() {
   }
 }
 
-async function saveInstanceName() {
+async function updateTokenAbilityScore(key: (typeof ABILITY_KEYS)[number], raw: string) {
+  if (!canEditState.value) return;
   const tokenId = props.inspection?.tokenId;
-  if (!canEditInstanceName.value || tokenId == null) return;
-  const trimmed = editInstanceName.value.trim();
-  if (!trimmed) return;
-  renamingToken.value = true;
+  if (tokenId == null) return;
+  const value = parseOptionalInt(raw);
+  if (value == null) {
+    syncEditFieldsFromSummary();
+    return;
+  }
+  saving.value = true;
+  saveError.value = "";
+  saveSuccess.value = false;
   try {
-    await patchRoomToken(props.roomId, tokenId, { name: trimmed });
-    emit("tokenRenamed", tokenId, trimmed);
+    const currentScores = (tokenPanel.value?.ability_scores ?? {}) as Record<string, number | null>;
+    const updated = await patchRoomToken(props.roomId, tokenId, {
+      panel: {
+        ability_scores: {
+          ...currentScores,
+          [key]: value,
+        },
+      },
+    });
+    tabletopStore.applyTokenUpdated(props.roomId, updated);
+    saveSuccess.value = true;
   } catch (e) {
     saveError.value = getBackendErrorMessage(e) || t("table.inspector.saveFailed");
   } finally {
-    renamingToken.value = false;
+    saving.value = false;
+  }
+}
+
+async function updateResourceCurrent(index: number, delta: number) {
+  if (!canEditState.value || savingResourceIndex.value != null) return;
+  const tokenId = props.inspection?.tokenId;
+  if (tokenId == null) return;
+  const resources = tokenResources.value;
+  const target = resources[index];
+  if (!target) return;
+  const max = Math.max(0, Number(target.max) || 0);
+  const nextCurrent = Math.min(Math.max(resourceCurrent(target) + delta, 0), max);
+  const nextResources = resources.map((resource, i) => ({
+    ...resource,
+    current: i === index ? nextCurrent : resourceCurrent(resource),
+  }));
+
+  savingResourceIndex.value = index;
+  saveError.value = "";
+  saveSuccess.value = false;
+  try {
+    const updated = await patchRoomToken(props.roomId, tokenId, {
+      panel: { resources: nextResources },
+    });
+    tabletopStore.applyTokenUpdated(props.roomId, updated);
+  } catch (e) {
+    saveError.value = getBackendErrorMessage(e) || t("table.inspector.saveFailed");
+  } finally {
+    savingResourceIndex.value = null;
   }
 }
 
@@ -457,7 +554,7 @@ function openFullEdit() {
       <PanelSectionHeader :title="t('table.inspector.infoTitle')" />
       <div class="headActions">
         <button
-          v-if="character && canFullEdit"
+          v-if="character && canFullEdit && inspection?.tokenId == null"
           type="button"
           class="headBtn"
           @click="openFullEdit"
@@ -473,92 +570,210 @@ function openFullEdit() {
 
     <template v-else-if="character">
 
-      <!-- ── Token selected: unchanged view ────────────────────────────── -->
+      <!-- ── Token selected ────────────────────────────────────────────── -->
       <template v-if="inspection?.tokenId != null">
         <header class="hero">
-          <h3 v-if="!canEditInstanceName" class="heroTitle">{{ displayName }}</h3>
-          <label v-else class="field instanceField">
-            <span>{{ t("room.characters.instanceName") }}</span>
-            <div class="inlineRow">
-              <input v-model="editInstanceName" type="text" />
-              <button
-                type="button"
-                class="saveBtn small"
-                :disabled="renamingToken"
-                @click="saveInstanceName"
-              >{{ t("table.inspector.saveState") }}</button>
-            </div>
-          </label>
+          <h3 class="heroTitle">{{ displayName }}</h3>
           <p v-if="character.player_name" class="heroSub">{{ character.player_name }}</p>
-          <p v-if="identitySummary" class="heroSub">{{ identitySummary }}</p>
         </header>
 
-        <div v-if="abilityScores.length" class="section">
-          <h4 class="sectionTitle">{{ t("table.inspector.abilities") }}</h4>
-          <div class="abilityGrid">
-            <span v-for="item in abilityScores" :key="item.key" class="abilityChip">
-              {{ item.key.toUpperCase() }} {{ item.score }}
-            </span>
-          </div>
+        <div class="tabBar" role="tablist">
+          <button
+            v-for="tab in TOKEN_TABS"
+            :key="tab.id"
+            role="tab"
+            type="button"
+            class="tabBtn"
+            :class="{ active: activeTokenTab === tab.id }"
+            :aria-selected="activeTokenTab === tab.id"
+            @click="activeTokenTab = tab.id"
+          >{{ t(tab.labelKey) }}</button>
         </div>
 
-        <div v-if="savingThrows.length" class="section">
-          <h4 class="sectionTitle">{{ t("table.inspector.savingThrows") }}</h4>
-          <div class="chipRow">
-            <span v-for="st in savingThrows" :key="st.key" class="compactChip">
-              {{ ABILITY_SHORT[st.key] }} {{ fmtMod(st.value) }}
-            </span>
-          </div>
-        </div>
-
-        <div v-if="skillRows.length" class="section">
-          <h4 class="sectionTitle">{{ t("table.inspector.skills") }}</h4>
-          <div class="kvList">
-            <div v-for="sk in skillRows" :key="sk.key" class="kvRow">
-              <span class="kvLabel">{{ t(sk.labelKey) }}</span>
-              <span class="kvVal">{{ fmtMod(sk.value) }}</span>
+        <div class="tabPane">
+          <template v-if="activeTokenTab === 'overview'">
+            <div v-if="abilityScores.length" class="fieldGroup">
+              <h4 class="fieldGroupTitle">{{ t("character.token.abilityScores") }}</h4>
+              <div class="tokenAbilityGrid">
+                <div v-for="item in abilityScores" :key="item.key" class="tokenAbilityCell">
+                  <span class="tokenAbilityName">{{ t(ABILITY_LABEL_KEYS[item.key]) }}</span>
+                  <input
+                    v-if="canEditState"
+                    class="tokenAbilityInput no-spin"
+                    type="number"
+                    :value="item.score"
+                    :aria-label="t(ABILITY_LABEL_KEYS[item.key])"
+                    @change="updateTokenAbilityScore(item.key, ($event.target as HTMLInputElement).value)"
+                  />
+                  <span v-else class="tokenAbilityScore">{{ item.score }}</span>
+                  <span class="tokenAbilityMod">{{ fmtMod(abilityMod(item.score)) }}</span>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div v-if="inventoryItems.length" class="section">
-          <h4 class="sectionTitle">{{ t("table.inspector.inventory") }}</h4>
-          <div class="kvList">
-            <div v-for="(item, i) in inventoryItems" :key="i" class="kvRow">
-              <span class="kvLabel">{{ item.name }}</span>
-              <span class="kvVal muted">×{{ item.quantity }}</span>
+            <div class="fieldGroup">
+              <h4 class="fieldGroupTitle">{{ t("character.token.derivedStats") }}</h4>
+              <div v-if="canEditState" class="tokenStatusGrid">
+                <div class="tokenStatusCard hpCard">
+                  <span class="tokenStatusLabel">{{ t("character.token.hp") }}</span>
+                  <div class="tokenHpEdit">
+                    <input
+                      v-model="editCurrentHp"
+                      class="tokenStatInput no-spin"
+                      :aria-label="t('table.inspector.currentHp')"
+                      type="number"
+                      placeholder="—"
+                      @change="saveState"
+                    />
+                    <span class="tokenHpSlash">/</span>
+                    <input
+                      v-model="editMaxHp"
+                      class="tokenStatInput no-spin"
+                      :aria-label="t('table.inspector.maxHp')"
+                      type="number"
+                      placeholder="—"
+                      @change="saveState"
+                    />
+                  </div>
+                </div>
+                <label class="tokenStatusCard">
+                  <span class="tokenStatusLabel">{{ t("table.inspector.ac") }}</span>
+                  <input v-model="editAc" class="tokenStatInput no-spin" type="number" placeholder="—" @change="saveState" />
+                </label>
+                <label class="tokenStatusCard">
+                  <span class="tokenStatusLabel">{{ t("character.token.speed") }}</span>
+                  <input v-model="editSpeed" class="tokenStatInput no-spin" type="number" placeholder="—" @change="saveState" />
+                </label>
+                <label class="tokenStatusCard">
+                  <span class="tokenStatusLabel">{{ t("character.token.pp") }}</span>
+                  <input v-model="editPp" class="tokenStatInput no-spin" type="number" placeholder="—" @change="saveState" />
+                </label>
+              </div>
+              <div v-else-if="tokenStateSummary && isDamageOnlyView" class="stateReadonly">
+                {{ t("room.characters.damageTaken") }}: {{ tokenStateSummary.damage_taken }}
+              </div>
+              <div v-else-if="tokenStateSummary" class="tokenStatusGrid readonly">
+                <div class="tokenStatusCard hpCard">
+                  <span class="tokenStatusLabel">{{ t("character.token.hp") }}</span>
+                  <span class="tokenStatusValue">
+                    {{ tokenStateSummary.current_hp ?? "—" }}/{{ tokenStateSummary.max_hp ?? "—" }}
+                  </span>
+                </div>
+                <div class="tokenStatusCard">
+                  <span class="tokenStatusLabel">{{ t("table.inspector.ac") }}</span>
+                  <span class="tokenStatusValue">{{ tokenStateSummary.ac ?? "—" }}</span>
+                </div>
+                <div class="tokenStatusCard">
+                  <span class="tokenStatusLabel">{{ t("character.token.speed") }}</span>
+                  <span class="tokenStatusValue">{{ tokenPanel?.speed ?? "—" }}</span>
+                </div>
+                <div class="tokenStatusCard">
+                  <span class="tokenStatusLabel">{{ t("character.token.pp") }}</span>
+                  <span class="tokenStatusValue">{{ tokenPanel?.pp ?? "—" }}</span>
+                </div>
+              </div>
+              <div v-else class="emptyHint">—</div>
+              <p v-if="saveError" class="saveHint error">{{ saveError }}</p>
             </div>
-          </div>
-        </div>
+          </template>
 
-        <div class="section">
-          <h4 class="sectionTitle">{{ t("table.inspector.state") }}</h4>
-          <div v-if="canEditState" class="stateForm">
-            <label class="field">
-              <span>{{ t("table.inspector.currentHp") }}</span>
-              <input v-model="editCurrentHp" type="number" />
-            </label>
-            <label class="field">
-              <span>{{ t("table.inspector.maxHp") }}</span>
-              <input v-model="editMaxHp" type="number" />
-            </label>
-            <label class="field">
-              <span>{{ t("table.inspector.ac") }}</span>
-              <input v-model="editAc" type="number" />
-            </label>
-            <button type="button" class="saveBtn" :disabled="saving" @click="saveState">
-              {{ t("table.inspector.saveState") }}
-            </button>
-            <p v-if="saveSuccess" class="saveHint success">{{ t("table.inspector.stateSaved") }}</p>
-            <p v-else-if="saveError" class="saveHint error">{{ saveError }}</p>
-          </div>
-          <div v-else-if="tokenStateSummary && isDamageOnlyView" class="stateReadonly">
-            {{ t("room.characters.damageTaken") }}: {{ tokenStateSummary.damage_taken }}
-          </div>
-          <div v-else-if="tokenStateSummary" class="stateReadonly">
-            HP {{ tokenStateSummary.current_hp ?? "?" }}/{{ tokenStateSummary.max_hp ?? "?" }} · AC
-            {{ tokenStateSummary.ac ?? "?" }}
-          </div>
+          <template v-else-if="activeTokenTab === 'skillsSaves'">
+            <div class="tokenSkillSaveStack">
+              <div v-if="savingThrows.length" class="fieldGroup">
+                <h4 class="fieldGroupTitle">{{ t("character.token.savingThrows") }}</h4>
+                <div class="tokenCompactGrid saves">
+                  <div v-for="st in savingThrows" :key="st.key" class="tokenCompactItem">
+                    <span class="tokenCompactLabel">{{ t(ABILITY_LABEL_KEYS[st.key]).slice(0, 2) }}</span>
+                    <span class="tokenCompactValue">{{ fmtMod(st.value) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="skillRows.length" class="fieldGroup">
+                <h4 class="fieldGroupTitle">{{ t("character.token.skills") }}</h4>
+                <div class="tokenCompactGrid skills">
+                  <div v-for="sk in skillRows" :key="sk.key" class="tokenCompactItem">
+                    <span class="tokenCompactLabel">{{ t(sk.labelKey) }}</span>
+                    <span class="tokenCompactValue">{{ fmtMod(sk.value) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="!savingThrows.length && !skillRows.length" class="emptyHint">—</div>
+          </template>
+
+          <template v-else-if="activeTokenTab === 'spells'">
+            <template v-if="tokenSpellcastingAbilityLabel || tokenSpellSaveDC != null || tokenSpellAttackBonus != null || tokenSpellLevelRows.length">
+              <div
+                v-if="tokenSpellcastingAbilityLabel || tokenSpellSaveDC != null || tokenSpellAttackBonus != null"
+                class="spellStats compact"
+              >
+                <div v-if="tokenSpellcastingAbilityLabel" class="spellStat">
+                  <span class="spellStatLabel">{{ t("character.spells.spellcastingAbility") }}</span>
+                  <span class="spellStatVal">{{ tokenSpellcastingAbilityLabel }}</span>
+                </div>
+                <div v-if="tokenSpellSaveDC != null" class="spellStat">
+                  <span class="spellStatLabel">{{ t("character.spells.spellSaveDC") }}</span>
+                  <span class="spellStatVal">{{ tokenSpellSaveDC }}</span>
+                </div>
+                <div v-if="tokenSpellAttackBonus != null" class="spellStat">
+                  <span class="spellStatLabel">{{ t("character.spells.spellAttackBonus") }}</span>
+                  <span class="spellStatVal">{{ fmtMod(tokenSpellAttackBonus) }}</span>
+                </div>
+              </div>
+              <div v-if="tokenSpellLevelRows.length" class="spellLevels compact">
+                <div v-for="row in tokenSpellLevelRows" :key="row.lvl" class="spellLevelGroup">
+                  <div class="levelStatic">
+                    <span>{{ row.label }}</span>
+                  </div>
+                  <div class="spellNames">
+                    <span v-for="sp in row.spells" :key="sp" class="spellName">{{ sp }}</span>
+                  </div>
+                </div>
+              </div>
+            </template>
+            <div v-else class="emptyHint">—</div>
+          </template>
+
+          <template v-else-if="activeTokenTab === 'resources'">
+            <div v-if="tokenResources.length" class="kvList">
+              <div v-for="(resource, i) in tokenResources" :key="i" class="kvRow resourceStateRow">
+                <span class="kvLabel">{{ resource.name }}</span>
+                <div class="resourceCounter">
+                  <button
+                    v-if="canEditState"
+                    type="button"
+                    class="counterBtn"
+                    :disabled="savingResourceIndex !== null || resourceCurrent(resource) <= 0"
+                    @click="updateResourceCurrent(i, -1)"
+                  >−</button>
+                  <span class="kvVal">
+                    {{ resourceCurrent(resource) }}/{{ resource.max }}
+                  </span>
+                  <button
+                    v-if="canEditState"
+                    type="button"
+                    class="counterBtn"
+                    :disabled="savingResourceIndex !== null || resourceCurrent(resource) >= resource.max"
+                    @click="updateResourceCurrent(i, 1)"
+                  >+</button>
+                  <span v-if="resource.recovery" class="resourceRecovery">{{ resource.recovery }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-else class="emptyHint">—</div>
+          </template>
+
+          <template v-else-if="activeTokenTab === 'inventory'">
+            <div v-if="inventoryItems.length" class="kvList">
+              <div v-for="(item, i) in inventoryItems" :key="i" class="kvRow">
+                <span class="kvLabel">{{ item.name }}</span>
+                <span class="kvVal muted">×{{ item.quantity }}</span>
+              </div>
+            </div>
+            <div v-else class="emptyHint">—</div>
+          </template>
         </div>
 
       </template>
@@ -637,7 +852,7 @@ function openFullEdit() {
             </div>
 
             <div class="attrBlock">
-              <div class="attrBlockTitle">{{ t("table.inspector.savingThrows") }}</div>
+              <div class="attrBlockTitle">{{ t("character.token.savingThrows") }}</div>
               <div class="saveGrid">
                 <div v-for="st in attrSavingThrowRows" :key="st.key" class="saveItem">
                   <span class="saveAbility">{{ t(st.labelKey) }}</span>
@@ -647,7 +862,7 @@ function openFullEdit() {
             </div>
 
             <div class="attrBlock">
-              <div class="attrBlockTitle">{{ t("table.inspector.skills") }}</div>
+              <div class="attrBlockTitle">{{ t("character.token.skills") }}</div>
               <div class="skillList">
                 <div v-for="sk in attrSkillRows" :key="sk.key" class="skillItem">
                   <span class="skillLabel">{{ sk.label }}</span>
@@ -745,7 +960,7 @@ function openFullEdit() {
   display: grid;
   gap: 12px;
   color: var(--c-text);
-  width: min(320px, calc(100vw - 24px));
+  width: min(380px, calc(100vw - 24px));
   max-height: min(70vh, 560px);
   overflow-y: scroll;
   scrollbar-gutter: stable;
@@ -840,6 +1055,231 @@ function openFullEdit() {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--c-text-muted);
+}
+
+.fieldGroup {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.fieldGroupTitle {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.tokenAbilityGrid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.tokenAbilityCell {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  padding: 6px 4px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-bg-subtle);
+}
+
+.tokenAbilityName {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--c-text-muted);
+}
+
+.tokenAbilityScore {
+  font-size: 16px;
+  line-height: 1.1;
+  font-weight: 700;
+  color: var(--c-text);
+}
+
+.tokenAbilityInput {
+  width: 42px;
+  min-width: 0;
+  text-align: center;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--c-text);
+  padding: 0 3px;
+  font-size: 16px;
+  line-height: 1.1;
+  font-weight: 700;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.tokenAbilityInput:focus {
+  border-color: var(--c-accent);
+  background: color-mix(in srgb, var(--c-surface) 96%, var(--c-bg));
+}
+
+.tokenAbilityMod {
+  font-size: 11px;
+  color: var(--c-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tokenStatusGrid {
+  display: grid;
+  grid-template-columns: minmax(104px, 1.35fr) repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.tokenStatusCard {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 3px;
+  min-height: 54px;
+  padding: 7px 5px 6px;
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--c-bg-subtle) 78%, var(--c-surface));
+}
+
+.tokenStatusCard.hpCard {
+  grid-column: auto;
+}
+
+.tokenStatusLabel {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--c-text-muted);
+}
+
+.tokenStatusValue {
+  color: var(--c-text);
+  font-size: 16px;
+  line-height: 1.1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.tokenHpEdit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tokenHpSlash {
+  color: var(--c-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.tokenStatInput {
+  width: 38px;
+  text-align: center;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--c-text);
+  padding: 2px 3px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  outline: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.tokenStatusCard:not(.hpCard) .tokenStatInput {
+  width: 48px;
+}
+
+.tokenStatInput:focus {
+  border-color: var(--c-accent);
+  background: color-mix(in srgb, var(--c-surface) 96%, var(--c-bg));
+}
+
+.tokenStatInput::placeholder {
+  color: var(--c-text-muted);
+  opacity: 0.55;
+}
+
+.no-spin {
+  -moz-appearance: textfield;
+}
+
+.no-spin::-webkit-inner-spin-button,
+.no-spin::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.tokenSkillSaveStack {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+
+.tokenCompactGrid {
+  display: grid;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.tokenCompactGrid.saves {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tokenCompactGrid.skills {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tokenCompactItem {
+  position: relative;
+  min-width: 0;
+  display: block;
+  align-items: center;
+  min-height: 20px;
+  padding: 3px 0;
+}
+
+.tokenCompactLabel {
+  display: block;
+  max-width: calc(50% - 6px);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--c-text-muted);
+  text-align: left;
+}
+
+.tokenCompactValue {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: var(--c-text);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .abilityGrid {
@@ -984,6 +1424,51 @@ function openFullEdit() {
   color: var(--c-text-muted);
 }
 
+.resourceStateRow {
+  align-items: center;
+}
+
+.resourceCounter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.counterBtn {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  background: var(--c-bg-subtle);
+  color: var(--c-text-muted);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.counterBtn:hover:not(:disabled) {
+  color: var(--c-text);
+  background: color-mix(in srgb, var(--c-primary) 10%, var(--c-bg-subtle));
+}
+
+.counterBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.resourceRecovery {
+  color: var(--c-text-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .instanceField { margin-top: 0; }
 
 /* ── Character-only multi-tab view ──────────────────────────────────── */
@@ -997,12 +1482,12 @@ function openFullEdit() {
 
 .tabBtn {
   flex: 1;
-  padding: 5px 2px;
+  padding: 5px 4px;
   border: none;
   background: transparent;
   border-radius: 6px;
   font: inherit;
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--c-text-muted);
   cursor: pointer;
   white-space: nowrap;
@@ -1024,6 +1509,10 @@ function openFullEdit() {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 8px;
+  border: 1px solid var(--c-border);
+  border-radius: 9px;
+  background: var(--c-bg-subtle);
 }
 
 .portrait {
@@ -1050,22 +1539,32 @@ function openFullEdit() {
 .heroInfo { flex: 1; min-width: 0; }
 .heroName { font-size: 15px; font-weight: 600; color: var(--c-text); }
 
-.infoRows { display: grid; gap: 4px; }
+.infoRows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
 
 .infoRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  align-content: center;
+  min-height: 34px;
+  padding: 2px 4px;
   font-size: 12px;
 }
 
-.infoLabel { color: var(--c-text-muted); flex-shrink: 0; }
+.infoLabel {
+  color: var(--c-text-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
 
 .infoVal {
   color: var(--c-text);
   font-weight: 500;
-  text-align: right;
+  text-align: left;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1131,20 +1630,33 @@ function openFullEdit() {
 }
 
 .saveItem {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  position: relative;
+  display: block;
+  min-height: 19px;
   font-size: 11px;
+  padding: 2px 0;
 }
 
-.saveAbility { flex: 1; color: var(--c-text-muted); font-size: 10px; }
+.saveAbility {
+  display: block;
+  max-width: calc(50% - 6px);
+  color: var(--c-text-muted);
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .saveVal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  transform: translate(-50%, -50%);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--c-text);
   text-align: center;
-  min-width: 22px;
 }
 
 .skillList {
@@ -1154,15 +1666,16 @@ function openFullEdit() {
 }
 
 .skillItem {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  position: relative;
+  display: block;
+  min-height: 19px;
   font-size: 11px;
   padding: 2px 0;
 }
 
 .skillLabel {
-  flex: 1;
+  display: block;
+  max-width: calc(50% - 6px);
   color: var(--c-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1170,10 +1683,14 @@ function openFullEdit() {
 }
 
 .skillVal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  transform: translate(-50%, -50%);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   color: var(--c-text);
-  min-width: 22px;
   text-align: center;
 }
 
@@ -1236,6 +1753,7 @@ function openFullEdit() {
 .spellStatVal   { font-size: 14px; font-weight: 700; color: var(--c-text); }
 
 .spellLevels { display: grid; gap: 4px; }
+.spellLevels.compact { gap: 6px; }
 
 .spellLevelGroup { display: grid; gap: 4px; }
 
@@ -1258,6 +1776,20 @@ function openFullEdit() {
 
 .levelToggle:hover {
   background: color-mix(in srgb, var(--c-primary) 8%, var(--c-bg-subtle));
+}
+
+.levelStatic {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-bg-subtle);
+  color: var(--c-text);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .slotBadge {

@@ -48,8 +48,9 @@ const emit = defineEmits<{
   display: flex;
   align-items: center;
   gap: 6px;
-  justify-self: start;
+  justify-self: stretch;
   max-width: 100%;
+  min-width: 0;
 }
 .item-label {
   font-size: 12px;

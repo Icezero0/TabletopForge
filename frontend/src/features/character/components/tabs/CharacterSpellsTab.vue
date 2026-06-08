@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { SPELLCASTING_ABILITY_OPTIONS, defaultSpells, abilityMod } from "@/features/character/constants";
+import { DND5E_CLASSES, SPELLCASTING_ABILITY_OPTIONS, defaultSpells, abilityMod } from "@/features/character/constants";
 import BaseSelect from "@/ui/base/BaseSelect.vue";
 import BaseTagInput from "@/ui/base/BaseTagInput.vue";
 
 const props = defineProps<{
   modelValue: Record<string, unknown> | null;
+  identityBlock: Record<string, unknown>;
   attributesBlock: Record<string, unknown>;
 }>();
 const emit = defineEmits<{ (e: "update:modelValue", v: Record<string, unknown>): void }>();
@@ -63,6 +64,75 @@ function autoCalcSpellAttackBonus() {
 
 const SPELL_LEVELS = ["0","1","2","3","4","5","6","7","8","9"] as const;
 const expandedLevels = ref<Set<string>>(new Set());
+
+const FULL_CASTER_CLASSES = new Set(["bard", "cleric", "druid", "sorcerer", "wizard"]);
+const HALF_CASTER_CLASSES = new Set(["paladin", "ranger"]);
+const ARTIFICER_CLASSES = new Set(["artificer"]);
+const THIRD_CASTER_SUBCLASSES = new Set([
+  "arcane trickster",
+  "eldritch knight",
+  "诡术师",
+  "奥法骑士",
+  "魔能骑士",
+]);
+
+const MULTICLASS_SPELL_SLOTS: Record<number, Record<string, number>> = {
+  1: { "1": 2 },
+  2: { "1": 3 },
+  3: { "1": 4, "2": 2 },
+  4: { "1": 4, "2": 3 },
+  5: { "1": 4, "2": 3, "3": 2 },
+  6: { "1": 4, "2": 3, "3": 3 },
+  7: { "1": 4, "2": 3, "3": 3, "4": 1 },
+  8: { "1": 4, "2": 3, "3": 3, "4": 2 },
+  9: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 1 },
+  10: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 2 },
+  11: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 2, "6": 1 },
+  12: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 2, "6": 1 },
+  13: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 2, "6": 1, "7": 1 },
+  14: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 2, "6": 1, "7": 1 },
+  15: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 2, "6": 1, "7": 1, "8": 1 },
+  16: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 2, "6": 1, "7": 1, "8": 1 },
+  17: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 2, "6": 1, "7": 1, "8": 1, "9": 1 },
+  18: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 3, "6": 1, "7": 1, "8": 1, "9": 1 },
+  19: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 3, "6": 2, "7": 1, "8": 1, "9": 1 },
+  20: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 3, "6": 2, "7": 2, "8": 1, "9": 1 },
+};
+
+function normalizedClassKey(rawName: unknown): string {
+  const name = String(rawName ?? "").trim().toLowerCase();
+  if (!name) return "";
+  for (const key of DND5E_CLASSES) {
+    if (name === key || name === t(`character.classes.${key}`).toLowerCase()) return key;
+  }
+  return name;
+}
+
+function spellcasterLevelForClass(cls: { name?: string; level?: number; subclass?: string }) {
+  const classKey = normalizedClassKey(cls.name);
+  const level = Math.max(0, Number(cls.level) || 0);
+  const subclass = String(cls.subclass ?? "").trim().toLowerCase();
+  if (FULL_CASTER_CLASSES.has(classKey)) return level;
+  if (ARTIFICER_CLASSES.has(classKey)) return Math.ceil(level / 2);
+  if (HALF_CASTER_CLASSES.has(classKey)) return Math.floor(level / 2);
+  if (THIRD_CASTER_SUBCLASSES.has(subclass)) return Math.floor(level / 3);
+  return 0;
+}
+
+function autoCalcSpellSlots() {
+  const classes = (props.identityBlock.classes ?? []) as { name?: string; level?: number; subclass?: string }[];
+  const casterLevel = Math.min(
+    20,
+    Math.max(0, classes.reduce((sum, cls) => sum + spellcasterLevelForClass(cls), 0)),
+  );
+  const tableRow = MULTICLASS_SPELL_SLOTS[casterLevel] ?? {};
+  const slots: Record<string, number> = {};
+  for (let level = 1; level <= 9; level += 1) {
+    slots[String(level)] = tableRow[String(level)] ?? 0;
+  }
+  update("spell_slots_max", slots);
+}
+
 function toggleLevel(lvl: string) {
   const s = new Set(expandedLevels.value);
   s.has(lvl) ? s.delete(lvl) : s.add(lvl);
@@ -117,7 +187,12 @@ function setSlotMax(lvl: string, v: string) {
 
     <!-- Spellbook by level -->
     <div class="section">
-      <div class="section-title">{{ t("character.spells.spellbook") }}</div>
+      <div class="section-header">
+        <div class="section-title">{{ t("character.spells.spellbook") }}</div>
+        <button class="auto-btn" @click="autoCalcSpellSlots">
+          {{ t("character.spells.autoCalcSpellSlots") }}
+        </button>
+      </div>
       <div class="spell-levels">
         <div v-for="lvl in SPELL_LEVELS" :key="lvl" class="spell-level">
           <button class="level-toggle" @click="toggleLevel(lvl)">
@@ -141,6 +216,7 @@ function setSlotMax(lvl: string, v: string) {
 <style scoped>
 .tab-content { display: grid; gap: 24px; }
 .section { display: grid; gap: 8px; }
+.section-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .section-title { font-size: 14px; font-weight: 600; color: var(--c-text); }
 .derived-hint { font-size: 12px; color: var(--c-text-muted); }
 .casting-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }

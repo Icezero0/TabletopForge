@@ -38,8 +38,9 @@ function setScore(ability: string, raw: string) {
 <style scoped>
 .scores-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 8px;
+  min-width: 0;
 }
 .score-box {
   display: flex;
@@ -50,12 +51,22 @@ function setScore(ability: string, raw: string) {
   border-radius: var(--r-2);
   padding: 8px 4px;
   background: var(--c-surface);
+  min-width: 0;
 }
 .score-label {
   font-size: 11px;
   color: var(--c-text-muted);
   text-align: center;
 }
-.score-input-wrap { width: 100px; }
+.score-input-wrap {
+  width: min(100px, 100%);
+  min-width: 0;
+}
 .score-mod { font-size: 14px; font-weight: 500; color: var(--c-text); }
+
+@media (max-width: 720px) {
+  .scores-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
 </style>

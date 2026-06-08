@@ -157,6 +157,41 @@ class RoomTabletopService:
             damage_taken=damage_taken,
         )
 
+    @staticmethod
+    def _build_spawn_panel_from_config(panel_initial: dict | None) -> dict:
+        panel = dict(panel_initial or {})
+        resources = panel.get("resources")
+        if not isinstance(resources, list):
+            return panel
+
+        normalized_resources: list[dict] = []
+        for resource in resources:
+            if not isinstance(resource, dict):
+                continue
+            max_value = resource.get("max", 0)
+            try:
+                max_count = max(0, int(max_value))
+            except (TypeError, ValueError):
+                max_count = 0
+
+            current_value = resource.get("current", max_count)
+            try:
+                current_count = int(current_value)
+            except (TypeError, ValueError):
+                current_count = max_count
+            current_count = min(max(current_count, 0), max_count)
+
+            normalized_resources.append(
+                {
+                    **resource,
+                    "max": max_count,
+                    "current": current_count,
+                }
+            )
+
+        panel["resources"] = normalized_resources
+        return panel
+
     async def _token_responses(
         self,
         db: AsyncSession,
@@ -641,7 +676,9 @@ class RoomTabletopService:
                 reason=ErrorReason.REQUEST_VALIDATION_FAILED,
             )
 
-        spawn_panel = dict(selected_config.panel_initial) if selected_config and selected_config.panel_initial else {}
+        spawn_panel = self._build_spawn_panel_from_config(
+            selected_config.panel_initial if selected_config else None
+        )
 
         token = await self.repo.create_token(
             db,

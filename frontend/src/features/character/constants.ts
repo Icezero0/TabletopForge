@@ -152,11 +152,22 @@ export function defaultTokenPanelInitial(isPrimary: boolean) {
     hp_max: null as number | null,
     speed: null as number | null,
     pp: null as number | null,
+    proficiency_bonus: 2 as number | null,
     saving_throws: {} as Record<string, number | null>,
+    saving_throw_profs: {} as Record<string, boolean>,
     skills: {} as Record<string, number | null>,
+    skill_profs: {} as Record<string, string>,
     items: [] as { name: string; quantity: number; notes: string }[],
     weapons: [] as unknown[],
     armor: [] as unknown[],
+    spellcasting_ability: "intelligence",
+    spell_save_dc: { value: 0, breakdown: "" },
+    spell_attack_bonus: { value: 0, breakdown: "" },
+    spellbook: {
+      "0": [], "1": [], "2": [], "3": [], "4": [], "5": [],
+      "6": [], "7": [], "8": [], "9": [],
+    } as Record<string, string[]>,
+    resources: [] as { name: string; max: number; recovery: string }[],
     inherit_items_from_character: isPrimary,
   };
 }

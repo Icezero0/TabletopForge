@@ -382,6 +382,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload)
         <CharacterSpellsTab
           v-show="activeTab === 'spells'"
           v-model="formSpells"
+          :identity-block="formIdentity"
           :attributes-block="formAttributes"
         />
 
@@ -398,7 +399,9 @@ onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload)
         <CharacterTokenTab
           v-show="activeTab === 'token'"
           v-model="formTokenConfigs"
+          :identity-block="formIdentity"
           :attributes-block="formAttributes"
+          :spells-block="formSpells"
           :equipment-block="formEquipment"
           :character-name="charName"
           :portrait-asset-id="formPortraitAssetId"

@@ -7,11 +7,19 @@ export type TokenPanelInitial = {
   hp_max?: number | null;
   speed?: number | null;
   pp?: number | null;
+  proficiency_bonus?: number | null;
   saving_throws?: Record<string, number | null>;
+  saving_throw_profs?: Record<string, boolean>;
   skills?: Record<string, number | null>;
+  skill_profs?: Record<string, string>;
   items?: { name: string; quantity: number; notes: string }[];
   weapons?: unknown[];
   armor?: unknown[];
+  spellcasting_ability?: string;
+  spell_save_dc?: { value: number; breakdown?: string };
+  spell_attack_bonus?: { value: number; breakdown?: string };
+  spellbook?: Record<string, string[]>;
+  resources?: { name: string; max: number; current?: number; recovery: string }[];
   inherit_items_from_character?: boolean;
 };
 
