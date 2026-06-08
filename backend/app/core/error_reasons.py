@@ -48,6 +48,7 @@ class ErrorReason(StrEnum):
     INVALID_HEARTBEAT_ACTION = "invalid_heartbeat_action"
     INVALID_INTEGER_FIELD = "invalid_integer_field"
     INVALID_NUMBER_FIELD = "invalid_number_field"
+    INVALID_PAYLOAD = "invalid_payload"
     INVALID_STRING_FIELD = "invalid_string_field"
     INVALID_WEBSOCKET_PAYLOAD = "invalid_websocket_payload"
     REQUEST_VALIDATION_FAILED = "request_validation_failed"

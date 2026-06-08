@@ -1,7 +1,6 @@
 import type { Character } from "@/infra/api/character.api";
 import { getCharacters } from "@/infra/api/character.api";
 import type { RoomCharacterEntry, SpawnPopoverEntry } from "@/infra/api/roomCharacters.api";
-import type { GameRole } from "@/features/room/types";
 
 function characterToPopoverEntry(char: Character): SpawnPopoverEntry {
   return {
@@ -11,6 +10,8 @@ function characterToPopoverEntry(char: Character): SpawnPopoverEntry {
     name: char.name,
     player_name: char.player_name,
     token_image_asset_id: char.token_image_asset_id ?? char.portrait_asset_id,
+    token_configs: [],
+    is_hidden: false,
     state: {
       current_hp: null,
       max_hp: null,
@@ -24,7 +25,6 @@ function characterToPopoverEntry(char: Character): SpawnPopoverEntry {
 export function mergeSpawnPopoverEntries(
   roomEntries: RoomCharacterEntry[],
   libraryCharacters: Character[],
-  gameRole: GameRole | "unknown",
   currentUserId: number | null | undefined,
 ): SpawnPopoverEntry[] {
   const roomIds = new Set(roomEntries.map((entry) => entry.character_id));

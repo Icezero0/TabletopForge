@@ -43,10 +43,6 @@ const scores = computed(() => {
   for (const k of ABILITY_KEYS) result[k] = Number(s[k] ?? 10);
   return result;
 });
-function setScore(ability: string, raw: string) {
-  update("ability_scores", { ...scores.value, [ability]: parseInt(raw) || 0 });
-}
-
 // ── Derived stats ───────────────────────────────────────────────────────────
 const DERIVED_KEYS = ["ac", "max_hp", "speed", "initiative", "proficiency_bonus", "passive_perception"] as const;
 type DerivedKey = (typeof DERIVED_KEYS)[number];

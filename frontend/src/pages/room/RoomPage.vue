@@ -8,7 +8,6 @@ import {
   patchMyPlayerColor,
   patchRoom,
   type Room,
-  type RoomMap,
   type RoomPatchPayload,
 } from "@/infra/api/rooms.api";
 import { patchLibraryResourceGrid, type LibraryResource } from "@/infra/api/library.api";
@@ -136,8 +135,6 @@ const tokenSpawnCharacters = computed(() => {
   }
   return [];
 });
-const canAddCharacter = computed(() =>
-  currentUserGameRole.value === "GM" || currentUserGameRole.value === "PL");
 const canEditGrid = computed(() => currentUserGameRole.value === "GM");
 
 const { toolMode, disabledTools } = useTableToolMode(currentUserGameRole);
@@ -215,13 +212,8 @@ const spawnPopoverEntries = computed(() =>
   mergeSpawnPopoverEntries(
     roomCharacters.value,
     libraryCharacters.value,
-    currentUserGameRole.value,
     currentUserId.value,
   ),
-);
-
-const spawnPopoverLoading = computed(
-  () => roomCharactersLoading.value || libraryLoading.value,
 );
 
 watch(characterPopoverOpen, async (open) => {
@@ -432,16 +424,18 @@ function isObjectClaimedByOther(selectionLike: ClaimableObjectSelection) {
 
 function releaseLocalObjectSelection() {
   if (!roomId.value || !lastClaimedSelection) return;
+  const releasedSelection = lastClaimedSelection;
+  lastClaimedSelection = null;
+  if (!realtime.isRealtimeActive.value) return;
   sendObjectSelection(roomId.value, {
-    object_type: lastClaimedSelection.type,
-    object_id: lastClaimedSelection.id,
+    object_type: releasedSelection.type,
+    object_id: releasedSelection.id,
     active: false,
   });
-  lastClaimedSelection = null;
 }
 
 function sendLocalObjectSelectionClaim(selectionLike: ClaimableObjectSelection) {
-  if (!roomId.value) return;
+  if (!roomId.value || !realtime.isRealtimeActive.value) return;
   sendObjectSelection(roomId.value, {
     object_type: selectionLike.type,
     object_id: selectionLike.id,
@@ -731,6 +725,7 @@ async function handleSpawnAllTokens(characterId: number) {
 
   for (let i = 0; i < configs.length; i++) {
     const cfg = configs[i];
+    if (!cfg) continue;
     try {
       await tabletopStore.spawnCharacterToken(roomId.value, characterId, {
         x: startX + i * step,
@@ -858,7 +853,8 @@ async function handleContextAlignMapToGrid(mapId: number) {
   let scaleX: number, scaleY: number, phaseX: number, phaseY: number;
 
   const calibration = map.map_grid_calibration;
-  if (calibration && calibration.length > 0 && "width" in calibration[0]) {
+  const firstCalibration = calibration?.[0];
+  if (firstCalibration && "width" in firstCalibration) {
     // New format: {x, y, width, height} — use least squares
     const { cellWidth, phaseX: px, cellHeight, phaseY: py } = fitGridFromSamples(calibration as GridSampleRect[]);
     scaleX = cellPx / cellWidth;
@@ -1228,6 +1224,7 @@ async function handleAnnotate(payload: { calibration: GridSampleRect[] }) {
   const x = Math.round((idealX + screenPhaseX) / cellPx) * cellPx - screenPhaseX;
   const y = Math.round((idealY + screenPhaseY) / cellPx) * cellPx - screenPhaseY;
   const first = payload.calibration[0];
+  if (!first) return;
   try {
     await patchLibraryResourceGrid(pending.libraryResourceId, {
       map_grid_x: first.x,
@@ -1362,6 +1359,15 @@ const realtime = useRoomRealtimeSession({
   onObjectSelection: handleObjectSelection,
 });
 
+watch(
+  () => realtime.isRealtimeActive.value,
+  (active) => {
+    if (active && lastClaimedSelection) {
+      sendLocalObjectSelectionClaim(lastClaimedSelection);
+    }
+  },
+);
+
 function scenePointFromViewport(clientX: number, clientY: number) {
   return mapViewportRef.value?.scenePointFromClient(clientX, clientY) ?? { x: 0, y: 0 };
 }
@@ -1462,14 +1468,6 @@ const roomMemberItems = computed(() => entityRoomMembers.value.map((member) => {
 }));
 const roomMemberStatusByUserId = computed<Map<number, MemberStatus>>(() =>
   new Map(roomMemberItems.value.map((member) => [member.id, member.status])));
-
-const characterById = computed(() => {
-  const map = new Map<number, (typeof roomCharacters.value)[number]>();
-  for (const entry of roomCharacters.value) {
-    map.set(entry.character_id, entry);
-  }
-  return map;
-});
 
 const inRoomCharacterIds = computed(
   () => new Set(roomCharacters.value.map((e) => e.character_id)),

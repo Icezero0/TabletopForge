@@ -86,7 +86,7 @@ class TabletopCommandHandler:
         if room_id is None:
             raise BadRequestError(
                 "Active room is required",
-                reason=ErrorReason.BAD_REQUEST,
+                reason=ErrorReason.ROOM_NOT_ENTERED,
             )
 
         data = command.data or {}
@@ -94,7 +94,7 @@ class TabletopCommandHandler:
         if payload_room_id is not None and int(payload_room_id) != room_id:
             raise BadRequestError(
                 "room_id does not match active room",
-                reason=ErrorReason.BAD_REQUEST,
+                reason=ErrorReason.INVALID_ROOM_ID,
                 details={"room_id": payload_room_id},
             )
 
@@ -111,6 +111,41 @@ class TabletopCommandHandler:
         require_game_permission(game_role, GamePermission.MANAGE_DRAWINGS)
         return room_id
 
+    async def _require_object_selection_room(
+        self,
+        db: AsyncSession,
+        *,
+        connection: WsConnection,
+        command: WsCommandPayload,
+    ) -> int:
+        room_id = connection.active_room_id
+        if room_id is None:
+            raise BadRequestError(
+                "Active room is required",
+                reason=ErrorReason.ROOM_NOT_ENTERED,
+            )
+
+        data = command.data or {}
+        payload_room_id = data.get("room_id")
+        if payload_room_id is not None and int(payload_room_id) != room_id:
+            raise BadRequestError(
+                "room_id does not match active room",
+                reason=ErrorReason.INVALID_ROOM_ID,
+                details={"room_id": payload_room_id},
+            )
+
+        game_role = await self.membership_service.find_game_role(
+            db,
+            room_id=room_id,
+            user_id=connection.user_id,
+        )
+        if game_role is None:
+            raise ForbiddenError(
+                "You do not have permission to perform this action",
+                reason=ErrorReason.ROOM_PERMISSION_DENIED,
+            )
+        return room_id
+
     async def _require_token_room(
         self,
         db: AsyncSession,
@@ -122,7 +157,7 @@ class TabletopCommandHandler:
         if room_id is None:
             raise BadRequestError(
                 "Active room is required",
-                reason=ErrorReason.BAD_REQUEST,
+                reason=ErrorReason.ROOM_NOT_ENTERED,
             )
 
         data = command.data or {}
@@ -130,7 +165,7 @@ class TabletopCommandHandler:
         if payload_room_id is not None and int(payload_room_id) != room_id:
             raise BadRequestError(
                 "room_id does not match active room",
-                reason=ErrorReason.BAD_REQUEST,
+                reason=ErrorReason.INVALID_ROOM_ID,
                 details={"room_id": payload_room_id},
             )
 
@@ -159,13 +194,13 @@ class TabletopCommandHandler:
         if token is None:
             raise BadRequestError(
                 "Token not found",
-                reason=ErrorReason.BAD_REQUEST,
+                reason=ErrorReason.REQUEST_VALIDATION_FAILED,
                 details={"token_id": token_id},
             )
         if token.locked:
             raise BadRequestError(
                 "Token is locked",
-                reason=ErrorReason.BAD_REQUEST,
+                reason=ErrorReason.REQUEST_VALIDATION_FAILED,
                 details={"token_id": token_id},
             )
 
@@ -320,7 +355,7 @@ class TabletopCommandHandler:
         connection: WsConnection,
         command: WsCommandPayload,
     ) -> None:
-        room_id = await self._require_pointer_room(
+        room_id = await self._require_object_selection_room(
             db,
             connection=connection,
             command=command,

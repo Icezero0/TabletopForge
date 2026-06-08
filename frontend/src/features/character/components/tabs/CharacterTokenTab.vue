@@ -192,6 +192,7 @@ function removeSecondary(idx: number) {
 
 function copySecondary(idx: number) {
   const src = secondaryConfigs()[idx];
+  if (!src) return;
   const copy: TokenConfigUpsert = {
     id: undefined,
     is_primary: false,
@@ -199,7 +200,7 @@ function copySecondary(idx: number) {
     asset_id: src.asset_id,
     library_resource_id: src.library_resource_id,
     sort_order: secondaryConfigs().length,
-    panel_initial: src.panel_initial ? { ...src.panel_initial } : undefined,
+    panel_initial: src.panel_initial ? { ...src.panel_initial } : {},
   };
   const primary = primaryConfig() ? [primaryConfig()!] : [];
   const secs = secondaryConfigs();

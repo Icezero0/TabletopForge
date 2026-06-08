@@ -31,7 +31,7 @@ function isLockedInHandMode(map: RoomMap) {
   return props.toolMode === "hand" && map.locked;
 }
 
-function onMapPointerDown(map: RoomMap, event: PointerEvent) {
+function onMapPointerDown(event: PointerEvent) {
   if (!canPickMap.value) return;
   event.stopPropagation();
 }
@@ -61,7 +61,7 @@ function onMapContextMenu(map: RoomMap, event: MouseEvent) {
         transform: `translate(${map.x}px, ${map.y}px) scale(${map.scale_x ?? map.scale}, ${map.scale_y ?? map.scale})`,
         pointerEvents: isLockedInHandMode(map) ? 'none' : undefined,
       }"
-      @pointerdown="onMapPointerDown(map, $event)"
+      @pointerdown="onMapPointerDown($event)"
       @click="onMapClick(map, $event)"
       @contextmenu="onMapContextMenu(map, $event)"
     >

@@ -5,7 +5,6 @@ import { useI18n } from "vue-i18n";
 import {
   defaultIdentity, defaultFlavor, defaultAttributes,
   defaultFeatures, defaultSpells, defaultEquipment,
-  defaultTokenConfig,
 } from "@/features/character/constants";
 import {
   getCharacter, createCharacter, patchCharacter,

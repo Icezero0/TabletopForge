@@ -3,7 +3,7 @@ import { toRef } from "vue";
 import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthenticatedAssetUrl";
 
 const props = defineProps<{
-  assetId: number;
+  assetId: number | null;
   name: string;
   selected?: boolean;
 }>();

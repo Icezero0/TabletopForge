@@ -4,7 +4,7 @@ import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthen
 
 const props = defineProps<{
   mapId: number;
-  assetId: number;
+  assetId: number | null;
 }>();
 
 const emit = defineEmits<{
