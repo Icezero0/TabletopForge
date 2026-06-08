@@ -36,7 +36,7 @@ from app.modules.rooms.tabletop.schemas import (
     RoomDrawingPatch,
     RoomDrawingResponse,
     RoomDrawingsBulkDelete,
-    RoomMapFromAssetCreate,
+    RoomMapFromResourceCreate,
     RoomMapPatch,
     RoomMapResponse,
     RoomTabletopSettingsPatch,
@@ -280,22 +280,25 @@ async def create_room_map(
 
 
 @router.post(
-    "/{room_id}/maps/from-asset",
+    "/{room_id}/maps/from-resource",
     response_model=RoomMapResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def create_room_map_from_asset(
+async def create_room_map_from_resource(
     room_id: int,
-    payload: RoomMapFromAssetCreate,
+    payload: RoomMapFromResourceCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     publisher: RealtimePublisher = Depends(get_realtime_publisher),
 ) -> RoomMapResponse:
-    room_map = await tabletop_service.create_map_from_asset(
+    room_map = await tabletop_service.create_map_from_resource(
         db,
         room_id=room_id,
         user=current_user,
-        asset_id=payload.asset_id,
+        resource_id=payload.library_resource_id,
+        x=payload.x,
+        y=payload.y,
+        scale=payload.scale,
     )
     await publisher.publish_map_created(
         room_id=room_id,

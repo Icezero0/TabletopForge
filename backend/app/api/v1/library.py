@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.modules.auth.deps import get_current_user
 from app.modules.library.constants import ResourceType
 from app.modules.library.schemas import (
+    LibraryResourceGridPatch,
     LibraryResourceListResponse,
     LibraryResourcePatch,
     LibraryResourceResponse,
@@ -87,6 +88,22 @@ async def update_resource(
         name=payload.name,
         tags=payload.tags,
         comment=payload.comment,
+    )
+    return LibraryResourceResponse.model_validate(resource)
+
+
+@router.patch("/resources/{resource_id}/grid", response_model=LibraryResourceResponse)
+async def patch_resource_grid(
+    resource_id: int,
+    payload: LibraryResourceGridPatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> LibraryResourceResponse:
+    resource = await library_service.patch_resource_grid(
+        db,
+        resource_id=resource_id,
+        user=current_user,
+        payload=payload,
     )
     return LibraryResourceResponse.model_validate(resource)
 

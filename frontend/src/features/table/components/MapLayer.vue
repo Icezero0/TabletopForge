@@ -58,7 +58,7 @@ function onMapContextMenu(map: RoomMap, event: MouseEvent) {
       class="mapItem"
       :class="{ inactive: !canPickMap }"
       :style="{
-        transform: `translate(${map.x}px, ${map.y}px) scale(${map.scale})`,
+        transform: `translate(${map.x}px, ${map.y}px) scale(${map.scale_x ?? map.scale}, ${map.scale_y ?? map.scale})`,
         pointerEvents: isLockedInHandMode(map) ? 'none' : undefined,
       }"
       @pointerdown="onMapPointerDown(map, $event)"

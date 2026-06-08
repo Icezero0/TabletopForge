@@ -1,12 +1,14 @@
 from math import ceil
 
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_reasons import ErrorReason
 from app.core.exceptions import ForbiddenError, NotFoundError
+from app.modules.library.models import LibraryResource
 from app.modules.rooms.constants import GameRole, RoomPermission, RoomRole, RoomVisibility
 from app.modules.rooms.membership.service import RoomMembershipService
-from app.modules.rooms.models import Room
+from app.modules.rooms.models import Room, RoomMap
 from app.modules.rooms.permissions import require_room_permission
 from app.modules.rooms.room.repository import RoomRepository
 from app.modules.rooms.room.schemas import RoomCreate, RoomPatch
@@ -178,6 +180,19 @@ class RoomService:
             user=user,
             permission=RoomPermission.DELETE_ROOM,
         )
+
+        # Decrement usage_count on all library resources referenced by this room's maps
+        # before the cascade delete removes the room_maps rows.
+        result = await db.execute(
+            select(RoomMap.library_resource_id).where(RoomMap.room_id == room_id)
+        )
+        resource_ids = [row[0] for row in result.all()]
+        if resource_ids:
+            await db.execute(
+                update(LibraryResource)
+                .where(LibraryResource.id.in_(resource_ids))
+                .values(usage_count=LibraryResource.usage_count - 1)
+            )
 
         await self.repo.delete_room(db, room)
         await db.commit()

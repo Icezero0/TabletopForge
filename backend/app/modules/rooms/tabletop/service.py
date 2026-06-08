@@ -12,6 +12,8 @@ from app.modules.character.presenter import (
 )
 from app.modules.character.repository import CharacterRepository
 from app.modules.character.state_repository import CharacterStateRepository
+from app.modules.library.constants import ResourceType
+from app.modules.library.repository import LibraryRepository
 from app.modules.rooms.characters.repository import RoomCharacterRepository
 from app.modules.rooms.constants import GamePermission, GameRole
 from app.modules.rooms.game_permissions import require_game_permission
@@ -43,6 +45,7 @@ class RoomTabletopService:
         self.membership_service = RoomMembershipService()
         self.room_service = RoomService()
         self.asset_service = AssetService()
+        self.library_repo = LibraryRepository()
         self.room_character_repo = RoomCharacterRepository()
         self.character_repo = CharacterRepository()
         self.state_repo = CharacterStateRepository()
@@ -237,7 +240,7 @@ class RoomTabletopService:
         tokens = await self.repo.list_tokens(db, room_id=room_id)
         return RoomTabletopSnapshotResponse(
             settings=RoomTabletopSettingsResponse.model_validate(settings),
-            maps=[RoomMapResponse.model_validate(m) for m in maps],
+            maps=[RoomMapResponse.from_orm(m) for m in maps],
             drawings=[RoomDrawingResponse.model_validate(d) for d in drawings],
             tokens=await self._token_responses(
                 db,
@@ -300,25 +303,35 @@ class RoomTabletopService:
             asset_type=AssetType.MAP_BACKGROUND,
             owner_id=user.id,
         )
+        resource = await self.library_repo.create(
+            db,
+            owner_id=user.id,
+            type=ResourceType.MAP_BACKGROUND,
+            name=file.filename or asset.filename,
+            primary_asset_id=asset.id,
+        )
+        resource.usage_count = 1
+        await db.flush()
+
         room_map = await self.repo.create_map(
             db,
             room_id=room_id,
-            asset_id=asset.id,
+            library_resource_id=resource.id,
             x=x,
             y=y,
             scale=scale,
             z_index=next_z_index,
         )
         await db.commit()
-        return RoomMapResponse.model_validate(room_map)
+        return RoomMapResponse.from_orm(room_map)
 
-    async def create_map_from_asset(
+    async def create_map_from_resource(
         self,
         db: AsyncSession,
         *,
         room_id: int,
         user: User,
-        asset_id: int,
+        resource_id: int,
         x: float = 0.0,
         y: float = 0.0,
         scale: float = 1.0,
@@ -326,12 +339,18 @@ class RoomTabletopService:
         game_role = await self._require_member_game_role(db, room_id=room_id, user=user)
         require_game_permission(game_role, GamePermission.UPLOAD_MAP)
 
-        asset = await self.asset_service.get_asset_by_id(db, asset_id)
-        if asset.owner_id != user.id:
+        resource = await self.library_repo.get_by_id(db, resource_id=resource_id)
+        if resource is None:
+            raise NotFoundError(
+                "Library resource not found",
+                reason=ErrorReason.ROOM_NOT_FOUND,
+                details={"resource_id": resource_id},
+            )
+        if resource.owner_id != user.id:
             raise ForbiddenError(
-                "You do not have permission to use this asset",
+                "You do not have permission to use this resource",
                 reason=ErrorReason.ROOM_PERMISSION_DENIED,
-                details={"asset_id": asset_id},
+                details={"resource_id": resource_id},
             )
 
         existing_maps = await self.repo.list_maps(db, room_id=room_id)
@@ -341,17 +360,18 @@ class RoomTabletopService:
             else 0
         )
 
+        await self.library_repo.adjust_usage_count(db, resource=resource, delta=1)
         room_map = await self.repo.create_map(
             db,
             room_id=room_id,
-            asset_id=asset.id,
+            library_resource_id=resource.id,
             x=x,
             y=y,
             scale=scale,
             z_index=next_z_index,
         )
         await db.commit()
-        return RoomMapResponse.model_validate(room_map)
+        return RoomMapResponse.from_orm(room_map)
 
     async def patch_map(
         self,
@@ -392,11 +412,15 @@ class RoomTabletopService:
             x=payload.x,
             y=payload.y,
             scale=payload.scale,
+            scale_x=payload.scale_x,
+            scale_y=payload.scale_y,
+            _scale_x_set="scale_x" in payload.model_fields_set,
+            _scale_y_set="scale_y" in payload.model_fields_set,
             locked=payload.locked,
             z_index=payload.z_index,
         )
         await db.commit()
-        return RoomMapResponse.model_validate(updated)
+        return RoomMapResponse.from_orm(updated)
 
     async def delete_map(
         self,
@@ -416,7 +440,9 @@ class RoomTabletopService:
                 reason=ErrorReason.ROOM_NOT_FOUND,
                 details={"map_id": map_id},
             )
+        library_resource = room_map.library_resource
         await self.repo.delete_map(db, room_map=room_map)
+        await self.library_repo.adjust_usage_count(db, resource=library_resource, delta=-1)
         await db.commit()
 
     async def create_drawing(

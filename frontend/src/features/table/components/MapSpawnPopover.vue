@@ -116,7 +116,7 @@ const showPopover = computed(() => props.open && props.anchorEl != null);
           v-for="map in maps"
           :key="map.id"
           :asset-id="map.asset_id"
-          :name="t('table.assets.mapLabel', { id: map.id })"
+          :name="map.resource_name ?? t('table.assets.mapLabel', { id: map.id })"
           :selected="selectedMapId === map.id"
           @select="onSelect(map.id)"
         />

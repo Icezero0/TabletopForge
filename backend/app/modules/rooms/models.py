@@ -1,10 +1,16 @@
+from __future__ import annotations
+
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 from app.modules.users.models import User
+
+if TYPE_CHECKING:
+    from app.modules.library.models import LibraryResource
 
 from app.modules.rooms.constants import (
     GameRole,
@@ -221,15 +227,17 @@ class RoomMap(Base):
         nullable=False,
         index=True,
     )
-    asset_id: Mapped[int] = mapped_column(
+    library_resource_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("assets.id", ondelete="RESTRICT"),
+        ForeignKey("library_resources.id", ondelete="RESTRICT"),
         nullable=False,
         index=True,
     )
     x: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     y: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     scale: Mapped[float] = mapped_column(Float, nullable=False, default=1.0, server_default="1")
+    scale_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    scale_y: Mapped[float | None] = mapped_column(Float, nullable=True)
     locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     z_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     created_at: Mapped[datetime | None] = mapped_column(
@@ -243,6 +251,7 @@ class RoomMap(Base):
     )
 
     room: Mapped["Room"] = relationship("Room")
+    library_resource: Mapped["LibraryResource"] = relationship("LibraryResource")
 
 
 class RoomDrawing(Base):

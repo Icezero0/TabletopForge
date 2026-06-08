@@ -16,6 +16,11 @@ class LibraryResourceResponse(BaseModel):
     usage_count: int
     created_at: datetime
     updated_at: datetime | None
+    map_grid_x: float | None = None
+    map_grid_y: float | None = None
+    map_grid_size: float | None = None
+    map_grid_cell_height: float | None = None
+    map_grid_calibration: list[dict[str, float]] | None = None
 
     model_config = {"from_attributes": True}
 
@@ -32,3 +37,11 @@ class LibraryResourcePatch(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     tags: list[str] | None = None
     comment: str | None = None
+
+
+class LibraryResourceGridPatch(BaseModel):
+    map_grid_x: float | None = None
+    map_grid_y: float | None = None
+    map_grid_size: float | None = Field(default=None, gt=0)
+    map_grid_cell_height: float | None = Field(default=None, gt=0)
+    map_grid_calibration: list[dict[str, float]] | None = None

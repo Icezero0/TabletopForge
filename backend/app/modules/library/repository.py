@@ -88,6 +88,26 @@ class LibraryRepository:
         await db.refresh(resource)
         return resource
 
+    async def update_grid(
+        self,
+        db: AsyncSession,
+        *,
+        resource: LibraryResource,
+        map_grid_x: float | None,
+        map_grid_y: float | None,
+        map_grid_size: float | None,
+        map_grid_cell_height: float | None = None,
+        map_grid_calibration: list | None = None,
+    ) -> LibraryResource:
+        resource.map_grid_x = map_grid_x
+        resource.map_grid_y = map_grid_y
+        resource.map_grid_size = map_grid_size
+        resource.map_grid_cell_height = map_grid_cell_height
+        resource.map_grid_calibration = map_grid_calibration
+        await db.flush()
+        await db.refresh(resource)
+        return resource
+
     async def delete(self, db: AsyncSession, *, resource: LibraryResource) -> None:
         await db.delete(resource)
         await db.flush()

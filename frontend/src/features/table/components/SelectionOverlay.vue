@@ -7,6 +7,7 @@ import type { TabletopSelection } from "@/features/table/types";
 import { MAP_SCALE_MIN, MAP_SCALE_STEP } from "@/features/table/constants";
 
 type Corner = "tl" | "tr" | "bl" | "br";
+type Edge = "t" | "b" | "l" | "r";
 
 const props = defineProps<{
   selection: TabletopSelection;
@@ -18,7 +19,7 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  patchMap: [mapId: number, payload: { x?: number; y?: number; scale?: number }];
+  patchMap: [mapId: number, payload: { x?: number; y?: number; scale?: number; scale_x?: number | null; scale_y?: number | null }];
 }>();
 
 const corners: { id: Corner; class: string; cursor: string }[] = [
@@ -26,6 +27,13 @@ const corners: { id: Corner; class: string; cursor: string }[] = [
   { id: "tr", class: "handleTr", cursor: "nesw-resize" },
   { id: "bl", class: "handleBl", cursor: "nesw-resize" },
   { id: "br", class: "handleBr", cursor: "nwse-resize" },
+];
+
+const edges: { id: Edge; class: string; cursor: string }[] = [
+  { id: "t", class: "handleTm", cursor: "ns-resize" },
+  { id: "b", class: "handleBm", cursor: "ns-resize" },
+  { id: "l", class: "handleMl", cursor: "ew-resize" },
+  { id: "r", class: "handleMr", cursor: "ew-resize" },
 ];
 
 const selectedMap = computed(() => {
@@ -45,14 +53,17 @@ const canTransform = computed(
   () => canShowOverlay.value && selectedMap.value != null && !selectedMap.value.locked,
 );
 
+function effScaleX(map: RoomMap) { return map.scale_x ?? map.scale; }
+function effScaleY(map: RoomMap) { return map.scale_y ?? map.scale; }
+
 const box = computed(() => {
   const map = selectedMap.value;
   if (!map || !props.mapNaturalSize.w) return null;
   return {
     x: map.x,
     y: map.y,
-    width: props.mapNaturalSize.w * map.scale,
-    height: props.mapNaturalSize.h * map.scale,
+    width: props.mapNaturalSize.w * effScaleX(map),
+    height: props.mapNaturalSize.h * effScaleY(map),
   };
 });
 
@@ -73,6 +84,7 @@ let dragStartY = 0;
 let dragOriginX = 0;
 let dragOriginY = 0;
 
+// --- corner resize state ---
 let resizePointerId: number | null = null;
 let resizeCorner: Corner | null = null;
 let resizeOriginScale = 1;
@@ -83,6 +95,18 @@ let resizeStartClientX = 0;
 let resizeStartClientY = 0;
 let resizeStartCornerX = 0;
 let resizeStartCornerY = 0;
+
+// --- edge resize state ---
+let edgePointerId: number | null = null;
+let edgeEdge: Edge | null = null;
+let edgeOriginScaleX = 1;
+let edgeOriginScaleY = 1;
+let edgeOriginW = 0;
+let edgeOriginH = 0;
+let edgeOriginMapX = 0;
+let edgeOriginMapY = 0;
+let edgeStartClientX = 0;
+let edgeStartClientY = 0;
 
 const frameRef = ref<HTMLElement | null>(null);
 
@@ -135,29 +159,22 @@ function startDrag(event: PointerEvent, map?: RoomMap) {
 
 defineExpose({ startDrag });
 
+// --- corner resize ---
 function cornerScenePoint(corner: Corner, b: { x: number; y: number; width: number; height: number }) {
   switch (corner) {
-    case "tl":
-      return { x: b.x, y: b.y };
-    case "tr":
-      return { x: b.x + b.width, y: b.y };
-    case "bl":
-      return { x: b.x, y: b.y + b.height };
-    case "br":
-      return { x: b.x + b.width, y: b.y + b.height };
+    case "tl": return { x: b.x, y: b.y };
+    case "tr": return { x: b.x + b.width, y: b.y };
+    case "bl": return { x: b.x, y: b.y + b.height };
+    case "br": return { x: b.x + b.width, y: b.y + b.height };
   }
 }
 
 function anchorForCorner(corner: Corner, b: { x: number; y: number; width: number; height: number }) {
   switch (corner) {
-    case "br":
-      return { x: b.x, y: b.y };
-    case "bl":
-      return { x: b.x + b.width, y: b.y };
-    case "tr":
-      return { x: b.x, y: b.y + b.height };
-    case "tl":
-      return { x: b.x + b.width, y: b.y + b.height };
+    case "br": return { x: b.x, y: b.y };
+    case "bl": return { x: b.x + b.width, y: b.y };
+    case "tr": return { x: b.x, y: b.y + b.height };
+    case "tl": return { x: b.x + b.width, y: b.y + b.height };
   }
 }
 
@@ -184,27 +201,23 @@ function onResizeDown(corner: Corner, event: PointerEvent) {
 function patchScaleForCorner(map: RoomMap, corner: Corner, nextScale: number) {
   const nw = props.mapNaturalSize.w;
   const nh = props.mapNaturalSize.h;
+  const curW = nw * effScaleX(map);
+  const curH = nh * effScaleY(map);
   const w = nw * nextScale;
   const h = nh * nextScale;
-  const curW = nw * map.scale;
-  const curH = nh * map.scale;
-
+  // corner resize resets to uniform scale (clears scale_x/scale_y)
   switch (corner) {
     case "br":
-      emit("patchMap", map.id, { scale: nextScale });
+      emit("patchMap", map.id, { scale: nextScale, scale_x: null, scale_y: null });
       break;
     case "bl":
-      emit("patchMap", map.id, { scale: nextScale, x: map.x + curW - w });
+      emit("patchMap", map.id, { scale: nextScale, scale_x: null, scale_y: null, x: map.x + curW - w });
       break;
     case "tr":
-      emit("patchMap", map.id, { scale: nextScale, y: map.y + curH - h });
+      emit("patchMap", map.id, { scale: nextScale, scale_x: null, scale_y: null, y: map.y + curH - h });
       break;
     case "tl":
-      emit("patchMap", map.id, {
-        scale: nextScale,
-        x: map.x + curW - w,
-        y: map.y + curH - h,
-      });
+      emit("patchMap", map.id, { scale: nextScale, scale_x: null, scale_y: null, x: map.x + curW - w, y: map.y + curH - h });
       break;
   }
 }
@@ -213,7 +226,6 @@ function onResizeMove(event: PointerEvent) {
   const map = selectedMap.value;
   const corner = resizeCorner;
   if (!map || !corner || resizePointerId !== event.pointerId) return;
-
   const vs = props.viewportScale ?? 1;
   const dx = (event.clientX - resizeStartClientX) / vs;
   const dy = (event.clientY - resizeStartClientY) / vs;
@@ -229,6 +241,66 @@ function onResizeUp(event: PointerEvent) {
   if (resizePointerId !== event.pointerId) return;
   resizePointerId = null;
   resizeCorner = null;
+  (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+}
+
+// --- edge resize ---
+function onEdgeDown(edge: Edge, event: PointerEvent) {
+  const map = selectedMap.value;
+  const b = box.value;
+  if (!canTransform.value || !map || !b) return;
+  event.stopPropagation();
+  edgePointerId = event.pointerId;
+  edgeEdge = edge;
+  edgeOriginScaleX = effScaleX(map);
+  edgeOriginScaleY = effScaleY(map);
+  edgeOriginW = b.width;
+  edgeOriginH = b.height;
+  edgeOriginMapX = map.x;
+  edgeOriginMapY = map.y;
+  edgeStartClientX = event.clientX;
+  edgeStartClientY = event.clientY;
+  (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+}
+
+function onEdgeMove(event: PointerEvent) {
+  const map = selectedMap.value;
+  const edge = edgeEdge;
+  if (!map || !edge || edgePointerId !== event.pointerId) return;
+  const nw = props.mapNaturalSize.w;
+  const nh = props.mapNaturalSize.h;
+  const vs = props.viewportScale ?? 1;
+  const dx = (event.clientX - edgeStartClientX) / vs;
+  const dy = (event.clientY - edgeStartClientY) / vs;
+
+  switch (edge) {
+    case "r": {
+      const newSx = roundScale((edgeOriginW + dx) / nw);
+      emit("patchMap", map.id, { scale_x: newSx, scale_y: edgeOriginScaleY });
+      break;
+    }
+    case "l": {
+      const newSx = roundScale((edgeOriginW - dx) / nw);
+      emit("patchMap", map.id, { scale_x: newSx, scale_y: edgeOriginScaleY, x: edgeOriginMapX + dx });
+      break;
+    }
+    case "b": {
+      const newSy = roundScale((edgeOriginH + dy) / nh);
+      emit("patchMap", map.id, { scale_x: edgeOriginScaleX, scale_y: newSy });
+      break;
+    }
+    case "t": {
+      const newSy = roundScale((edgeOriginH - dy) / nh);
+      emit("patchMap", map.id, { scale_x: edgeOriginScaleX, scale_y: newSy, y: edgeOriginMapY + dy });
+      break;
+    }
+  }
+}
+
+function onEdgeUp(event: PointerEvent) {
+  if (edgePointerId !== event.pointerId) return;
+  edgePointerId = null;
+  edgeEdge = null;
   (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
 }
 </script>
@@ -248,17 +320,31 @@ function onResizeUp(event: PointerEvent) {
       @pointerup="onDragUp"
       @pointercancel="onDragUp"
     />
+    <!-- corner handles: proportional resize -->
     <div
       v-for="c in corners"
       v-show="canTransform"
       :key="c.id"
-      class="resizeHandle"
+      class="resizeHandle cornerHandle"
       :class="c.class"
       :style="{ cursor: c.cursor }"
       @pointerdown="onResizeDown(c.id, $event)"
       @pointermove="onResizeMove"
       @pointerup="onResizeUp"
       @pointercancel="onResizeUp"
+    />
+    <!-- edge handles: single-axis resize -->
+    <div
+      v-for="e in edges"
+      v-show="canTransform"
+      :key="e.id"
+      class="resizeHandle edgeHandle"
+      :class="e.class"
+      :style="{ cursor: e.cursor }"
+      @pointerdown="onEdgeDown(e.id, $event)"
+      @pointermove="onEdgeMove"
+      @pointerup="onEdgeUp"
+      @pointercancel="onEdgeUp"
     />
   </div>
 </template>
@@ -293,9 +379,6 @@ function onResizeUp(event: PointerEvent) {
 
 .resizeHandle {
   position: absolute;
-  width: 18px;
-  height: 18px;
-  border-radius: 3px;
   background: var(--c-primary);
   border: 2px solid var(--c-surface);
   pointer-events: auto;
@@ -307,23 +390,52 @@ function onResizeUp(event: PointerEvent) {
   inset: -8px;
 }
 
-.handleTl {
-  top: -10px;
-  left: -10px;
+/* corner handles: square */
+.cornerHandle {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
 }
 
-.handleTr {
-  top: -10px;
-  right: -10px;
+.handleTl { top: -8px; left: -8px; }
+.handleTr { top: -8px; right: -8px; }
+.handleBl { bottom: -8px; left: -8px; }
+.handleBr { bottom: -8px; right: -8px; }
+
+/* edge handles: rectangular */
+.edgeHandle {
+  border-radius: 3px;
 }
 
-.handleBl {
-  bottom: -10px;
-  left: -10px;
+.handleTm {
+  width: 24px;
+  height: 8px;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
-.handleBr {
-  bottom: -10px;
-  right: -10px;
+.handleBm {
+  width: 24px;
+  height: 8px;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.handleMl {
+  width: 8px;
+  height: 24px;
+  left: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.handleMr {
+  width: 8px;
+  height: 24px;
+  right: -5px;
+  top: 50%;
+  transform: translateY(-50%);
 }
 </style>

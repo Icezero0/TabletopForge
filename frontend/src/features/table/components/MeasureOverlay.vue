@@ -61,7 +61,7 @@ const routeLastPoint = computed((): [number, number] => {
       <!-- Per-segment labels -->
       <template v-for="(seg, i) in state.segments" :key="i">
         <text
-          v-if="seg.labelFt >= 1"
+          v-if="seg.labelFt >= 2.5"
           :x="(seg.x1 + seg.x2) / 2"
           :y="(seg.y1 + seg.y2) / 2"
           class="measureLabel"
@@ -88,7 +88,7 @@ const routeLastPoint = computed((): [number, number] => {
       />
       <!-- Total label at last point -->
       <text
-        v-if="state.totalFt >= 1"
+        v-if="state.totalFt > 0"
         :x="routeLastPoint[0]"
         :y="routeLastPoint[1] - 14"
         class="measureTotalLabel"

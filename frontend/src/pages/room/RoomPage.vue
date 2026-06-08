@@ -8,8 +8,10 @@ import {
   patchMyPlayerColor,
   patchRoom,
   type Room,
+  type RoomMap,
   type RoomPatchPayload,
 } from "@/infra/api/rooms.api";
+import { patchLibraryResourceGrid, type LibraryResource } from "@/infra/api/library.api";
 import BaseLayout from "@/ui/layout/BaseLayout.vue";
 import RoomChatTab from "@/features/room/components/workspace/RoomChatTab.vue";
 import type { GameRole, MemberStatus, RoomRole } from "@/features/room/types";
@@ -28,6 +30,7 @@ import { useRoomRealtimeSession } from "@/features/room/composables/useRoomRealt
 import type { RoomRealtimeSessionClosed } from "@/infra/realtime/roomRealtime";
 import BottomAssetBar from "@/features/table/components/BottomAssetBar.vue";
 import LibraryMapPickerDialog from "@/features/table/components/LibraryMapPickerDialog.vue";
+import MapGridAnnotationDialog from "@/features/table/components/MapGridAnnotationDialog.vue";
 import AddRoomCharacterDialog from "@/features/room/components/AddRoomCharacterDialog.vue";
 import InGameCharacterList from "@/features/room/components/InGameCharacterList.vue";
 import FloatingPanel from "@/features/table/components/FloatingPanel.vue";
@@ -50,6 +53,7 @@ import { useTabletopPointer } from "@/features/table/composables/useTabletopPoin
 import { nextDrawingZIndex } from "@/features/table/drawingTypes";
 import { computeMapScaleForViewport } from "@/features/table/utils/mapScale";
 import { canInspectToken, canManageToken } from "@/features/table/utils/tokenDisplay";
+import { fitGridFromSamples, circularMeanPhase, type GridSampleRect, type GridSampleLegacy } from "@/features/table/utils/gridFit";
 import { useMessagesStore } from "@/stores/messages.store";
 import { useTabletopStore } from "@/stores/tabletop.store";
 import { useEntitiesStore } from "@/stores/entities.store";
@@ -165,6 +169,14 @@ const mapNaturalSizes = ref<Record<number, { w: number; h: number }>>({});
 const mapViewportRef = ref<InstanceType<typeof MapViewport> | null>(null);
 const mapUploadInput = ref<HTMLInputElement | null>(null);
 const mapUploading = ref(false);
+const pendingAnnotationMap = ref<{ id: number; assetId: number; libraryResourceId: number; dims: { w: number; h: number } } | null>(null);
+const gridAnnotationOpen = ref(false);
+
+watch(gridAnnotationOpen, (open) => {
+  if (!open && pendingAnnotationMap.value) {
+    handleAnnotationClose();
+  }
+});
 
 const addCharacterDialogOpen = ref(false);
 const characterPopoverOpen = ref(false);
@@ -656,6 +668,59 @@ function handleClearSelection() {
   closeContextMenu();
 }
 
+async function handleContextAlignMapToGrid(mapId: number) {
+  if (!roomId.value) return;
+  const map = tabletopMaps.value.find((m) => m.id === mapId);
+  if (!map || map.map_grid_size == null) return;
+  const cellPx = gridCellPx.value;
+  const natural = mapNaturalSizes.value[mapId] ?? { w: 0, h: 0 };
+  const effSx = map.scale_x ?? map.scale;
+  const effSy = map.scale_y ?? map.scale;
+  const centerX = map.x + (natural.w * effSx) / 2;
+  const centerY = map.y + (natural.h * effSy) / 2;
+
+  let scaleX: number, scaleY: number, phaseX: number, phaseY: number;
+
+  const calibration = map.map_grid_calibration;
+  if (calibration && calibration.length > 0 && "width" in calibration[0]) {
+    // New format: {x, y, width, height} — use least squares
+    const { cellWidth, phaseX: px, cellHeight, phaseY: py } = fitGridFromSamples(calibration as GridSampleRect[]);
+    scaleX = cellPx / cellWidth;
+    scaleY = cellPx / cellHeight;
+    phaseX = ((px * scaleX) % cellPx + cellPx) % cellPx;
+    phaseY = ((py * scaleY) % cellPx + cellPx) % cellPx;
+  } else if (calibration && calibration.length > 0) {
+    // Legacy format: {x, y, size} — use circular mean (uniform scale)
+    const legacyScale = cellPx / map.map_grid_size;
+    scaleX = legacyScale;
+    scaleY = map.map_grid_cell_height != null ? cellPx / map.map_grid_cell_height : legacyScale;
+    phaseX = circularMeanPhase(calibration as GridSampleLegacy[], "x", scaleX, cellPx);
+    phaseY = circularMeanPhase(calibration as GridSampleLegacy[], "y", scaleY, cellPx);
+  } else {
+    // No calibration — use stored grid params
+    scaleX = cellPx / map.map_grid_size;
+    scaleY = map.map_grid_cell_height != null ? cellPx / map.map_grid_cell_height : scaleX;
+    phaseX = (((map.map_grid_x ?? 0) * scaleX) % cellPx + cellPx) % cellPx;
+    phaseY = (((map.map_grid_y ?? 0) * scaleY) % cellPx + cellPx) % cellPx;
+  }
+
+  const idealX = centerX - (natural.w * scaleX) / 2;
+  const idealY = centerY - (natural.h * scaleY) / 2;
+  const x = Math.round((idealX + phaseX) / cellPx) * cellPx - phaseX;
+  const y = Math.round((idealY + phaseY) / cellPx) * cellPx - phaseY;
+
+  const nonSquare = Math.abs(scaleX - scaleY) > 1e-6;
+  try {
+    if (nonSquare) {
+      await tabletopStore.updateMap(roomId.value, mapId, { scale_x: scaleX, scale_y: scaleY, x, y });
+    } else {
+      await tabletopStore.updateMap(roomId.value, mapId, { scale: scaleX, scale_x: null, scale_y: null, x, y });
+    }
+  } catch (error) {
+    toasts.push({ message: getBackendErrorMessage(error), tone: "danger" });
+  }
+}
+
 async function handleContextDeleteMap(mapId: number) {
   if (!roomId.value) return;
   try {
@@ -914,11 +979,11 @@ function handleAddMapClick() {
   mapUploadInput.value?.click();
 }
 
-async function handlePickLibraryMap(assetId: number) {
+async function handlePickLibraryMap(resource: LibraryResource) {
   if (!roomId.value) return;
   mapUploading.value = true;
   try {
-    const map = await tabletopStore.addMapFromAsset(roomId.value, assetId);
+    const map = await tabletopStore.addMapFromResource(roomId.value, resource.id);
     const offset = tabletopMaps.value.length * 24;
     await tabletopStore.updateMap(roomId.value, map.id, { x: offset, y: offset });
     selectMap(map.id);
@@ -945,17 +1010,10 @@ async function handleMapFileChange(event: Event) {
   mapUploading.value = true;
   try {
     const dims = await readImageDimensions(file);
-    const viewportWidth = mapViewportRef.value?.getViewportWidth() ?? window.innerWidth;
-    const scale = computeMapScaleForViewport(dims.w, viewportWidth);
-    const offset = tabletopMaps.value.length * 24;
     const map = await tabletopStore.uploadMap(roomId.value, file);
-    await tabletopStore.updateMap(roomId.value, map.id, {
-      scale,
-      x: offset,
-      y: offset,
-    });
     selectMap(map.id);
-    toasts.push({ message: t("table.assets.uploadSuccess"), tone: "success" });
+    pendingAnnotationMap.value = { id: map.id, assetId: map.asset_id ?? 0, libraryResourceId: map.library_resource_id, dims };
+    gridAnnotationOpen.value = true;
   } catch (error) {
     toasts.push({
       message: getBackendErrorMessage(error) || t("table.assets.uploadFailed"),
@@ -963,6 +1021,72 @@ async function handleMapFileChange(event: Event) {
     });
   } finally {
     mapUploading.value = false;
+  }
+}
+
+async function handleAnnotate(payload: { calibration: GridSampleRect[] }) {
+  const pending = pendingAnnotationMap.value;
+  pendingAnnotationMap.value = null;
+  if (!pending || !roomId.value || payload.calibration.length === 0) return;
+  const cellPx = gridCellPx.value;
+  const { cellWidth, phaseX, cellHeight, phaseY } = fitGridFromSamples(payload.calibration);
+  const scaleX = cellPx / cellWidth;
+  const scaleY = cellPx / cellHeight;
+  const center = viewportCenterPoint();
+  const idealX = center.x - (pending.dims.w * scaleX) / 2;
+  const idealY = center.y - (pending.dims.h * scaleY) / 2;
+  const screenPhaseX = ((phaseX * scaleX) % cellPx + cellPx) % cellPx;
+  const screenPhaseY = ((phaseY * scaleY) % cellPx + cellPx) % cellPx;
+  const x = Math.round((idealX + screenPhaseX) / cellPx) * cellPx - screenPhaseX;
+  const y = Math.round((idealY + screenPhaseY) / cellPx) * cellPx - screenPhaseY;
+  const first = payload.calibration[0];
+  try {
+    await patchLibraryResourceGrid(pending.libraryResourceId, {
+      map_grid_x: first.x,
+      map_grid_y: first.y,
+      map_grid_size: cellWidth,
+      map_grid_cell_height: cellHeight,
+      map_grid_calibration: payload.calibration,
+    });
+    await tabletopStore.updateMap(roomId.value, pending.id, { scale_x: scaleX, scale_y: scaleY, x, y });
+    toasts.push({ message: t("table.assets.uploadSuccess"), tone: "success" });
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error) || t("table.assets.uploadFailed"),
+      tone: "danger",
+    });
+  }
+}
+
+function handleAnnotationClose() {
+  const pending = pendingAnnotationMap.value;
+  pendingAnnotationMap.value = null;
+  if (!pending || !roomId.value) return;
+  const viewportWidth = mapViewportRef.value?.getViewportWidth() ?? window.innerWidth;
+  const scale = computeMapScaleForViewport(pending.dims.w, viewportWidth);
+  const offset = (tabletopMaps.value.length - 1) * 24;
+  void tabletopStore.updateMap(roomId.value, pending.id, { scale, x: offset, y: offset }).then(() => {
+    toasts.push({ message: t("table.assets.uploadSuccess"), tone: "success" });
+  }).catch((error: unknown) => {
+    toasts.push({
+      message: getBackendErrorMessage(error) || t("table.assets.uploadFailed"),
+      tone: "danger",
+    });
+  });
+}
+
+async function handleCancelAnnotation() {
+  const pending = pendingAnnotationMap.value;
+  pendingAnnotationMap.value = null; // clear before watch fires to skip handleAnnotationClose
+  if (!pending || !roomId.value) return;
+  clearSelection();
+  try {
+    await tabletopStore.removeMap(roomId.value, pending.id);
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error) || t("table.assets.uploadFailed"),
+      tone: "danger",
+    });
   }
 }
 
@@ -1594,6 +1718,7 @@ watch(
             :current-user-id="currentUserId"
             :character-owner-by-id="characterOwnerById"
             @close="closeContextMenu"
+            @align-map-to-grid="handleContextAlignMapToGrid"
             @delete-map="handleContextDeleteMap"
             @delete-drawing="handleContextDeleteDrawing"
             @delete-token="handleContextDeleteToken"
@@ -1622,6 +1747,12 @@ watch(
           <LibraryMapPickerDialog
             v-model="libraryMapPickerOpen"
             @pick="handlePickLibraryMap"
+          />
+          <MapGridAnnotationDialog
+            v-model="gridAnnotationOpen"
+            :asset-id="pendingAnnotationMap?.assetId ?? null"
+            @annotate="handleAnnotate"
+            @cancel="handleCancelAnnotation"
           />
         </template>
 

@@ -27,6 +27,7 @@ const emit = defineEmits<{
   inspectToken: [tokenId: number];
   editTextDrawing: [drawingId: number];
   toggleMapLock: [mapId: number, locked: boolean];
+  alignMapToGrid: [mapId: number];
   mapLayer: [action: "up" | "down" | "top" | "bottom"];
   tokenLayer: [action: "up" | "down" | "top" | "bottom"];
   drawingLayer: [action: "up" | "down" | "top" | "bottom"];
@@ -101,6 +102,14 @@ function onAction(fn: () => void) {
       @click.stop
     >
       <template v-if="selection?.type === 'map' && selectedMap && isGm">
+        <button
+          v-if="selectedMap.map_grid_size != null"
+          type="button"
+          class="menuItem"
+          @click="onAction(() => emit('alignMapToGrid', selectedMap!.id))"
+        >
+          {{ t("table.menu.alignMapToGrid") }}
+        </button>
         <button
           type="button"
           class="menuItem"

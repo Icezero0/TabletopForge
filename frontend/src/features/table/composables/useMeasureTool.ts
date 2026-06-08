@@ -1,5 +1,5 @@
 import { ref, type Ref } from "vue";
-import { measureLineLabelFt } from "@/features/table/utils/gridMeasure";
+import { scenePxToFt } from "@/features/table/utils/gridMeasure";
 
 export type MeasureLineState = {
   kind: "line";
@@ -44,8 +44,8 @@ export function useMeasureTool(options: UseMeasureToolOptions) {
 
   function buildLineState(x1: number, y1: number, x2: number, y2: number): MeasureLineState | null {
     const pxDist = Math.hypot(x2 - x1, y2 - y1);
-    const labelFt = measureLineLabelFt(pxDist, options.gridCellPx.value, options.gridCellFt.value);
-    if (labelFt < 1) return null;
+    const labelFt = scenePxToFt(pxDist, options.gridCellPx.value, options.gridCellFt.value);
+    if (labelFt < 2.5) return null;
     return { kind: "line", x1, y1, x2, y2, labelFt };
   }
 
@@ -59,15 +59,16 @@ export function useMeasureTool(options: UseMeasureToolOptions) {
   ): MeasureRouteState {
     const allPoints = cursor ? [...waypoints, cursor] : waypoints;
     const segments: MeasureRouteSegment[] = [];
-    let totalFt = 0;
+    let totalPxDist = 0;
     for (let i = 1; i < allPoints.length; i++) {
-      const [x1, y1] = allPoints[i - 1];
-      const [x2, y2] = allPoints[i];
+      const [x1, y1] = allPoints[i - 1]!;
+      const [x2, y2] = allPoints[i]!;
       const pxDist = Math.hypot(x2 - x1, y2 - y1);
-      const labelFt = measureLineLabelFt(pxDist, options.gridCellPx.value, options.gridCellFt.value);
+      const labelFt = scenePxToFt(pxDist, options.gridCellPx.value, options.gridCellFt.value);
       segments.push({ x1, y1, x2, y2, labelFt });
-      totalFt += labelFt;
+      totalPxDist += pxDist;
     }
+    const totalFt = scenePxToFt(totalPxDist, options.gridCellPx.value, options.gridCellFt.value);
     return { kind: "route", waypoints, cursor, segments, totalFt };
   }
 

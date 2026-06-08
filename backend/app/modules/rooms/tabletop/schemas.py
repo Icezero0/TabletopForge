@@ -16,32 +16,69 @@ class RoomTabletopSettingsResponse(BaseModel):
 
 class RoomTabletopSettingsPatch(BaseModel):
     grid_cell_ft: float | None = Field(default=None, gt=0)
-    grid_cell_px: int | None = Field(default=None, ge=28, le=72)
+    grid_cell_px: int | None = Field(default=None, ge=28, le=120)
 
 
 class RoomMapResponse(BaseModel):
     id: int
     room_id: int
-    asset_id: int
+    library_resource_id: int
+    asset_id: int | None  # from library_resource.primary_asset_id
     x: float
     y: float
     scale: float
+    scale_x: float | None = None
+    scale_y: float | None = None
     locked: bool
     z_index: int
+    map_grid_x: float | None = None  # from library_resource
+    map_grid_y: float | None = None  # from library_resource
+    map_grid_size: float | None = None  # from library_resource (fitted cell width)
+    map_grid_cell_height: float | None = None  # from library_resource (fitted cell height)
+    map_grid_calibration: list | None = None  # from library_resource
+    resource_name: str | None = None  # from library_resource
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
-    model_config = {"from_attributes": True}
+    @classmethod
+    def from_orm(cls, room_map: Any) -> "RoomMapResponse":
+        lr = room_map.library_resource
+        return cls(
+            id=room_map.id,
+            room_id=room_map.room_id,
+            library_resource_id=room_map.library_resource_id,
+            asset_id=lr.primary_asset_id if lr else None,
+            resource_name=lr.name if lr else None,
+            x=room_map.x,
+            y=room_map.y,
+            scale=room_map.scale,
+            scale_x=room_map.scale_x,
+            scale_y=room_map.scale_y,
+            locked=room_map.locked,
+            z_index=room_map.z_index,
+            map_grid_x=lr.map_grid_x if lr else None,
+            map_grid_y=lr.map_grid_y if lr else None,
+            map_grid_size=lr.map_grid_size if lr else None,
+            map_grid_cell_height=lr.map_grid_cell_height if lr else None,
+            map_grid_calibration=lr.map_grid_calibration if lr else None,
+            created_at=room_map.created_at,
+            updated_at=room_map.updated_at,
+        )
 
 
-class RoomMapFromAssetCreate(BaseModel):
-    asset_id: int
+class RoomMapFromResourceCreate(BaseModel):
+    library_resource_id: int
+    x: float = 0.0
+    y: float = 0.0
+    scale: float = Field(default=1.0, gt=0)
 
 
 class RoomMapPatch(BaseModel):
     x: float | None = None
     y: float | None = None
     scale: float | None = Field(default=None, gt=0)
+    scale_x: float | None = Field(default=None, gt=0)
+    scale_y: float | None = Field(default=None, gt=0)
     locked: bool | None = None
     z_index: int | None = None
 

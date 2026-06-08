@@ -2,6 +2,8 @@ export default {
 
   common: {
     cancel: "取消",
+    confirm: "确认",
+    skip: "跳过",
     save: "保存",
     loading: "加载中…",
     backHome: "返回首页",
@@ -136,6 +138,7 @@ export default {
     card: {
       inUse: "使用中",
       notInUse: "未使用",
+      annotateGrid: "标记网格",
     },
     upload: {
       title: "创建资源",
@@ -160,6 +163,7 @@ export default {
     },
     edit: {
       title: "编辑资源",
+      annotateGrid: "重新标记网格",
     },
     delete: {
       title: "删除资源",
@@ -685,6 +689,13 @@ export default {
       scale: "每格 {ft} ft",
       scaleBar: "{ft} ft",
       scaleCell: "每格 {ft} ft",
+      gridAnnotationTitle: "标记地图网格",
+      gridAnnotationHint: "切换到「标记」模式，在图片上拖拽绘制网格单元（正方形）。可多次标记以提高精度，推荐标记靠近四个角落的非边缘网格。",
+      gridAnnotationModePan: "平移",
+      gridAnnotationModeMark: "标记",
+      gridAnnotationAvg: "已标记 {n} 格，平均 {w}×{h} px",
+      gridAnnotationRemoveLast: "撤销最后一个",
+      gridAnnotationClearAll: "清除全部",
     },
     tools: {
       toolbar: "桌面工具",
@@ -722,6 +733,7 @@ export default {
       textPlaceholder: "在框内输入文本…",
     },
     menu: {
+      alignMapToGrid: "对齐到房间网格",
       deleteMap: "删除地图",
       deleteDrawing: "删除绘制",
       editTextDrawing: "编辑文本",

@@ -1,6 +1,8 @@
 export default {
   common: {
     cancel: "Cancel",
+    confirm: "Confirm",
+    skip: "Skip",
     save: "Save",
     loading: "Loading…",
     backHome: "Back to Home",
@@ -136,6 +138,7 @@ export default {
     card: {
       inUse: "Used by character",
       notInUse: "Not in use",
+      annotateGrid: "Annotate Grid",
     },
     upload: {
       title: "Create Resource",
@@ -160,6 +163,7 @@ export default {
     },
     edit: {
       title: "Edit Resource",
+      annotateGrid: "Re-annotate Grid",
     },
     delete: {
       title: "Delete Resource",
@@ -685,6 +689,13 @@ export default {
       scale: "{ft} ft per cell",
       scaleBar: "{ft} ft",
       scaleCell: "{ft} ft per cell",
+      gridAnnotationTitle: "Mark Map Grid",
+      gridAnnotationHint: "Switch to \"Mark\" mode and drag to outline grid cells (squares). Mark multiple cells for better accuracy — recommended to mark non-edge cells near each of the four corners.",
+      gridAnnotationModePan: "Pan",
+      gridAnnotationModeMark: "Mark",
+      gridAnnotationAvg: "{n} cells marked, avg {w}×{h} px",
+      gridAnnotationRemoveLast: "Undo last",
+      gridAnnotationClearAll: "Clear all",
     },
     tools: {
       toolbar: "Table tools",
@@ -722,6 +733,7 @@ export default {
       textPlaceholder: "Type text in the box…",
     },
     menu: {
+      alignMapToGrid: "Align to room grid",
       deleteMap: "Delete map",
       deleteDrawing: "Delete drawing",
       editTextDrawing: "Edit text",

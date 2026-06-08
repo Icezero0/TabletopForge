@@ -13,7 +13,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "update:modelValue": [value: boolean];
-  pick: [assetId: number];
+  pick: [resource: LibraryResource];
 }>();
 
 const { t } = useI18n();
@@ -42,7 +42,7 @@ function close() {
 
 function onPick(resource: LibraryResource) {
   if (!resource.primary_asset_id) return;
-  emit("pick", resource.primary_asset_id);
+  emit("pick", resource);
   close();
 }
 </script>

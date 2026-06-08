@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, func
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -29,6 +29,11 @@ class LibraryResource(Base):
     )
 
     meta: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
+    map_grid_x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    map_grid_y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    map_grid_size: Mapped[float | None] = mapped_column(Float, nullable=True)
+    map_grid_cell_height: Mapped[float | None] = mapped_column(Float, nullable=True)
+    map_grid_calibration: Mapped[list | None] = mapped_column(JSON, nullable=True)
 
     usage_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"

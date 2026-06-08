@@ -12,6 +12,11 @@ export type LibraryResource = {
   usage_count: number;
   created_at: string;
   updated_at: string | null;
+  map_grid_x: number | null;
+  map_grid_y: number | null;
+  map_grid_size: number | null;
+  map_grid_cell_height: number | null;
+  map_grid_calibration: Array<{ x: number; y: number; width: number; height: number }> | null;
 };
 
 export type LibraryResourceListResponse = {
@@ -70,4 +75,18 @@ export async function patchLibraryResource(
 
 export async function deleteLibraryResource(id: number) {
   await http.delete(`/library/resources/${id}`);
+}
+
+export async function patchLibraryResourceGrid(
+  id: number,
+  payload: {
+    map_grid_x: number | null;
+    map_grid_y: number | null;
+    map_grid_size: number | null;
+    map_grid_cell_height?: number | null;
+    map_grid_calibration?: Array<{ x: number; y: number; width: number; height: number }> | null;
+  },
+) {
+  const { data } = await http.patch<LibraryResource>(`/library/resources/${id}/grid`, payload);
+  return data;
 }

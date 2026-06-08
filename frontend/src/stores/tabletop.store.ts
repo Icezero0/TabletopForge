@@ -10,7 +10,7 @@ import {
   patchRoomTabletopSettings,
   postRoomDrawing,
   postRoomMap,
-  postRoomMapFromAsset,
+  postRoomMapFromResource,
   postRoomToken,
   spawnRoomCharacterToken,
   type RoomDrawing,
@@ -179,8 +179,12 @@ export const useTabletopStore = defineStore("tabletop", {
       return map;
     },
 
-    async addMapFromAsset(roomId: number, assetId: number) {
-      const map = await postRoomMapFromAsset(roomId, assetId);
+    async addMapFromResource(
+      roomId: number,
+      resourceId: number,
+      opts?: Parameters<typeof postRoomMapFromResource>[2],
+    ) {
+      const map = await postRoomMapFromResource(roomId, resourceId, opts);
       this.applyMapCreated(roomId, map);
       return map;
     },

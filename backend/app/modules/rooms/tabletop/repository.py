@@ -1,6 +1,8 @@
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
+from app.modules.library.models import LibraryResource
 from app.modules.rooms.models import RoomDrawing, RoomMap, RoomMember, RoomTabletopSettings, RoomToken
 from app.modules.rooms.tabletop.constants import DEFAULT_GRID_CELL_FT, DEFAULT_GRID_CELL_PX
 
@@ -51,7 +53,10 @@ class RoomTabletopRepository:
 
     async def list_maps(self, db: AsyncSession, *, room_id: int) -> list[RoomMap]:
         result = await db.execute(
-            select(RoomMap).where(RoomMap.room_id == room_id).order_by(RoomMap.z_index, RoomMap.id)
+            select(RoomMap)
+            .where(RoomMap.room_id == room_id)
+            .options(selectinload(RoomMap.library_resource))
+            .order_by(RoomMap.z_index, RoomMap.id)
         )
         return list(result.scalars().all())
 
@@ -61,7 +66,9 @@ class RoomTabletopRepository:
 
     async def get_map(self, db: AsyncSession, *, map_id: int, room_id: int) -> RoomMap | None:
         result = await db.execute(
-            select(RoomMap).where(RoomMap.id == map_id, RoomMap.room_id == room_id)
+            select(RoomMap)
+            .where(RoomMap.id == map_id, RoomMap.room_id == room_id)
+            .options(selectinload(RoomMap.library_resource))
         )
         return result.scalar_one_or_none()
 
@@ -70,7 +77,7 @@ class RoomTabletopRepository:
         db: AsyncSession,
         *,
         room_id: int,
-        asset_id: int,
+        library_resource_id: int,
         x: float = 0.0,
         y: float = 0.0,
         scale: float = 1.0,
@@ -79,7 +86,7 @@ class RoomTabletopRepository:
     ) -> RoomMap:
         room_map = RoomMap(
             room_id=room_id,
-            asset_id=asset_id,
+            library_resource_id=library_resource_id,
             x=x,
             y=y,
             scale=scale,
@@ -88,8 +95,12 @@ class RoomTabletopRepository:
         )
         db.add(room_map)
         await db.flush()
-        await db.refresh(room_map)
-        return room_map
+        result = await db.execute(
+            select(RoomMap)
+            .where(RoomMap.id == room_map.id)
+            .options(selectinload(RoomMap.library_resource))
+        )
+        return result.scalar_one()
 
     async def update_map(
         self,
@@ -99,6 +110,10 @@ class RoomTabletopRepository:
         x: float | None = None,
         y: float | None = None,
         scale: float | None = None,
+        scale_x: float | None = None,
+        scale_y: float | None = None,
+        _scale_x_set: bool = False,
+        _scale_y_set: bool = False,
         locked: bool | None = None,
         z_index: int | None = None,
     ) -> RoomMap:
@@ -108,13 +123,21 @@ class RoomTabletopRepository:
             room_map.y = y
         if scale is not None:
             room_map.scale = scale
+        if _scale_x_set:
+            room_map.scale_x = scale_x
+        if _scale_y_set:
+            room_map.scale_y = scale_y
         if locked is not None:
             room_map.locked = locked
         if z_index is not None:
             room_map.z_index = z_index
         await db.flush()
-        await db.refresh(room_map)
-        return room_map
+        result = await db.execute(
+            select(RoomMap)
+            .where(RoomMap.id == room_map.id)
+            .options(selectinload(RoomMap.library_resource))
+        )
+        return result.scalar_one()
 
     async def delete_map(self, db: AsyncSession, *, room_map: RoomMap) -> None:
         await db.delete(room_map)
@@ -223,7 +246,8 @@ class RoomTabletopRepository:
         result = await db.execute(
             select(RoomMember.room_id)
             .join(RoomMap, RoomMap.room_id == RoomMember.room_id)
-            .where(RoomMap.asset_id == asset_id, RoomMember.user_id == user_id)
+            .join(LibraryResource, LibraryResource.id == RoomMap.library_resource_id)
+            .where(LibraryResource.primary_asset_id == asset_id, RoomMember.user_id == user_id)
         )
         return result.first() is not None
 

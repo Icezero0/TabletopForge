@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { PlusIcon } from "@heroicons/vue/24/outline";
+import { PlusIcon, TableCellsIcon } from "@heroicons/vue/24/outline";
 import type { LibraryResource, ResourceType } from "@/infra/api/library.api";
+import { patchLibraryResourceGrid } from "@/infra/api/library.api";
 import { useLibraryResources } from "@/features/library/composables/useLibraryResources";
 import { RESOURCE_TYPE_OPTIONS, getResourceTypeMeta } from "@/features/library/constants";
 import BaseTagInput from "@/ui/base/BaseTagInput.vue";
 import BaseTextarea from "@/ui/base/BaseTextarea.vue";
 import ResourceCard from "@/features/library/components/ResourceCard.vue";
 import UploadResourceDialog from "@/features/library/components/UploadResourceDialog.vue";
+import MapGridAnnotationDialog from "@/features/table/components/MapGridAnnotationDialog.vue";
 import { usePageReturnTo } from "@/composables/useNavigationReturn";
 import { useToastsStore } from "@/stores/toasts.store";
 import BaseButton from "@/ui/base/BaseButton.vue";
@@ -16,7 +18,9 @@ import BaseInput from "@/ui/base/BaseInput.vue";
 import BaseSelect from "@/ui/base/BaseSelect.vue";
 import BaseConfirmDialog from "@/ui/base/BaseConfirmDialog.vue";
 import BaseDialog from "@/ui/base/BaseDialog.vue";
+import BaseListItem from "@/ui/base/BaseListItem.vue";
 import AppIcon from "@/ui/base/AppIcon.vue";
+import { fitGridFromSamples, type GridSampleRect } from "@/features/table/utils/gridFit";
 
 const { t } = useI18n();
 const { backTo, backText } = usePageReturnTo();
@@ -27,6 +31,9 @@ const showUpload = ref(false);
 const showDelete = ref(false);
 const showEdit = ref(false);
 const targetResource = ref<LibraryResource | null>(null);
+const annotationResource = ref<LibraryResource | null>(null);
+const annotationIsNew = ref(false);
+const showAnnotation = ref(false);
 const editName = ref("");
 const editTags = ref<string[]>([]);
 const editComment = ref("");
@@ -110,13 +117,75 @@ async function handleUploadSubmit(payload: {
   comment?: string;
 }) {
   try {
-    await lib.create(payload);
+    const resource = await lib.create(payload);
     showUpload.value = false;
-    toasts.push({ message: t("library.toast.created"), tone: "success" });
+    if (payload.type === "map_background" && resource.primary_asset_id != null) {
+      annotationResource.value = resource;
+      annotationIsNew.value = true;
+      showAnnotation.value = true;
+    } else {
+      toasts.push({ message: t("library.toast.created"), tone: "success" });
+    }
   } catch {
     toasts.push({ message: t("library.toast.createFailed"), tone: "danger" });
   }
 }
+
+function openAnnotateGrid(resource: LibraryResource) {
+  showEdit.value = false;
+  annotationResource.value = resource;
+  annotationIsNew.value = false;
+  showAnnotation.value = true;
+}
+
+async function handleAnnotate(payload: { calibration: GridSampleRect[] }) {
+  const resource = annotationResource.value;
+  const isNew = annotationIsNew.value;
+  annotationResource.value = null;
+  annotationIsNew.value = false;
+  if (!resource || payload.calibration.length === 0) {
+    toasts.push({ message: t(isNew ? "library.toast.created" : "library.toast.saved"), tone: "success" });
+    return;
+  }
+  try {
+    const { cellWidth, cellHeight } = fitGridFromSamples(payload.calibration);
+    const first = payload.calibration[0]!;
+    await patchLibraryResourceGrid(resource.id, {
+      map_grid_x: first.x,
+      map_grid_y: first.y,
+      map_grid_size: cellWidth,
+      map_grid_cell_height: cellHeight,
+      map_grid_calibration: payload.calibration,
+    });
+    await lib.fetchPage(lib.page.value);
+    toasts.push({ message: t(isNew ? "library.toast.created" : "library.toast.saved"), tone: "success" });
+  } catch {
+    toasts.push({ message: t(isNew ? "library.toast.createFailed" : "library.toast.saveFailed"), tone: "danger" });
+  }
+}
+
+async function handleAnnotationCancel() {
+  const resource = annotationResource.value;
+  const isNew = annotationIsNew.value;
+  annotationResource.value = null;
+  annotationIsNew.value = false;
+  if (!resource || !isNew) return;
+  try {
+    await lib.remove(resource.id);
+  } catch {
+    toasts.push({ message: t("library.toast.deleteFailed"), tone: "danger" });
+  }
+}
+
+// Skip: dialog closed without annotate/cancel
+watch(showAnnotation, (open) => {
+  if (!open && annotationResource.value) {
+    const wasNew = annotationIsNew.value;
+    annotationResource.value = null;
+    annotationIsNew.value = false;
+    toasts.push({ message: t(wasNew ? "library.toast.created" : "library.toast.saved"), tone: "success" });
+  }
+});
 
 onMounted(() => {
   void lib.fetchPage(1);
@@ -194,42 +263,62 @@ onMounted(() => {
     @submit="handleUploadSubmit"
   />
 
+  <MapGridAnnotationDialog
+    v-model="showAnnotation"
+    :asset-id="annotationResource?.primary_asset_id ?? null"
+    @annotate="handleAnnotate"
+    @cancel="handleAnnotationCancel"
+  />
+
   <!-- Edit dialog -->
   <BaseDialog v-model="showEdit" :max-width="420">
-    <div class="edit-inner">
-      <div class="edit-title">{{ t("library.edit.title") }}</div>
-      <div class="edit-field">
-        <label class="edit-label">{{ t("library.upload.nameLabel") }}</label>
-        <BaseInput
-          v-model="editName"
-          :placeholder="t('library.rename.placeholder')"
-          @keydown.enter="handleEditConfirm"
-        />
-      </div>
-      <div v-if="editTargetMeta?.hasTags" class="edit-field">
-        <label class="edit-label">{{ t("library.upload.tagsLabel") }}</label>
-        <BaseTagInput v-model="editTags" :placeholder="t('library.upload.tagsPlaceholder')" />
-      </div>
-      <div v-if="editTargetMeta?.hasComment" class="edit-field">
-        <label class="edit-label">{{ t("library.upload.commentLabel") }}</label>
-        <BaseTextarea
-          v-model="editComment"
-          :rows="3"
-          :placeholder="t('library.upload.commentPlaceholder')"
-        />
-      </div>
-      <div class="edit-actions">
-        <BaseButton variant="default" @click="showEdit = false">
-          {{ t("common.cancel") }}
-        </BaseButton>
-        <BaseButton
-          variant="primary"
-          :disabled="!editName.trim()"
-          @click="handleEditConfirm"
-        >
-          {{ t("common.save") }}
-        </BaseButton>
-      </div>
+    <div class="dialog-inner">
+      <BaseListItem :interactive="false">
+        <div class="edit-fields">
+          <div class="edit-title">{{ t("library.edit.title") }}</div>
+          <div class="edit-field">
+            <label class="edit-label">{{ t("library.upload.nameLabel") }}</label>
+            <BaseInput
+              v-model="editName"
+              :placeholder="t('library.rename.placeholder')"
+              @keydown.enter="handleEditConfirm"
+            />
+          </div>
+          <div v-if="editTargetMeta?.hasTags" class="edit-field">
+            <label class="edit-label">{{ t("library.upload.tagsLabel") }}</label>
+            <BaseTagInput v-model="editTags" :placeholder="t('library.upload.tagsPlaceholder')" />
+          </div>
+          <div v-if="editTargetMeta?.hasComment" class="edit-field">
+            <label class="edit-label">{{ t("library.upload.commentLabel") }}</label>
+            <BaseTextarea
+              v-model="editComment"
+              :rows="3"
+              :placeholder="t('library.upload.commentPlaceholder')"
+            />
+          </div>
+          <button
+            v-if="targetResource?.type === 'map_background'"
+            type="button"
+            class="annotate-grid-btn"
+            @click="openAnnotateGrid(targetResource!)"
+          >
+            <AppIcon :icon="TableCellsIcon" :size="14" />
+            {{ t("library.edit.annotateGrid") }}
+          </button>
+          <div class="edit-actions">
+            <BaseButton variant="default" @click="showEdit = false">
+              {{ t("common.cancel") }}
+            </BaseButton>
+            <BaseButton
+              variant="primary"
+              :disabled="!editName.trim()"
+              @click="handleEditConfirm"
+            >
+              {{ t("common.save") }}
+            </BaseButton>
+          </div>
+        </div>
+      </BaseListItem>
     </div>
   </BaseDialog>
 
@@ -304,14 +393,17 @@ onMounted(() => {
   color: var(--c-text-muted);
 }
 
-.edit-inner {
+.dialog-inner {
   padding: 24px;
+}
+
+.edit-fields {
   display: grid;
   gap: 16px;
 }
 
 .edit-title {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
   color: var(--c-text);
 }
@@ -325,6 +417,27 @@ onMounted(() => {
   font-size: 13px;
   font-weight: 500;
   color: var(--c-text-muted);
+}
+
+.annotate-grid-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--c-border);
+  background: transparent;
+  color: var(--c-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  width: 100%;
+  justify-content: center;
+}
+.annotate-grid-btn:hover {
+  background: var(--c-hover);
+  color: var(--c-text);
+  border-color: var(--c-border-hover, var(--c-border));
 }
 
 .edit-actions {

@@ -225,6 +225,9 @@ class AssetService:
                 reason=ErrorReason.MISSING_AUTHORIZATION_TOKEN,
             )
 
+        if asset.owner_id == user.id:
+            return
+
         if asset_type == AssetType.MAP_BACKGROUND:
             if await self.tabletop_repo.user_can_read_map_asset(
                 db,

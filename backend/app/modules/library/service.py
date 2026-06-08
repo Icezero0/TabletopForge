@@ -10,7 +10,7 @@ from app.modules.assets.service import AssetService
 from app.modules.library.constants import RESOURCE_TYPE_SPECS, ResourceType
 from app.modules.library.models import LibraryResource
 from app.modules.library.repository import LibraryRepository
-from app.modules.library.schemas import LibraryResourceListResponse, LibraryResourceResponse
+from app.modules.library.schemas import LibraryResourceGridPatch, LibraryResourceListResponse, LibraryResourceResponse
 from app.modules.users.models import User
 
 
@@ -158,6 +158,28 @@ class LibraryService:
             if comment is not None:
                 meta_patch["comment"] = comment
         updated = await self.repo.update(db, resource=resource, name=name, meta_patch=meta_patch)
+        await db.commit()
+        return updated
+
+    async def patch_resource_grid(
+        self,
+        db: AsyncSession,
+        *,
+        resource_id: int,
+        user: User,
+        payload: LibraryResourceGridPatch,
+    ) -> LibraryResource:
+        resource = await self._get_or_404(db, resource_id=resource_id)
+        await self._require_owner(resource, user)
+        updated = await self.repo.update_grid(
+            db,
+            resource=resource,
+            map_grid_x=payload.map_grid_x,
+            map_grid_y=payload.map_grid_y,
+            map_grid_size=payload.map_grid_size,
+            map_grid_cell_height=payload.map_grid_cell_height,
+            map_grid_calibration=payload.map_grid_calibration,
+        )
         await db.commit()
         return updated
 

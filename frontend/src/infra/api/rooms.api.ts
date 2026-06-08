@@ -335,12 +335,21 @@ export type RoomTabletopSettings = {
 export type RoomMap = {
   id: number;
   room_id: number;
-  asset_id: number;
+  library_resource_id: number;
+  asset_id: number | null;
   x: number;
   y: number;
   scale: number;
+  scale_x: number | null;
+  scale_y: number | null;
   locked: boolean;
   z_index: number;
+  map_grid_x: number | null;
+  map_grid_y: number | null;
+  map_grid_size: number | null;
+  map_grid_cell_height: number | null;
+  map_grid_calibration: Array<{ x: number; y: number; width: number; height: number }> | Array<{ x: number; y: number; size: number }> | null;
+  resource_name: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -423,8 +432,19 @@ export async function postRoomMap(roomId: number, file: File) {
   return data;
 }
 
-export async function postRoomMapFromAsset(roomId: number, assetId: number) {
-  const { data } = await http.post<RoomMap>(`/rooms/${roomId}/maps/from-asset`, { asset_id: assetId });
+export async function postRoomMapFromResource(
+  roomId: number,
+  resourceId: number,
+  opts?: {
+    x?: number;
+    y?: number;
+    scale?: number;
+  },
+) {
+  const { data } = await http.post<RoomMap>(`/rooms/${roomId}/maps/from-resource`, {
+    library_resource_id: resourceId,
+    ...opts,
+  });
   return data;
 }
 
@@ -435,6 +455,8 @@ export async function patchRoomMap(
     x?: number;
     y?: number;
     scale?: number;
+    scale_x?: number | null;
+    scale_y?: number | null;
     locked?: boolean;
     z_index?: number;
   },
