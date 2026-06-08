@@ -108,6 +108,7 @@ export default {
     systemTitle: "系统通知",
     workflowTitle: "流程通知",
     placeholderJoinRequest: "有新的加入请求需要处理。",
+    goHandle: "去处理",
     placeholderWorkflow: "有一条新的流程通知。",
     placeholderGeneric: "有一条新的系统通知。",
     markAllRead: "全部已读",

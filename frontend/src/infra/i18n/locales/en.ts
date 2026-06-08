@@ -108,6 +108,7 @@ export default {
     systemTitle: "System notification",
     workflowTitle: "Workflow notification",
     placeholderJoinRequest: "There is a new room-join approval to review.",
+    goHandle: "Review",
     placeholderWorkflow: "There is a new workflow notification.",
     placeholderGeneric: "There is a new system notification.",
     markAllRead: "Mark all as read",

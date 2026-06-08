@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { useRouter } from "vue-router";
 import { usePageReturnTo } from "@/composables/useNavigationReturn";
 import { ChevronDownIcon, EnvelopeOpenIcon } from "@heroicons/vue/24/outline";
 import type { Notification } from "@/infra/api/notifications.api";
@@ -8,6 +9,7 @@ import { useNotificationsStore } from "@/stores/notifications.store";
 import { formatLocalDateTime } from "@/utils/datetime";
 
 const { t } = useI18n();
+const router = useRouter();
 const { backTo, backText } = usePageReturnTo();
 const notifications = useNotificationsStore();
 
@@ -129,6 +131,13 @@ async function handleMarkAllRead() {
   await notifications.markAllAsRead();
 }
 
+async function handleGoToRequests(item: Notification) {
+  if (!item.is_read) {
+    await notifications.markAsRead(item.id);
+  }
+  void router.push({ name: "join-requests" });
+}
+
 onMounted(async () => {
   await Promise.all([fetchNotifications(), notifications.fetchUnreadCount()]);
   await measureTruncation();
@@ -230,6 +239,17 @@ onBeforeUnmount(() => {
               {{ notificationBody(item) }}
             </div>
           </button>
+
+          <template v-if="item.related_type === 'room_join_request'" #right>
+            <button
+              class="goHandleBtn"
+              type="button"
+              @mousedown.prevent
+              @click.stop="handleGoToRequests(item)"
+            >
+              {{ t("notifications.goHandle") }}
+            </button>
+          </template>
         </RowListItem>
       </TransitionGroup>
     </BaseCard>
@@ -324,6 +344,27 @@ onBeforeUnmount(() => {
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.goHandleBtn {
+  flex-shrink: 0;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--c-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.goHandleBtn:hover {
+  border-color: color-mix(in srgb, var(--c-accent) 45%, var(--c-border));
+  background: color-mix(in srgb, var(--c-accent) 6%, transparent);
+  color: var(--c-text);
 }
 
 .summaryTop {
