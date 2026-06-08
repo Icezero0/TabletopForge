@@ -3,7 +3,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.modules.rooms.tabletop.constants import DrawingKind, TokenType
+from app.modules.rooms.tabletop.constants import DrawingKind
 
 
 class RoomTabletopSettingsResponse(BaseModel):
@@ -132,10 +132,9 @@ class TokenStateSummary(BaseModel):
 class RoomTokenResponse(BaseModel):
     id: int
     room_id: int
-    asset_id: int | None
-    linked_character_id: int | None
+    asset_id: int | None = None
+    linked_character_id: int
     name: str
-    token_type: TokenType
     x: float
     y: float
     width: float

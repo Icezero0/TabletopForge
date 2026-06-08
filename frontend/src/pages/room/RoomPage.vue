@@ -402,12 +402,16 @@ function handleSelectMap(mapId: number) {
   if (toolMode.value !== "select" && toolMode.value !== "hand") return;
   if (currentUserGameRole.value !== "GM") return;
   selectMap(mapId);
+  clearInspection();
+  selectedCharacterListId.value = null;
 }
 
 function handleMapContextMenu(mapId: number, event: MouseEvent) {
   if (toolMode.value === "draw" || toolMode.value === "measure") return;
   if (currentUserGameRole.value !== "GM") return;
   selectMap(mapId);
+  clearInspection();
+  selectedCharacterListId.value = null;
   contextMenuX.value = event.clientX;
   contextMenuY.value = event.clientY;
   contextMenuOpen.value = true;
@@ -417,12 +421,16 @@ function handleSelectDrawing(drawingId: number) {
   if (toolMode.value !== "select" && toolMode.value !== "hand") return;
   if (!canDraw.value) return;
   selectDrawing(drawingId);
+  clearInspection();
+  selectedCharacterListId.value = null;
 }
 
 function handleDrawingContextMenu(drawingId: number, event: MouseEvent) {
   if (toolMode.value === "draw" || toolMode.value === "measure") return;
   if (!canDraw.value) return;
   selectDrawing(drawingId);
+  clearInspection();
+  selectedCharacterListId.value = null;
   contextMenuX.value = event.clientX;
   contextMenuY.value = event.clientY;
   contextMenuOpen.value = true;

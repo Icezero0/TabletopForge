@@ -255,6 +255,7 @@ class RoomTabletopRepository:
         result = await db.execute(
             select(RoomToken)
             .where(RoomToken.room_id == room_id)
+            .options(selectinload(RoomToken.library_resource))
             .order_by(RoomToken.z_index, RoomToken.id)
         )
         return list(result.scalars().all())
@@ -267,7 +268,9 @@ class RoomTabletopRepository:
         room_id: int,
     ) -> RoomToken | None:
         result = await db.execute(
-            select(RoomToken).where(RoomToken.id == token_id, RoomToken.room_id == room_id)
+            select(RoomToken)
+            .where(RoomToken.id == token_id, RoomToken.room_id == room_id)
+            .options(selectinload(RoomToken.library_resource))
         )
         return result.scalar_one_or_none()
 
@@ -282,9 +285,8 @@ class RoomTabletopRepository:
         width: float,
         height: float,
         owner_user_id: int,
-        asset_id: int | None = None,
-        linked_character_id: int | None = None,
-        token_type: str = "character",
+        linked_character_id: int,
+        library_resource_id: int | None = None,
         rotation: float = 0.0,
         z_index: int = 0,
         visible: bool = True,
@@ -293,10 +295,9 @@ class RoomTabletopRepository:
     ) -> RoomToken:
         token = RoomToken(
             room_id=room_id,
-            asset_id=asset_id,
+            library_resource_id=library_resource_id,
             linked_character_id=linked_character_id,
             name=name,
-            token_type=token_type,
             x=x,
             y=y,
             width=width,
@@ -310,8 +311,12 @@ class RoomTabletopRepository:
         )
         db.add(token)
         await db.flush()
-        await db.refresh(token)
-        return token
+        result = await db.execute(
+            select(RoomToken)
+            .where(RoomToken.id == token.id)
+            .options(selectinload(RoomToken.library_resource))
+        )
+        return result.scalar_one()
 
     async def update_token(
         self,
@@ -403,6 +408,7 @@ class RoomTabletopRepository:
         result = await db.execute(
             select(RoomMember.room_id)
             .join(RoomToken, RoomToken.room_id == RoomMember.room_id)
-            .where(RoomToken.asset_id == asset_id, RoomMember.user_id == user_id)
+            .join(LibraryResource, LibraryResource.id == RoomToken.library_resource_id)
+            .where(LibraryResource.primary_asset_id == asset_id, RoomMember.user_id == user_id)
         )
         return result.first() is not None

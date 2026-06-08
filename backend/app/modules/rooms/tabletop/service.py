@@ -18,7 +18,6 @@ from app.modules.rooms.membership.service import RoomMembershipService
 from app.modules.rooms.models import RoomDrawing, RoomMap, RoomTabletopSettings, RoomToken
 from app.modules.rooms.room.service import RoomService
 from app.modules.rooms.tabletop.repository import RoomTabletopRepository
-from app.modules.rooms.tabletop.constants import TokenType
 from app.modules.rooms.tabletop.schemas import (
     RoomDrawingCreate,
     RoomDrawingPatch,
@@ -532,8 +531,8 @@ class RoomTabletopService:
         name: str,
         x: float,
         y: float,
-        file: UploadFile | None = None,
-        linked_character_id: int | None = None,
+        linked_character_id: int,
+        library_resource_id: int | None = None,
     ) -> RoomTokenResponse:
         game_role = await self._require_member_game_role(db, room_id=room_id, user=user)
         await self._require_token_write_access(
@@ -547,26 +546,15 @@ class RoomTabletopService:
                 reason=ErrorReason.REQUEST_VALIDATION_FAILED,
             )
 
-        if linked_character_id is not None:
-            await self._validate_linked_character_in_room(
-                db,
-                room_id=room_id,
-                character_id=linked_character_id,
-            )
+        await self._validate_linked_character_in_room(
+            db,
+            room_id=room_id,
+            character_id=linked_character_id,
+        )
 
         settings = await self._get_or_create_settings(db, room_id=room_id)
         existing_tokens = await self.repo.list_tokens(db, room_id=room_id)
         next_z_index = max((t.z_index for t in existing_tokens), default=-1) + 1
-
-        asset_id: int | None = None
-        if file is not None and file.filename:
-            asset = await self.asset_service.create_image_asset(
-                db,
-                file=file,
-                asset_type=AssetType.TOKEN_IMAGE,
-                owner_id=user.id,
-            )
-            asset_id = asset.id
 
         token = await self.repo.create_token(
             db,
@@ -577,9 +565,8 @@ class RoomTabletopService:
             width=settings.grid_cell_ft,
             height=settings.grid_cell_ft,
             owner_user_id=user.id,
-            asset_id=asset_id,
             linked_character_id=linked_character_id,
-            token_type=TokenType.CHARACTER.value,
+            library_resource_id=library_resource_id,
             z_index=next_z_index,
         )
         await db.commit()
@@ -637,14 +624,7 @@ class RoomTabletopService:
                 None,
             )
 
-        spawn_asset_id = selected_config.asset_id if selected_config else None
-        if spawn_asset_id is None and selected_config and selected_config.library_resource_id is not None:
-            lib = await self.library_repo.get_by_id(db, resource_id=selected_config.library_resource_id)
-            if lib is not None:
-                spawn_asset_id = lib.primary_asset_id
-        # Only fall back to character image when no specific config was requested
-        if spawn_asset_id is None and payload.token_config_id is None:
-            spawn_asset_id = character.token_image_asset_id or character.portrait_asset_id
+        spawn_library_resource_id = selected_config.library_resource_id if selected_config else None
 
         spawn_name = (
             payload.name
@@ -669,9 +649,8 @@ class RoomTabletopService:
             width=settings.grid_cell_ft,
             height=settings.grid_cell_ft,
             owner_user_id=user.id,
-            asset_id=spawn_asset_id,
             linked_character_id=character_id,
-            token_type=TokenType.CHARACTER.value,
+            library_resource_id=spawn_library_resource_id,
             z_index=next_z_index,
             panel=spawn_panel,
         )
@@ -717,7 +696,13 @@ class RoomTabletopService:
             )
 
         linked_character_id_set = "linked_character_id" in payload.model_fields_set
-        if linked_character_id_set and payload.linked_character_id is not None:
+        if linked_character_id_set:
+            if payload.linked_character_id is None:
+                raise BadRequestError(
+                    "linked_character_id cannot be null",
+                    reason=ErrorReason.REQUEST_VALIDATION_FAILED,
+                    details={"token_id": token_id},
+                )
             await self._validate_linked_character_in_room(
                 db,
                 room_id=room_id,

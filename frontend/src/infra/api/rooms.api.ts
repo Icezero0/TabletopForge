@@ -385,9 +385,8 @@ export type RoomToken = {
   id: number;
   room_id: number;
   asset_id: number | null;
-  linked_character_id: number | null;
+  linked_character_id: number;
   name: string;
-  token_type: string;
   x: number;
   y: number;
   width: number;
@@ -513,23 +512,11 @@ export async function postRoomToken(
     name: string;
     x: number;
     y: number;
-    file?: File;
-    linked_character_id?: number | null;
+    linked_character_id: number;
+    library_resource_id?: number | null;
   },
 ) {
-  const form = new FormData();
-  form.append("name", payload.name);
-  form.append("x", String(payload.x));
-  form.append("y", String(payload.y));
-  if (payload.linked_character_id != null) {
-    form.append("linked_character_id", String(payload.linked_character_id));
-  }
-  if (payload.file) {
-    form.append("file", payload.file);
-  }
-  const { data } = await http.post<RoomToken>(`/rooms/${roomId}/tokens`, form, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  const { data } = await http.post<RoomToken>(`/rooms/${roomId}/tokens`, payload);
   return data;
 }
 

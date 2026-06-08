@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -298,25 +298,19 @@ class RoomToken(Base):
         nullable=False,
         index=True,
     )
-    asset_id: Mapped[int | None] = mapped_column(
+    library_resource_id: Mapped[int | None] = mapped_column(
         Integer,
-        ForeignKey("assets.id", ondelete="RESTRICT"),
+        ForeignKey("library_resources.id", ondelete="RESTRICT"),
         nullable=True,
         index=True,
     )
-    linked_character_id: Mapped[int | None] = mapped_column(
+    linked_character_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("characters.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("characters.id", ondelete="CASCADE"),
+        nullable=False,
         index=True,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    token_type: Mapped[str] = mapped_column(
-        String(16),
-        nullable=False,
-        default="character",
-        server_default="character",
-    )
     x: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     y: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     width: Mapped[float] = mapped_column(Float, nullable=False)
@@ -344,6 +338,13 @@ class RoomToken(Base):
 
     room: Mapped["Room"] = relationship("Room")
     owner: Mapped["User"] = relationship("User")
+    library_resource: Mapped[Optional["LibraryResource"]] = relationship("LibraryResource")
+
+    @property
+    def asset_id(self) -> int | None:
+        if self.library_resource is not None:
+            return self.library_resource.primary_asset_id
+        return None
 
 
 class RoomCharacter(Base):

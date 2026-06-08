@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
@@ -421,6 +422,14 @@ async def delete_room_drawings(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+class CreateRoomTokenRequest(BaseModel):
+    name: str
+    x: float = 0.0
+    y: float = 0.0
+    linked_character_id: int
+    library_resource_id: int | None = None
+
+
 @router.post(
     "/{room_id}/tokens",
     response_model=RoomTokenResponse,
@@ -428,11 +437,7 @@ async def delete_room_drawings(
 )
 async def create_room_token(
     room_id: int,
-    name: str = Form(...),
-    x: float = Form(...),
-    y: float = Form(...),
-    linked_character_id: int | None = Form(None),
-    file: UploadFile | None = File(None),
+    payload: CreateRoomTokenRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     publisher: RealtimePublisher = Depends(get_realtime_publisher),
@@ -441,11 +446,11 @@ async def create_room_token(
         db,
         room_id=room_id,
         user=current_user,
-        name=name,
-        x=x,
-        y=y,
-        file=file,
-        linked_character_id=linked_character_id,
+        name=payload.name,
+        x=payload.x,
+        y=payload.y,
+        linked_character_id=payload.linked_character_id,
+        library_resource_id=payload.library_resource_id,
     )
     await publisher.publish_token_created(
         room_id=room_id,
