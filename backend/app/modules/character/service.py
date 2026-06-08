@@ -324,7 +324,11 @@ class CharacterService:
     ) -> None:
         character = await self._get_or_404(db, character_id=character_id)
         self._require_owner(character, user)
+        token_configs = await self.token_config_repo.list_by_character(db, character_id=character_id)
+        lib_ids = {cfg.library_resource_id for cfg in token_configs if cfg.library_resource_id is not None}
         await self.repo.delete(db, character=character)
+        for rid in lib_ids:
+            await self.library_service.decrement_usage(db, resource_id=rid)
         await db.commit()
 
     async def get_character_internal(
