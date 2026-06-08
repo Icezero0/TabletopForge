@@ -249,7 +249,7 @@ export const useTabletopStore = defineStore("tabletop", {
     async spawnCharacterToken(
       roomId: number,
       characterId: number,
-      payload?: { x?: number; y?: number; name?: string },
+      payload?: { x?: number; y?: number; name?: string; token_config_id?: number },
     ) {
       const token = await spawnRoomCharacterToken(roomId, characterId, payload);
       this.applyTokenCreated(roomId, token);

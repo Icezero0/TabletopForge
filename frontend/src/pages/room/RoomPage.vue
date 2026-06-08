@@ -118,6 +118,7 @@ const currentUserCanRemoveMembers = computed(() =>
 const memberDangerActionDisabled = computed(() => currentUserRoomRole.value === "unknown");
 
 const canAddMap = computed(() => currentUserGameRole.value === "GM");
+const canAddToken = computed(() => currentUserGameRole.value === "GM");
 const canAddCharacter = computed(() =>
   currentUserGameRole.value === "GM" || currentUserGameRole.value === "PL");
 const canEditGrid = computed(() => currentUserGameRole.value === "GM");
@@ -181,6 +182,7 @@ watch(gridAnnotationOpen, (open) => {
 const addCharacterDialogOpen = ref(false);
 const characterPopoverOpen = ref(false);
 const mapPopoverOpen = ref(false);
+const tokenPopoverOpen = ref(false);
 const libraryMapPickerOpen = ref(false);
 const libraryCharacters = ref<Character[]>([]);
 const libraryLoading = ref(false);
@@ -515,7 +517,7 @@ async function handleLinkRoomCharacter(characterId: number) {
   }
 }
 
-async function handleSpawnCharacter(characterId: number) {
+async function handleSpawnCharacter(characterId: number, tokenConfigId?: number) {
   if (!roomId.value) return;
   const inRoom = roomCharacters.value.some((entry) => entry.character_id === characterId);
   if (!inRoom) {
@@ -535,6 +537,7 @@ async function handleSpawnCharacter(characterId: number) {
     await tabletopStore.spawnCharacterToken(roomId.value, characterId, {
       x: center.x,
       y: center.y,
+      token_config_id: tokenConfigId,
     });
     toasts.push({ message: t("table.characterList.spawned"), tone: "success" });
   } catch (error) {
@@ -545,35 +548,35 @@ async function handleSpawnCharacter(characterId: number) {
   }
 }
 
-function handleInfoStatePatched(
-  characterId: number,
-  state: {
-    current_hp: number | null;
-    max_hp: number | null;
-    armor_class: number | null;
-    damage_taken?: number;
-  },
-) {
-  updateRoomCharacterState(characterId, {
-    current_hp: state.current_hp,
-    max_hp: state.max_hp,
-    ac: state.armor_class,
-    pp:
-      tabletopTokens.value.find((t) => t.linked_character_id === characterId)?.state_summary
-        ?.pp ?? null,
-    damage_taken: state.damage_taken,
-  });
-  if (!roomId.value) return;
-  const existing = tabletopTokens.value.find((t) => t.linked_character_id === characterId);
-  const summary = {
-    current_hp: state.current_hp,
-    max_hp: state.max_hp,
-    ac: state.armor_class,
-    pp: existing?.state_summary?.pp ?? null,
-    damage_taken: state.damage_taken ?? existing?.state_summary?.damage_taken ?? null,
-  };
-  tabletopStore.applyCharacterStateUpdated(roomId.value, characterId, summary);
+async function handleSpawnAllTokens(characterId: number) {
+  const entry = roomCharacters.value.find((e) => e.character_id === characterId);
+  if (!entry || !roomId.value) return;
+  const configs = entry.token_configs;
+  if (configs.length === 0) return;
+
+  const center = viewportCenterPoint();
+  const step = gridCellFt.value;
+  const startX = center.x - ((configs.length - 1) / 2) * step;
+
+  for (let i = 0; i < configs.length; i++) {
+    const cfg = configs[i];
+    const cx = viewportCenterPoint();
+    try {
+      await tabletopStore.spawnCharacterToken(roomId.value, characterId, {
+        x: startX + i * step,
+        y: cx.y,
+        token_config_id: cfg.id,
+      });
+      toasts.push({ message: t("table.characterList.spawned"), tone: "success" });
+    } catch (error) {
+      toasts.push({
+        message: getBackendErrorMessage(error) || t("table.characterList.spawnFailed"),
+        tone: "danger",
+      });
+    }
+  }
 }
+
 
 function handleEditTextDrawing(drawingId: number) {
   if (toolMode.value !== "select" && toolMode.value !== "hand") return;
@@ -1652,6 +1655,7 @@ watch(
           />
           <MapViewport
             ref="mapViewportRef"
+            :room-id="roomId"
             :maps="tabletopMaps"
             :tokens="tabletopTokens"
             :drawings="tabletopDrawings"
@@ -1852,6 +1856,7 @@ watch(
               :can-decrease-grid="canDecreaseGrid"
               @increase-grid="increaseGrid"
               @decrease-grid="decreaseGrid"
+              @reset-viewport="mapViewportRef?.resetViewport()"
             />
             <DrawToolStrip
               v-if="toolMode === 'draw' && canDraw"
@@ -1875,12 +1880,17 @@ watch(
           >
             <BottomAssetBar
               v-model:map-popover-open="mapPopoverOpen"
+              v-model:token-popover-open="tokenPopoverOpen"
               :can-add-map="canAddMap"
+              :can-add-token="canAddToken"
               :maps="tabletopMaps"
               :selected-map-id="selectedMapId"
+              :characters="roomCharacters"
               @add-map="handleAddMapClick"
               @select-map="selectMap"
               @open-library-picker="libraryMapPickerOpen = true"
+              @spawn-token="(cid, cfgId) => handleSpawnCharacter(cid, cfgId)"
+              @spawn-all="(cid) => handleSpawnAllTokens(cid)"
             />
           </FloatingPanel>
 
@@ -1899,7 +1909,6 @@ watch(
                 :game-role="currentUserGameRole"
                 :current-user-id="currentUserId"
                 @close="clearInspection"
-                @state-patched="handleInfoStatePatched"
               />
             </FloatingPanel>
 

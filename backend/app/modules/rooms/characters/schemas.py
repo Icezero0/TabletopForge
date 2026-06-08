@@ -9,6 +9,15 @@ from app.modules.character.schemas import (
 )
 
 
+class RoomCharacterTokenConfigSummary(BaseModel):
+    id: int
+    is_primary: bool
+    name: str
+    asset_id: int | None
+
+    model_config = {"from_attributes": True}
+
+
 class RoomCharacterEntryResponse(BaseModel):
     room_character_id: int
     character_id: int
@@ -16,6 +25,7 @@ class RoomCharacterEntryResponse(BaseModel):
     name: str
     player_name: str
     token_image_asset_id: int | None
+    token_configs: list[RoomCharacterTokenConfigSummary] = Field(default_factory=list)
     state: CharacterStateSummary
     is_hidden: bool = False
 

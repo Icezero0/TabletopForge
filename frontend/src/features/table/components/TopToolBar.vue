@@ -4,6 +4,7 @@ import {
   ArrowUpLeftIcon,
   CursorArrowRaysIcon,
   HandRaisedIcon,
+  HomeIcon,
   MinusIcon,
   PencilSquareIcon,
   PlusIcon,
@@ -24,6 +25,7 @@ const emit = defineEmits<{
   "update:modelValue": [TableToolMode];
   increaseGrid: [];
   decreaseGrid: [];
+  resetViewport: [];
 }>();
 
 const { t } = useI18n();
@@ -61,6 +63,18 @@ function selectTool(mode: TableToolMode) {
       >
         <component :is="tool.icon" class="toolIcon" aria-hidden="true" />
         <span class="toolLabel">{{ t(tool.labelKey) }}</span>
+      </button>
+    </div>
+
+    <div class="viewportControl">
+      <button
+        type="button"
+        class="toolBtn"
+        :title="t('table.tools.resetViewport')"
+        @click="emit('resetViewport')"
+      >
+        <HomeIcon class="toolIcon" aria-hidden="true" />
+        <span class="toolLabel">{{ t("table.tools.resetViewport") }}</span>
       </button>
     </div>
 
@@ -139,6 +153,14 @@ function selectTool(mode: TableToolMode) {
 .toolBtn.disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.viewportControl {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 0 0 10px;
+  border-left: 1px solid color-mix(in srgb, var(--c-border) 80%, transparent);
+  margin-left: 4px;
 }
 
 .scaleControl {

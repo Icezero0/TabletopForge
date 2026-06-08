@@ -7,6 +7,13 @@ export type CharacterStateSummary = {
   damage_taken?: number | null;
 };
 
+export type RoomCharacterTokenConfig = {
+  id: number;
+  is_primary: boolean;
+  name: string;
+  asset_id: number | null;
+};
+
 export type RoomCharacterEntry = {
   room_character_id: number;
   character_id: number;
@@ -14,6 +21,7 @@ export type RoomCharacterEntry = {
   name: string;
   player_name: string;
   token_image_asset_id: number | null;
+  token_configs: RoomCharacterTokenConfig[];
   state: CharacterStateSummary;
   is_hidden: boolean;
 };

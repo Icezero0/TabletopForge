@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, useId, watch } from "vue";
+import { computed, onUnmounted, ref, toRef, useId, watch } from "vue";
 import type { GameRole } from "@/features/room/types";
 import type { TableToolMode, TabletopSelection } from "@/features/table/types";
 import type { RoomDrawing, RoomMap, RoomToken } from "@/infra/api/rooms.api";
@@ -47,6 +47,7 @@ const props = withDefaults(
     currentUserId?: number | null;
     characterOwnerById?: Map<number, number>;
     playerColorByUserId?: Map<number, string>;
+    roomId?: number | null;
   }>(),
   {
     maps: () => [],
@@ -114,7 +115,9 @@ const emit = defineEmits<{
 }>();
 
 const toolModeRef = computed(() => props.toolMode);
-const { viewportTransform, viewportScale, setViewportEl } = useTabletopViewport(toolModeRef);
+const roomIdRef = toRef(props, "roomId");
+const { viewportTransform, viewportScale, setViewportEl, resetViewport } = useTabletopViewport(toolModeRef, roomIdRef);
+
 
 const patternUid = useId().replace(/:/g, "");
 const minorPatternId = computed(() => `grid-minor-${patternUid}`);
@@ -238,7 +241,7 @@ function scenePointFromViewportCenter() {
   return scenePointFromClient(rect.left + rect.width / 2, rect.top + rect.height / 2);
 }
 
-defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCenter });
+defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCenter, resetViewport });
 </script>
 
 <template>

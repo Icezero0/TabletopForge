@@ -16,6 +16,7 @@ from app.modules.rooms.characters.repository import RoomCharacterRepository
 from app.modules.rooms.characters.schemas import (
     RoomCharacterCreate,
     RoomCharacterEntryResponse,
+    RoomCharacterTokenConfigSummary,
     RoomCharacterVisibilityPatch,
 )
 from app.modules.rooms.constants import GamePermission, GameRole
@@ -79,6 +80,15 @@ class RoomCharacterService:
             game_role=game_role,
             viewer_user_id=viewer_user_id,
         )
+        token_configs = [
+            RoomCharacterTokenConfigSummary(
+                id=cfg.id,
+                is_primary=cfg.is_primary,
+                name=cfg.name,
+                asset_id=cfg.asset_id,
+            )
+            for cfg in (character.token_configs or [])
+        ]
         return RoomCharacterEntryResponse(
             room_character_id=entry.id,
             character_id=character.id,
@@ -86,6 +96,7 @@ class RoomCharacterService:
             name=character.name,
             player_name=character.player_name,
             token_image_asset_id=character.token_image_asset_id,
+            token_configs=token_configs,
             state=state_summary,
             is_hidden=entry.is_hidden,
         )

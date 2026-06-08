@@ -6,14 +6,10 @@ import type { GameRole } from "@/features/room/types";
 import type { ActiveInspection } from "@/features/room/composables/useRoomInspection";
 import { getCharacter, type Character } from "@/infra/api/character.api";
 import { ABILITY_KEYS, DND5E_SKILLS, fmtMod } from "@/features/character/constants";
-import {
-  getCharacterState,
-  patchCharacterState,
-  type CharacterState,
-} from "@/infra/api/characterState.api";
 import { patchRoomToken } from "@/infra/api/rooms.api";
 import { getBackendErrorMessage } from "@/infra/http/client";
 import { buildPathWithReturn } from "@/composables/useNavigationReturn";
+import { useTabletopStore } from "@/stores/tabletop.store";
 import PanelSectionHeader from "@/ui/layout/PanelSectionHeader.vue";
 
 const props = defineProps<{
@@ -25,15 +21,14 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
-  statePatched: [characterId: number, state: CharacterState];
   tokenRenamed: [tokenId: number, name: string];
 }>();
 
 const { t } = useI18n();
 const router = useRouter();
+const tabletopStore = useTabletopStore();
 
 const character = ref<Character | null>(null);
-const state = ref<CharacterState | null>(null);
 const loading = ref(false);
 const saving = ref(false);
 const renamingToken = ref(false);
@@ -46,8 +41,16 @@ const editMaxHp = ref("");
 const editAc = ref("");
 const editInstanceName = ref("");
 
+const tokenInStore = computed(() => {
+  const tokenId = props.inspection?.tokenId;
+  if (tokenId == null) return null;
+  return tabletopStore.getTokens(props.roomId).find((t) => t.id === tokenId) ?? null;
+});
+
+const tokenStateSummary = computed(() => tokenInStore.value?.state_summary ?? null);
+
 const canEditState = computed(() => {
-  if (!character.value) return false;
+  if (!character.value || props.inspection?.tokenId == null) return false;
   if (props.gameRole === "GM") return true;
   if (props.gameRole === "PL") {
     return props.currentUserId != null && character.value.owner_id === props.currentUserId;
@@ -65,14 +68,9 @@ const canFullEdit = computed(() => {
 });
 
 const isDamageOnlyView = computed(() => {
-  const s = state.value;
+  const s = tokenStateSummary.value;
   if (!s) return false;
-  return (
-    s.current_hp == null &&
-    s.max_hp == null &&
-    s.armor_class == null &&
-    s.damage_taken != null
-  );
+  return s.current_hp == null && s.max_hp == null && s.ac == null && s.damage_taken != null;
 });
 
 const displayName = computed(() => {
@@ -141,11 +139,17 @@ const abilityScores = computed(() => {
     .filter((item): item is { key: string; score: number } => item != null);
 });
 
+function syncEditFieldsFromSummary() {
+  const s = tokenStateSummary.value;
+  editCurrentHp.value = s?.current_hp != null ? String(s.current_hp) : "";
+  editMaxHp.value = s?.max_hp != null ? String(s.max_hp) : "";
+  editAc.value = s?.ac != null ? String(s.ac) : "";
+}
+
 async function loadInspection() {
   const inspection = props.inspection;
   if (!inspection || inspection.kind !== "character") {
     character.value = null;
-    state.value = null;
     return;
   }
   loading.value = true;
@@ -153,27 +157,23 @@ async function loadInspection() {
   saveError.value = "";
   saveSuccess.value = false;
   try {
-    const [char, charState] = await Promise.all([
-      getCharacter(inspection.characterId),
-      getCharacterState(inspection.characterId),
-    ]);
+    const char = await getCharacter(inspection.characterId);
     character.value = char;
-    state.value = charState;
-    editCurrentHp.value =
-      charState.current_hp != null ? String(charState.current_hp) : "";
-    editMaxHp.value = charState.max_hp != null ? String(charState.max_hp) : "";
-    editAc.value = charState.armor_class != null ? String(charState.armor_class) : "";
+    syncEditFieldsFromSummary();
     editInstanceName.value = inspection.tokenInstanceName ?? char.name;
   } catch (e) {
     error.value = e instanceof Error ? e.message : t("table.inspector.loadFailed");
     character.value = null;
-    state.value = null;
   } finally {
     loading.value = false;
   }
 }
 
 watch(() => props.inspection, loadInspection, { immediate: true });
+
+watch(tokenStateSummary, () => {
+  if (!saving.value) syncEditFieldsFromSummary();
+});
 
 watch([editCurrentHp, editMaxHp, editAc], () => {
   saveSuccess.value = false;
@@ -190,23 +190,22 @@ function parseOptionalInt(raw: string | number | null | undefined): number | nul
 }
 
 async function saveState() {
-  if (!character.value || !canEditState.value) return;
+  if (!canEditState.value) return;
+  const tokenId = props.inspection?.tokenId;
+  if (tokenId == null) return;
   saving.value = true;
   saveError.value = "";
   saveSuccess.value = false;
   try {
-    const updated = await patchCharacterState(character.value.id, {
-      current_hp: parseOptionalInt(editCurrentHp.value),
-      max_hp: parseOptionalInt(editMaxHp.value),
-      armor_class: parseOptionalInt(editAc.value),
+    const updated = await patchRoomToken(props.roomId, tokenId, {
+      panel: {
+        hp_current: parseOptionalInt(editCurrentHp.value),
+        hp_max: parseOptionalInt(editMaxHp.value),
+        ac: parseOptionalInt(editAc.value),
+      },
     });
-    state.value = updated;
-    editCurrentHp.value =
-      updated.current_hp != null ? String(updated.current_hp) : "";
-    editMaxHp.value = updated.max_hp != null ? String(updated.max_hp) : "";
-    editAc.value = updated.armor_class != null ? String(updated.armor_class) : "";
+    tabletopStore.applyTokenUpdated(props.roomId, updated);
     saveSuccess.value = true;
-    emit("statePatched", character.value.id, updated);
   } catch (e) {
     saveError.value = getBackendErrorMessage(e) || t("table.inspector.saveFailed");
   } finally {
@@ -334,12 +333,12 @@ function openFullEdit() {
           <p v-if="saveSuccess" class="saveHint success">{{ t("table.inspector.stateSaved") }}</p>
           <p v-else-if="saveError" class="saveHint error">{{ saveError }}</p>
         </div>
-        <div v-else-if="state && isDamageOnlyView" class="stateReadonly">
-          {{ t("room.characters.damageTaken") }}: {{ state.damage_taken }}
+        <div v-else-if="tokenStateSummary && isDamageOnlyView" class="stateReadonly">
+          {{ t("room.characters.damageTaken") }}: {{ tokenStateSummary.damage_taken }}
         </div>
-        <div v-else-if="state" class="stateReadonly">
-          HP {{ state.current_hp ?? "?" }}/{{ state.max_hp ?? "?" }} · AC
-          {{ state.armor_class ?? "?" }}
+        <div v-else-if="tokenStateSummary" class="stateReadonly">
+          HP {{ tokenStateSummary.current_hp ?? "?" }}/{{ tokenStateSummary.max_hp ?? "?" }} · AC
+          {{ tokenStateSummary.ac ?? "?" }}
         </div>
       </div>
 

@@ -289,6 +289,7 @@ class RoomTabletopRepository:
         z_index: int = 0,
         visible: bool = True,
         locked: bool = False,
+        panel: dict | None = None,
     ) -> RoomToken:
         token = RoomToken(
             room_id=room_id,
@@ -304,6 +305,7 @@ class RoomTabletopRepository:
             z_index=z_index,
             visible=visible,
             locked=locked,
+            panel=panel,
             owner_user_id=owner_user_id,
         )
         db.add(token)
@@ -327,6 +329,7 @@ class RoomTabletopRepository:
         locked: bool | None = None,
         linked_character_id: int | None = None,
         _linked_character_id_set: bool = False,
+        panel_merge: dict | None = None,
     ) -> RoomToken:
         if name is not None:
             token.name = name
@@ -348,6 +351,8 @@ class RoomTabletopRepository:
             token.locked = locked
         if _linked_character_id_set:
             token.linked_character_id = linked_character_id
+        if panel_merge is not None:
+            token.panel = {**(token.panel or {}), **panel_merge}
         await db.flush()
         await db.refresh(token)
         return token

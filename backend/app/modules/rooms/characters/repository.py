@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.modules.character.models import Character
+from app.modules.character.models import Character, CharacterTokenConfig
 from app.modules.rooms.constants import GameRole
 from app.modules.rooms.membership.service import RoomMembershipService
 from app.modules.rooms.models import RoomCharacter, RoomMember
@@ -40,7 +40,8 @@ class RoomCharacterRepository:
             select(RoomCharacter)
             .where(RoomCharacter.room_id == room_id)
             .options(
-                selectinload(RoomCharacter.character).selectinload(Character.state)
+                selectinload(RoomCharacter.character).selectinload(Character.state),
+                selectinload(RoomCharacter.character).selectinload(Character.token_configs)
             )
             .order_by(RoomCharacter.created_at, RoomCharacter.id)
         )
@@ -60,7 +61,8 @@ class RoomCharacterRepository:
                 RoomCharacter.character_id == character_id,
             )
             .options(
-                selectinload(RoomCharacter.character).selectinload(Character.state)
+                selectinload(RoomCharacter.character).selectinload(Character.state),
+                selectinload(RoomCharacter.character).selectinload(Character.token_configs)
             )
         )
         return result.scalar_one_or_none()
@@ -79,7 +81,8 @@ class RoomCharacterRepository:
                 RoomCharacter.room_id == room_id,
             )
             .options(
-                selectinload(RoomCharacter.character).selectinload(Character.state)
+                selectinload(RoomCharacter.character).selectinload(Character.state),
+                selectinload(RoomCharacter.character).selectinload(Character.token_configs)
             )
         )
         return result.scalar_one_or_none()
@@ -95,7 +98,8 @@ class RoomCharacterRepository:
             select(RoomCharacter)
             .where(RoomCharacter.id == room_character_id)
             .options(
-                selectinload(RoomCharacter.character).selectinload(Character.state)
+                selectinload(RoomCharacter.character).selectinload(Character.state),
+                selectinload(RoomCharacter.character).selectinload(Character.token_configs)
             )
         )
         entry = result.scalar_one()

@@ -5,11 +5,8 @@ from app.core.error_reasons import ErrorReason
 from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.modules.assets.constants import AssetType
 from app.modules.assets.service import AssetService
-from app.modules.character.models import Character, CharacterState
-from app.modules.character.presenter import (
-    build_character_state_broadcast,
-    present_token_state_summary,
-)
+from app.modules.character.models import Character
+from app.modules.character.presenter import build_character_state_broadcast
 from app.modules.character.repository import CharacterRepository
 from app.modules.character.state_repository import CharacterStateRepository
 from app.modules.library.constants import ResourceType
@@ -141,19 +138,24 @@ class RoomTabletopService:
             )
         return character
 
-    def _build_state_summary(
-        self,
-        *,
-        character: Character,
-        state: CharacterState | None,
-        game_role: GameRole,
-        viewer_user_id: int,
-    ) -> TokenStateSummary:
-        return present_token_state_summary(
-            character,
-            state,
-            game_role=game_role,
-            viewer_user_id=viewer_user_id,
+    @staticmethod
+    def _build_panel_state_summary(token: RoomToken) -> TokenStateSummary | None:
+        panel = token.panel
+        if not panel:
+            return None
+        current_hp = panel.get("hp_current")
+        max_hp = panel.get("hp_max")
+        ac = panel.get("ac")
+        pp = panel.get("pp")
+        damage_taken = panel.get("damage_taken")
+        if all(v is None for v in (current_hp, max_hp, ac, pp, damage_taken)):
+            return None
+        return TokenStateSummary(
+            current_hp=current_hp,
+            max_hp=max_hp,
+            ac=ac,
+            pp=pp,
+            damage_taken=damage_taken,
         )
 
     async def _token_responses(
@@ -170,28 +172,21 @@ class RoomTabletopService:
             t.linked_character_id for t in tokens if t.linked_character_id is not None
         ]
         characters = await self.character_repo.get_by_ids(db, character_ids=character_ids)
-        states = await self.state_repo.get_by_character_ids(db, character_ids=character_ids)
-        room_id = tokens[0].room_id
         responses: list[RoomTokenResponse] = []
         for token in tokens:
             base = RoomTokenResponse.model_validate(token)
+            state_summary = self._build_panel_state_summary(token)
             if token.linked_character_id is None:
-                responses.append(base.model_copy(update={"state_summary": None}))
+                responses.append(base.model_copy(update={"state_summary": state_summary}))
                 continue
             character = characters.get(token.linked_character_id)
             if character is None:
-                responses.append(base.model_copy(update={"state_summary": None}))
+                responses.append(base.model_copy(update={"state_summary": state_summary}))
                 continue
-            summary = self._build_state_summary(
-                character=character,
-                state=states.get(token.linked_character_id),
-                game_role=game_role,
-                viewer_user_id=viewer_user_id,
-            )
             responses.append(
                 base.model_copy(
                     update={
-                        "state_summary": summary,
+                        "state_summary": state_summary,
                         "linked_character_owner_id": character.owner_id,
                     }
                 )
@@ -632,27 +627,44 @@ class RoomTabletopService:
         existing_tokens = await self.repo.list_tokens(db, room_id=room_id)
         next_z_index = max((t.z_index for t in existing_tokens), default=-1) + 1
 
-        token_name = (payload.name or character.name).strip()
-        if not token_name:
+        if payload.token_config_id is not None:
+            selected_config = next(
+                (cfg for cfg in (character.token_configs or []) if cfg.id == payload.token_config_id),
+                None,
+            )
+        else:
+            selected_config = next(
+                (cfg for cfg in (character.token_configs or []) if cfg.is_primary),
+                None,
+            )
+
+        spawn_asset_id = selected_config.asset_id if selected_config else None
+        if spawn_asset_id is None and selected_config and selected_config.library_resource_id is not None:
+            lib = await self.library_repo.get_by_id(db, resource_id=selected_config.library_resource_id)
+            if lib is not None:
+                spawn_asset_id = lib.primary_asset_id
+        # Only fall back to character image when no specific config was requested
+        if spawn_asset_id is None and payload.token_config_id is None:
+            spawn_asset_id = character.token_image_asset_id or character.portrait_asset_id
+
+        spawn_name = (
+            payload.name
+            or (selected_config.name if selected_config and selected_config.name else None)
+            or character.name
+        ).strip()
+
+        if not spawn_name:
             raise BadRequestError(
                 "Token name is required",
                 reason=ErrorReason.REQUEST_VALIDATION_FAILED,
             )
 
-        primary_config = next(
-            (cfg for cfg in (character.token_configs or []) if cfg.is_primary),
-            None,
-        )
-        spawn_asset_id = (
-            primary_config.asset_id
-            if primary_config and primary_config.asset_id is not None
-            else character.token_image_asset_id or character.portrait_asset_id
-        )
+        spawn_panel = dict(selected_config.panel_initial) if selected_config and selected_config.panel_initial else {}
 
         token = await self.repo.create_token(
             db,
             room_id=room_id,
-            name=token_name,
+            name=spawn_name,
             x=payload.x if payload.x is not None else 0.0,
             y=payload.y if payload.y is not None else 0.0,
             width=settings.grid_cell_ft,
@@ -662,6 +674,7 @@ class RoomTabletopService:
             linked_character_id=character_id,
             token_type=TokenType.CHARACTER.value,
             z_index=next_z_index,
+            panel=spawn_panel,
         )
         await db.commit()
         return await self._token_response(
@@ -726,6 +739,7 @@ class RoomTabletopService:
             locked=payload.locked,
             linked_character_id=payload.linked_character_id,
             _linked_character_id_set=linked_character_id_set,
+            panel_merge=payload.panel,
         )
         await db.commit()
         return await self._token_response(
@@ -788,22 +802,3 @@ class RoomTabletopService:
             return None
         return build_character_state_broadcast(character, state)
 
-    async def build_token_state_summary_for_character(
-        self,
-        db: AsyncSession,
-        *,
-        character_id: int,
-    ) -> TokenStateSummary | None:
-        character = await self.character_repo.get_by_id(db, character_id=character_id)
-        if character is None:
-            return None
-        state = await self.state_repo.get_by_character_id(
-            db,
-            character_id=character_id,
-        )
-        return self._build_state_summary(
-            character=character,
-            state=state,
-            game_role=GameRole.GM,
-            viewer_user_id=character.owner_id,
-        )

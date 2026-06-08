@@ -1,11 +1,21 @@
-import { computed, onMounted, onUnmounted, ref, type Ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch, type Ref } from "vue";
 import type { TableToolMode } from "@/features/table/types";
+import { readPersistedState, writePersistedState } from "@/stores/persistence";
 
 const MIN_VIEWPORT_SCALE = 0.25;
 const MAX_VIEWPORT_SCALE = 4;
 const ZOOM_SENSITIVITY = 0.001;
 
-export function useTabletopViewport(toolMode: Ref<TableToolMode>) {
+type PersistedViewport = { x: number; y: number; scale: number };
+
+function viewportStorageKey(roomId: number) {
+  return `room-${roomId}-viewport`;
+}
+
+export function useTabletopViewport(
+  toolMode: Ref<TableToolMode>,
+  roomId?: Ref<number | null | undefined>,
+) {
   const viewportX = ref(0);
   const viewportY = ref(0);
   const viewportScale = ref(1);
@@ -20,6 +30,38 @@ export function useTabletopViewport(toolMode: Ref<TableToolMode>) {
   let panStartY = 0;
   let panOriginX = 0;
   let panOriginY = 0;
+
+  // --- persistence ---
+
+  function loadPersistedViewport(id: number | null | undefined) {
+    if (!id) return;
+    const saved = readPersistedState<PersistedViewport | null>(viewportStorageKey(id), null);
+    if (saved) {
+      viewportX.value = saved.x;
+      viewportY.value = saved.y;
+      viewportScale.value = Math.min(MAX_VIEWPORT_SCALE, Math.max(MIN_VIEWPORT_SCALE, saved.scale));
+    }
+  }
+
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  function scheduleSave() {
+    if (!roomId?.value) return;
+    if (saveTimer !== null) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      if (!roomId?.value) return;
+      writePersistedState<PersistedViewport>(viewportStorageKey(roomId.value), {
+        x: viewportX.value,
+        y: viewportY.value,
+        scale: viewportScale.value,
+      });
+    }, 500);
+  }
+
+  if (roomId) {
+    watch(roomId, (id) => loadPersistedViewport(id), { immediate: true });
+  }
+
+  // --- viewport interaction ---
 
   function clampScale(value: number) {
     return Math.min(MAX_VIEWPORT_SCALE, Math.max(MIN_VIEWPORT_SCALE, value));
@@ -39,6 +81,7 @@ export function useTabletopViewport(toolMode: Ref<TableToolMode>) {
     viewportX.value = mx - ((mx - viewportX.value) * newScale) / oldScale;
     viewportY.value = my - ((my - viewportY.value) * newScale) / oldScale;
     viewportScale.value = newScale;
+    scheduleSave();
   }
 
   function shouldStartPan(event: PointerEvent) {
@@ -76,6 +119,7 @@ export function useTabletopViewport(toolMode: Ref<TableToolMode>) {
     if (panPointerId !== event.pointerId) return;
     panPointerId = null;
     (event.currentTarget as HTMLElement)?.releasePointerCapture?.(event.pointerId);
+    scheduleSave();
   }
 
   function bindViewportEl(el: HTMLElement | null) {
@@ -103,6 +147,7 @@ export function useTabletopViewport(toolMode: Ref<TableToolMode>) {
 
   onUnmounted(() => {
     unbind?.();
+    if (saveTimer !== null) clearTimeout(saveTimer);
   });
 
   function setViewportEl(el: HTMLElement | null) {
@@ -111,11 +156,19 @@ export function useTabletopViewport(toolMode: Ref<TableToolMode>) {
     unbind = bindViewportEl(el);
   }
 
+  function resetViewport() {
+    viewportX.value = 0;
+    viewportY.value = 0;
+    viewportScale.value = 1;
+    scheduleSave();
+  }
+
   return {
     viewportX,
     viewportY,
     viewportScale,
     viewportTransform,
     setViewportEl,
+    resetViewport,
   };
 }

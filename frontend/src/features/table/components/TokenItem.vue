@@ -32,6 +32,8 @@ const displaySize = computed(() =>
 
 const initial = computed(() => tokenInitial(props.token.name));
 
+const initialFontSize = computed(() => `${Math.max(14, Math.round(displaySize.value * 0.42))}px`);
+
 const previewText = computed(() => {
   const summary = props.token.state_summary;
   if (!summary) return "";
@@ -62,7 +64,7 @@ const previewText = computed(() => {
       }"
     >
       <img v-if="imageUrl" class="tokenImage" :src="imageUrl" alt="" draggable="false" />
-      <span v-else class="tokenInitial">{{ initial }}</span>
+      <span v-else class="tokenInitial" :style="{ fontSize: initialFontSize }">{{ initial }}</span>
     </div>
     <div v-if="previewText" class="previewBadge">{{ previewText }}</div>
   </div>
@@ -109,9 +111,9 @@ const previewText = computed(() => {
 }
 
 .tokenInitial {
-  font-size: 1.1em;
   font-weight: 600;
   pointer-events: none;
+  line-height: 1;
 }
 
 .previewBadge {

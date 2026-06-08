@@ -144,6 +144,7 @@ class RoomTokenResponse(BaseModel):
     z_index: int
     visible: bool
     locked: bool
+    panel: dict[str, Any] | None = None
     owner_user_id: int
     linked_character_owner_id: int | None = None
     state_summary: TokenStateSummary | None = None
@@ -164,9 +165,11 @@ class RoomTokenPatch(BaseModel):
     visible: bool | None = None
     locked: bool | None = None
     linked_character_id: int | None = None
+    panel: dict[str, Any] | None = None
 
 
 class SpawnCharacterTokenRequest(BaseModel):
     x: float | None = None
     y: float | None = None
     name: str | None = Field(default=None, min_length=1, max_length=255)
+    token_config_id: int | None = None

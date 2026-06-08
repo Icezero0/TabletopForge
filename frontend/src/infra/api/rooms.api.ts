@@ -396,6 +396,7 @@ export type RoomToken = {
   z_index: number;
   visible: boolean;
   locked: boolean;
+  panel?: Record<string, unknown> | null;
   owner_user_id: number;
   linked_character_owner_id?: number | null;
   state_summary: TokenStateSummary | null;
@@ -534,7 +535,7 @@ export async function postRoomToken(
 export async function spawnRoomCharacterToken(
   roomId: number,
   characterId: number,
-  payload?: { x?: number; y?: number; name?: string },
+  payload?: { x?: number; y?: number; name?: string; token_config_id?: number },
 ) {
   const { data } = await http.post<RoomToken>(
     `/rooms/${roomId}/characters/${characterId}/spawn-token`,
@@ -557,6 +558,7 @@ export async function patchRoomToken(
     visible?: boolean;
     locked?: boolean;
     linked_character_id?: number | null;
+    panel?: Record<string, unknown>;
   },
 ) {
   const { data } = await http.patch<RoomToken>(
