@@ -44,6 +44,7 @@ import GovernanceDock from "@/features/table/components/GovernanceDock.vue";
 import InfoPanel from "@/features/table/components/InfoPanel.vue";
 import MapViewport from "@/features/table/components/MapViewport.vue";
 import ContextMenu from "@/features/table/components/ContextMenu.vue";
+import BackgroundMusicPanel from "@/features/table/components/BackgroundMusicPanel.vue";
 import DrawToolStrip from "@/features/table/components/DrawToolStrip.vue";
 import MeasureToolStrip from "@/features/table/components/MeasureToolStrip.vue";
 import PersonalMemo from "@/features/table/components/PersonalMemo.vue";
@@ -2112,6 +2113,13 @@ watch(
               @increase-grid="increaseGrid"
               @decrease-grid="decreaseGrid"
               @reset-viewport="mapViewportRef?.resetViewport()"
+            />
+            <BackgroundMusicPanel
+              v-if="toolMode === 'music' && roomId"
+              :room-id="roomId"
+              :game-role="currentUserGameRole"
+              :music-state="tabletopSettings?.music_state ?? null"
+              @error="(message) => toasts.push({ message, tone: 'danger' })"
             />
             <DrawToolStrip
               v-if="toolMode === 'draw' && canDraw"

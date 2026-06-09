@@ -115,6 +115,10 @@ watch(
   z-index: 2;
 }
 
+.floatingPanel.tools {
+  overflow: visible;
+}
+
 .floatingPanel.collapsed {
   grid-template-rows: auto;
 }
@@ -241,6 +245,7 @@ watch(
 
 .floatingPanel.tools .panelBody {
   padding: 0 4px 4px;
+  overflow: visible;
 }
 
 .floatingPanel.assets .panelBody {

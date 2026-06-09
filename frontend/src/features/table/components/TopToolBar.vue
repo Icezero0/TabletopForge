@@ -6,6 +6,7 @@ import {
   HandRaisedIcon,
   HomeIcon,
   MinusIcon,
+  MusicalNoteIcon,
   PencilSquareIcon,
   PlusIcon,
   ArrowsPointingOutIcon,
@@ -36,6 +37,7 @@ const tools: { mode: TableToolMode; labelKey: string; icon: typeof HandRaisedIco
   { mode: "draw", labelKey: "table.tools.draw", icon: PencilSquareIcon },
   { mode: "pointer", labelKey: "table.tools.pointer", icon: CursorArrowRaysIcon },
   { mode: "measure", labelKey: "table.tools.measure", icon: ArrowsPointingOutIcon },
+  { mode: "music", labelKey: "table.tools.music", icon: MusicalNoteIcon },
 ];
 
 function isDisabled(mode: TableToolMode) {

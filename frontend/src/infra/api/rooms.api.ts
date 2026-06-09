@@ -330,6 +330,7 @@ export type RoomTabletopSettings = {
   grid_cell_ft: number;
   grid_cell_px: number;
   combat_state: RoomCombatState | null;
+  music_state: RoomMusicState | null;
   updated_at: string | null;
 };
 
@@ -347,6 +348,21 @@ export type RoomCombatState = {
   round: number;
   turn_index: number;
   combatants: RoomCombatant[];
+};
+
+export type RoomMusicTrack = {
+  library_resource_id: number;
+  asset_id: number;
+  name: string;
+};
+
+export type RoomMusicState = {
+  tracks: RoomMusicTrack[];
+  current_index: number;
+  playing: boolean;
+  position: number;
+  loop_mode: "single" | "list" | "shuffle";
+  updated_at: string | null;
 };
 
 export type RoomMap = {
@@ -436,6 +452,7 @@ export async function patchRoomTabletopSettings(
     grid_cell_ft?: number;
     grid_cell_px?: number;
     combat_state?: RoomCombatState | null;
+    music_state?: RoomMusicState | null;
   },
 ) {
   const { data } = await http.patch<RoomTabletopSettings>(

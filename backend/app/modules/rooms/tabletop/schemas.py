@@ -22,10 +22,26 @@ class RoomCombatState(BaseModel):
     combatants: list[RoomCombatant] = Field(default_factory=list)
 
 
+class RoomMusicTrack(BaseModel):
+    library_resource_id: int
+    asset_id: int
+    name: str = Field(min_length=1, max_length=255)
+
+
+class RoomMusicState(BaseModel):
+    tracks: list[RoomMusicTrack] = Field(default_factory=list)
+    current_index: int = Field(default=0, ge=0)
+    playing: bool = False
+    position: float = Field(default=0, ge=0)
+    loop_mode: str = Field(default="list", pattern="^(single|list|shuffle)$")
+    updated_at: datetime | None = None
+
+
 class RoomTabletopSettingsResponse(BaseModel):
     grid_cell_ft: float
     grid_cell_px: int
     combat_state: RoomCombatState | None = None
+    music_state: RoomMusicState | None = None
     updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
@@ -35,6 +51,7 @@ class RoomTabletopSettingsPatch(BaseModel):
     grid_cell_ft: float | None = Field(default=None, gt=0)
     grid_cell_px: int | None = Field(default=None, ge=28, le=120)
     combat_state: RoomCombatState | None = None
+    music_state: RoomMusicState | None = None
 
 
 class RoomMapResponse(BaseModel):
