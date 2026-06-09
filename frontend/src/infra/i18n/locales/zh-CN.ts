@@ -727,6 +727,7 @@ export default {
       draw: "绘制",
       pointer: "Pointer",
       measure: "测距",
+      fog: "战争迷雾",
       music: "音乐",
       measureHint: "按住拖拽测量，线段跟随鼠标，距离按格取整",
       gridScale: "比例尺",
@@ -763,6 +764,11 @@ export default {
       toolbar: "测距工具",
       line: "直线",
       route: "自定义路线",
+    },
+    fog: {
+      toolbar: "战争迷雾工具",
+      erase: "擦除战争迷雾",
+      fill: "填充战争迷雾",
     },
     draw: {
       toolbar: "绘制工具",

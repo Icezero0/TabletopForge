@@ -9,6 +9,7 @@ import {
   MusicalNoteIcon,
   PencilSquareIcon,
   PlusIcon,
+  RectangleStackIcon,
   ArrowsPointingOutIcon,
 } from "@heroicons/vue/24/outline";
 import type { TableToolMode } from "@/features/table/types";
@@ -37,6 +38,7 @@ const tools: { mode: TableToolMode; labelKey: string; icon: typeof HandRaisedIco
   { mode: "draw", labelKey: "table.tools.draw", icon: PencilSquareIcon },
   { mode: "pointer", labelKey: "table.tools.pointer", icon: CursorArrowRaysIcon },
   { mode: "measure", labelKey: "table.tools.measure", icon: ArrowsPointingOutIcon },
+  { mode: "fog", labelKey: "table.tools.fog", icon: RectangleStackIcon },
   { mode: "music", labelKey: "table.tools.music", icon: MusicalNoteIcon },
 ];
 

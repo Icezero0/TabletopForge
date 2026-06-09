@@ -27,6 +27,12 @@ const canPickMap = computed(
     (props.toolMode === "select" || props.toolMode === "hand"),
 );
 
+const canOpenMapContextMenu = computed(
+  () =>
+    props.gameRole === "GM" &&
+    (props.toolMode === "select" || props.toolMode === "hand" || props.toolMode === "fog"),
+);
+
 function isLockedInHandMode(map: RoomMap) {
   return props.toolMode === "hand" && map.locked;
 }
@@ -44,7 +50,7 @@ function onMapClick(map: RoomMap, event: MouseEvent) {
 }
 
 function onMapContextMenu(map: RoomMap, event: MouseEvent) {
-  if (!canPickMap.value) return;
+  if (!canOpenMapContextMenu.value) return;
   event.preventDefault();
   event.stopPropagation();
   emit("mapContextMenu", map.id, event);
@@ -57,7 +63,7 @@ function onMapContextMenu(map: RoomMap, event: MouseEvent) {
       v-for="map in sortedMaps"
       :key="map.id"
       class="mapItem"
-      :class="{ inactive: !canPickMap }"
+      :class="{ inactive: !canPickMap && !canOpenMapContextMenu }"
       :style="{
         transform: `translate(${map.x}px, ${map.y}px) scale(${map.scale_x ?? map.scale}, ${map.scale_y ?? map.scale})`,
         pointerEvents: isLockedInHandMode(map) ? 'none' : undefined,

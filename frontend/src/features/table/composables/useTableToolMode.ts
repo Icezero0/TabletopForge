@@ -6,8 +6,9 @@ export function useTableToolMode(gameRole: Ref<GameRole | "unknown">) {
   const toolMode = ref<TableToolMode>("select");
 
   const disabledTools = computed<TableToolMode[]>(() => {
-    if (gameRole.value !== "OB") return [];
-    return ["draw", "pointer"];
+    if (gameRole.value === "GM") return [];
+    if (gameRole.value === "OB") return ["draw", "pointer", "fog"];
+    return ["fog"];
   });
 
   function setToolMode(mode: TableToolMode) {

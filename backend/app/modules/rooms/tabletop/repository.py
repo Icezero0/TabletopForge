@@ -46,6 +46,8 @@ class RoomTabletopRepository:
         combat_state_provided: bool = False,
         music_state: dict | None = None,
         music_state_provided: bool = False,
+        fog_state: dict | None = None,
+        fog_state_provided: bool = False,
     ) -> RoomTabletopSettings:
         if grid_cell_ft is not None:
             settings.grid_cell_ft = grid_cell_ft
@@ -55,6 +57,8 @@ class RoomTabletopRepository:
             settings.combat_state = combat_state
         if music_state_provided:
             settings.music_state = music_state
+        if fog_state_provided:
+            settings.fog_state = fog_state
         await db.flush()
         await db.refresh(settings)
         return settings

@@ -1,5 +1,6 @@
-export type TableToolMode = "select" | "hand" | "draw" | "pointer" | "measure" | "music";
+export type TableToolMode = "select" | "hand" | "draw" | "pointer" | "measure" | "fog" | "music";
 export type MeasureSubTool = "line" | "route";
+export type FogSubTool = "erase" | "fill";
 
 export type { DrawSubTool } from "@/features/table/drawingTypes";
 

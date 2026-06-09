@@ -331,6 +331,7 @@ export type RoomTabletopSettings = {
   grid_cell_px: number;
   combat_state: RoomCombatState | null;
   music_state: RoomMusicState | null;
+  fog_state: RoomFogState | null;
   updated_at: string | null;
 };
 
@@ -363,6 +364,34 @@ export type RoomMusicState = {
   position: number;
   loop_mode: "single" | "list" | "shuffle";
   updated_at: string | null;
+};
+
+export type RoomFogShape = {
+  id: string;
+  mode: "fill" | "erase";
+  kind: "rect" | "path";
+  map_id?: number | null;
+  x?: number | null;
+  y?: number | null;
+  width?: number | null;
+  height?: number | null;
+  points?: number[][] | null;
+  radius?: number;
+};
+
+export type RoomFogMapMask = {
+  map_id: number;
+  width: number;
+  height: number;
+  map_width: number;
+  map_height: number;
+  data_url: string;
+  updated_at?: string | null;
+};
+
+export type RoomFogState = {
+  shapes?: RoomFogShape[];
+  maps?: Record<string, RoomFogMapMask>;
 };
 
 export type RoomMap = {
@@ -453,6 +482,7 @@ export async function patchRoomTabletopSettings(
     grid_cell_px?: number;
     combat_state?: RoomCombatState | null;
     music_state?: RoomMusicState | null;
+    fog_state?: RoomFogState | null;
   },
 ) {
   const { data } = await http.patch<RoomTabletopSettings>(

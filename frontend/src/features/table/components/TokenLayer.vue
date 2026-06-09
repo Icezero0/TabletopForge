@@ -18,6 +18,7 @@ const props = defineProps<{
   characterOwnerById: Map<number, number>;
   playerColorByUserId?: Map<number, string>;
   remoteSelections?: RemoteObjectSelection[];
+  isClientPointFogged?: (clientX: number, clientY: number) => boolean;
 }>();
 
 const emit = defineEmits<{
@@ -79,17 +80,20 @@ function remoteSelectionFor(tokenId: number) {
 
 function onTokenPointerDown(token: RoomToken, event: PointerEvent) {
   if (!canPickToken(token)) return;
+  if (props.isClientPointFogged?.(event.clientX, event.clientY)) return;
   event.stopPropagation();
 }
 
 function onTokenClick(token: RoomToken, event: MouseEvent) {
   if (!canPickToken(token)) return;
+  if (props.isClientPointFogged?.(event.clientX, event.clientY)) return;
   event.stopPropagation();
   emit("selectToken", token.id);
 }
 
 function onTokenContextMenu(token: RoomToken, event: MouseEvent) {
   if (!canPickToken(token)) return;
+  if (props.isClientPointFogged?.(event.clientX, event.clientY)) return;
   event.preventDefault();
   event.stopPropagation();
   emit("tokenContextMenu", token.id, event);

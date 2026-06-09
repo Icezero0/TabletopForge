@@ -43,6 +43,7 @@ const emit = defineEmits<{
   inspectToken: [tokenId: number];
   editTextDrawing: [drawingId: number];
   toggleMapLock: [mapId: number, locked: boolean];
+  fillMapFog: [mapId: number];
   alignMapToGrid: [mapId: number];
   mapLayer: [action: "up" | "down" | "top" | "bottom"];
   tokenLayer: [action: "up" | "down" | "top" | "bottom"];
@@ -352,6 +353,14 @@ onBeforeUnmount(() => {
       @click.stop
     >
       <template v-if="selection?.type === 'map' && selectedMap && isGm">
+        <button
+          type="button"
+          class="menuItem"
+          @click="onAction(() => emit('fillMapFog', selectedMap!.id))"
+        >
+          填充战争迷雾
+        </button>
+        <div class="menuDivider" />
         <button
           v-if="selectedMap.map_grid_size != null"
           type="button"

@@ -37,11 +37,40 @@ class RoomMusicState(BaseModel):
     updated_at: datetime | None = None
 
 
+class RoomFogShape(BaseModel):
+    id: str = Field(min_length=1, max_length=80)
+    mode: str = Field(pattern="^(fill|erase)$")
+    kind: str = Field(pattern="^(rect|path)$")
+    map_id: int | None = None
+    x: float | None = None
+    y: float | None = None
+    width: float | None = None
+    height: float | None = None
+    points: list[list[float]] | None = None
+    radius: float = Field(default=48, ge=1, le=1000)
+
+
+class RoomFogMapMask(BaseModel):
+    map_id: int
+    width: int = Field(gt=0, le=4096)
+    height: int = Field(gt=0, le=4096)
+    map_width: float = Field(gt=0)
+    map_height: float = Field(gt=0)
+    data_url: str = Field(min_length=1)
+    updated_at: datetime | None = None
+
+
+class RoomFogState(BaseModel):
+    shapes: list[RoomFogShape] = Field(default_factory=list)
+    maps: dict[str, RoomFogMapMask] = Field(default_factory=dict)
+
+
 class RoomTabletopSettingsResponse(BaseModel):
     grid_cell_ft: float
     grid_cell_px: int
     combat_state: RoomCombatState | None = None
     music_state: RoomMusicState | None = None
+    fog_state: RoomFogState | None = None
     updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
@@ -52,6 +81,7 @@ class RoomTabletopSettingsPatch(BaseModel):
     grid_cell_px: int | None = Field(default=None, ge=28, le=120)
     combat_state: RoomCombatState | None = None
     music_state: RoomMusicState | None = None
+    fog_state: RoomFogState | None = None
 
 
 class RoomMapResponse(BaseModel):

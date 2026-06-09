@@ -210,6 +210,7 @@ class RoomTabletopSettings(Base):
     grid_cell_px: Mapped[int] = mapped_column(Integer, nullable=False, default=40, server_default="40")
     combat_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     music_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    fog_state: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

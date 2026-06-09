@@ -727,6 +727,7 @@ export default {
       draw: "Draw",
       pointer: "Pointer",
       measure: "Measure",
+      fog: "Fog",
       music: "Music",
       measureHint: "Drag to measure; line follows cursor, distance rounds to grid cells",
       gridScale: "Scale",
@@ -763,6 +764,11 @@ export default {
       toolbar: "Measure tools",
       line: "Line",
       route: "Custom route",
+    },
+    fog: {
+      toolbar: "Fog of war tools",
+      erase: "Erase fog",
+      fill: "Fill fog",
     },
     draw: {
       toolbar: "Drawing tools",

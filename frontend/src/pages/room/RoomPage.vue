@@ -9,6 +9,8 @@ import {
   patchRoom,
   type Room,
   type RoomCombatState,
+  type RoomFogMapMask,
+  type RoomFogState,
   type RoomPatchPayload,
 } from "@/infra/api/rooms.api";
 import { patchLibraryResourceGrid, type LibraryResource } from "@/infra/api/library.api";
@@ -46,6 +48,7 @@ import MapViewport from "@/features/table/components/MapViewport.vue";
 import ContextMenu from "@/features/table/components/ContextMenu.vue";
 import BackgroundMusicPanel from "@/features/table/components/BackgroundMusicPanel.vue";
 import DrawToolStrip from "@/features/table/components/DrawToolStrip.vue";
+import FogToolStrip from "@/features/table/components/FogToolStrip.vue";
 import MeasureToolStrip from "@/features/table/components/MeasureToolStrip.vue";
 import PersonalMemo from "@/features/table/components/PersonalMemo.vue";
 import TableStage from "@/features/table/components/TableStage.vue";
@@ -58,7 +61,7 @@ import { useTabletopSelection } from "@/features/table/composables/useTabletopSe
 import { useTableToolMode } from "@/features/table/composables/useTableToolMode";
 import { useTabletopPointer } from "@/features/table/composables/useTabletopPointer";
 import { useRealtimePreviewChannel } from "@/features/table/composables/useRealtimePreviewChannel";
-import type { ClaimableObjectSelection, RemoteObjectSelection } from "@/features/table/types";
+import type { ClaimableObjectSelection, FogSubTool, RemoteObjectSelection } from "@/features/table/types";
 import { nextDrawingZIndex } from "@/features/table/drawingTypes";
 import { computeMapScaleForViewport } from "@/features/table/utils/mapScale";
 import { canInspectToken, canManageToken } from "@/features/table/utils/tokenDisplay";
@@ -155,6 +158,17 @@ const {
 } = useGridScale(roomId, { canEdit: canEditGrid });
 
 const measureSubTool = ref<"line" | "route">("line");
+const fogSubTool = ref<FogSubTool>("erase");
+const FOG_BRUSH_RADIUS = 54;
+const FOG_MASK_MAX_SIZE = 2048;
+const fogMaskOverrides = ref<Record<number, RoomFogMapMask>>({});
+const fogBrushSession = ref<{
+  mapId: number;
+  canvas: HTMLCanvasElement;
+  mask: RoomFogMapMask;
+  lastX: number;
+  lastY: number;
+} | null>(null);
 
 const {
   measureState,
@@ -169,6 +183,9 @@ const {
 
 watch(toolMode, (mode) => {
   if (mode !== "measure") clearMeasure();
+  if (mode !== "fog") {
+    fogBrushSession.value = null;
+  }
 });
 
 watch(measureSubTool, clearMeasure);
@@ -185,6 +202,18 @@ const tabletopMaps = computed(() => tabletopStore.getMaps(roomId.value));
 const tabletopDrawings = computed(() => tabletopStore.getDrawings(roomId.value));
 const tabletopTokens = computed(() => tabletopStore.getTokens(roomId.value));
 const tabletopSettings = computed(() => tabletopStore.getSettings(roomId.value));
+const fogStateForViewport = computed<RoomFogState | null>(() => {
+  const base = tabletopSettings.value?.fog_state ?? { shapes: [], maps: {} };
+  return {
+    shapes: base.shapes ?? [],
+    maps: {
+      ...(base.maps ?? {}),
+      ...Object.fromEntries(
+        Object.entries(fogMaskOverrides.value).map(([mapId, mask]) => [String(mapId), mask]),
+      ),
+    },
+  };
+});
 const currentUserId = computed(() => auth.me?.id ?? null);
 const { selection, selectMap, selectDrawing, selectToken, clearSelection } = useTabletopSelection();
 const OBJECT_SELECTION_LEASE_MS = 30_000;
@@ -848,8 +877,204 @@ function handleMapNaturalSize(payload: { mapId: number; w: number; h: number }) 
   };
 }
 
+function currentFogState(): RoomFogState {
+  const current = tabletopSettings.value?.fog_state;
+  return {
+    shapes: current?.shapes ?? [],
+    maps: { ...(current?.maps ?? {}) },
+  };
+}
+
+async function saveFogState(next: RoomFogState) {
+  if (!roomId.value || currentUserGameRole.value !== "GM") return;
+  try {
+    await tabletopStore.updateSettings(roomId.value, { fog_state: next });
+  } catch (error) {
+    toasts.push({ message: getBackendErrorMessage(error), tone: "danger" });
+  }
+}
+
+function fogMaskSize(natural: { w: number; h: number }) {
+  const maxEdge = Math.max(natural.w, natural.h);
+  const ratio = maxEdge > FOG_MASK_MAX_SIZE ? FOG_MASK_MAX_SIZE / maxEdge : 1;
+  return {
+    width: Math.max(1, Math.round(natural.w * ratio)),
+    height: Math.max(1, Math.round(natural.h * ratio)),
+  };
+}
+
+function fogMapAtPoint(x: number, y: number) {
+  return [...tabletopMaps.value]
+    .sort((a, b) => b.z_index - a.z_index || b.id - a.id)
+    .find((map) => {
+      const natural = mapNaturalSizes.value[map.id];
+      if (!natural) return false;
+      const scaleX = map.scale_x ?? map.scale;
+      const scaleY = map.scale_y ?? map.scale;
+      return (
+        x >= map.x &&
+        x <= map.x + natural.w * scaleX &&
+        y >= map.y &&
+        y <= map.y + natural.h * scaleY
+      );
+    });
+}
+
+function pointToMask(mapId: number, x: number, y: number, mask: RoomFogMapMask) {
+  const map = tabletopMaps.value.find((item) => item.id === mapId);
+  if (!map) return null;
+  const scaleX = map.scale_x ?? map.scale;
+  const scaleY = map.scale_y ?? map.scale;
+  return {
+    x: ((x - map.x) / scaleX) * (mask.width / mask.map_width),
+    y: ((y - map.y) / scaleY) * (mask.height / mask.map_height),
+    radiusX: (FOG_BRUSH_RADIUS / scaleX) * (mask.width / mask.map_width),
+    radiusY: (FOG_BRUSH_RADIUS / scaleY) * (mask.height / mask.map_height),
+  };
+}
+
+function maskToDataUrl(canvas: HTMLCanvasElement) {
+  return canvas.toDataURL("image/png");
+}
+
+function maskFromCanvas(mapId: number, canvas: HTMLCanvasElement, natural: { w: number; h: number }): RoomFogMapMask {
+  return {
+    map_id: mapId,
+    width: canvas.width,
+    height: canvas.height,
+    map_width: natural.w,
+    map_height: natural.h,
+    data_url: maskToDataUrl(canvas),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+async function createFogCanvas(mapId: number) {
+  const natural = mapNaturalSizes.value[mapId];
+  if (!natural) return null;
+  const existing = fogMaskOverrides.value[mapId] ?? tabletopSettings.value?.fog_state?.maps?.[String(mapId)];
+  const size = existing ?? fogMaskSize(natural);
+  const canvas = document.createElement("canvas");
+  canvas.width = size.width;
+  canvas.height = size.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  if (existing?.data_url) {
+    const img = await loadImage(existing.data_url);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  }
+  return { canvas, natural };
+}
+
+function drawFogBrush(canvas: HTMLCanvasElement, point: { x: number; y: number; radiusX: number; radiusY: number }) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.fillStyle = fogSubTool.value === "fill" ? "white" : "black";
+  ctx.beginPath();
+  ctx.ellipse(point.x, point.y, point.radiusX, point.radiusY, 0, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function applyFogMaskOverride(mapId: number, mask: RoomFogMapMask) {
+  fogMaskOverrides.value = {
+    ...fogMaskOverrides.value,
+    [mapId]: mask,
+  };
+}
+
+async function handleFogPointerDown(x: number, y: number, event: PointerEvent) {
+  if (currentUserGameRole.value !== "GM" || event.button !== 0) return;
+  const map = fogMapAtPoint(x, y);
+  if (!map) return;
+  const data = await createFogCanvas(map.id);
+  if (!data) return;
+  const initialMask = maskFromCanvas(map.id, data.canvas, data.natural);
+  const point = pointToMask(map.id, x, y, initialMask);
+  if (!point) return;
+  drawFogBrush(data.canvas, point);
+  const mask = maskFromCanvas(map.id, data.canvas, data.natural);
+  fogBrushSession.value = {
+    mapId: map.id,
+    canvas: data.canvas,
+    mask,
+    lastX: x,
+    lastY: y,
+  };
+  applyFogMaskOverride(map.id, mask);
+}
+
+function handleFogPointerMove(x: number, y: number, event: PointerEvent) {
+  const session = fogBrushSession.value;
+  if (currentUserGameRole.value !== "GM" || event.buttons !== 1 || !session) return;
+  if (Math.hypot(x - session.lastX, y - session.lastY) < 12) return;
+  const natural = mapNaturalSizes.value[session.mapId];
+  const point = pointToMask(session.mapId, x, y, session.mask);
+  if (!natural || !point) return;
+  drawFogBrush(session.canvas, point);
+  const mask = maskFromCanvas(session.mapId, session.canvas, natural);
+  fogBrushSession.value = {
+    ...session,
+    mask,
+    lastX: x,
+    lastY: y,
+  };
+  applyFogMaskOverride(session.mapId, mask);
+}
+
+function handleFogPointerUp(x: number, y: number) {
+  const session = fogBrushSession.value;
+  if (currentUserGameRole.value !== "GM" || !session) return;
+  const natural = mapNaturalSizes.value[session.mapId];
+  const point = pointToMask(session.mapId, x, y, session.mask);
+  if (natural && point) {
+    drawFogBrush(session.canvas, point);
+  }
+  const mask = natural ? maskFromCanvas(session.mapId, session.canvas, natural) : session.mask;
+  fogBrushSession.value = null;
+  applyFogMaskOverride(session.mapId, mask);
+  const next = currentFogState();
+  next.maps = {
+    ...(next.maps ?? {}),
+    [String(session.mapId)]: mask,
+  };
+  void saveFogState(next);
+}
+
+async function handleFillMapFog(mapId: number) {
+  const natural = mapNaturalSizes.value[mapId];
+  if (!natural || currentUserGameRole.value !== "GM") return;
+  const size = fogMaskSize(natural);
+  const canvas = document.createElement("canvas");
+  canvas.width = size.width;
+  canvas.height = size.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.fillStyle = "white";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  const mask = maskFromCanvas(mapId, canvas, natural);
+  applyFogMaskOverride(mapId, mask);
+  const next = currentFogState();
+  next.maps = {
+    ...(next.maps ?? {}),
+    [String(mapId)]: mask,
+  };
+  await saveFogState(next);
+}
+
 function handleContextMenu(event: MouseEvent) {
-  if (toolMode.value === "draw" || toolMode.value === "measure") return;
+  if (toolMode.value === "draw" || toolMode.value === "measure" || toolMode.value === "fog") return;
   releaseLocalObjectSelection();
   clearSelection();
   clearInspection();
@@ -1863,6 +2088,7 @@ watch(
             :tokens="tabletopTokens"
             :drawings="tabletopDrawings"
             :combat-state="tabletopSettings?.combat_state ?? null"
+            :fog-state="fogStateForViewport"
             :grid-cell-px="gridCellPx"
             :grid-cell-ft="gridCellFt"
             :scale-bar-cells="scaleBarCells"
@@ -1915,6 +2141,10 @@ watch(
             @measure-pointer-up="measurePointerUp"
             @measure-route-click="routeClick"
             @measure-route-finish="routeFinish"
+            :fog-sub-tool="fogSubTool"
+            @fog-pointer-down="handleFogPointerDown"
+            @fog-pointer-move="handleFogPointerMove"
+            @fog-pointer-up="handleFogPointerUp"
           />
           <ContextMenu
             :open="contextMenuOpen"
@@ -1929,6 +2159,7 @@ watch(
             :character-owner-by-id="characterOwnerById"
             @close="closeContextMenu"
             @align-map-to-grid="handleContextAlignMapToGrid"
+            @fill-map-fog="handleFillMapFog"
             @delete-map="handleContextDeleteMap"
             @delete-drawing="handleContextDeleteDrawing"
             @delete-token="handleContextDeleteToken"
@@ -2133,6 +2364,10 @@ watch(
             <MeasureToolStrip
               v-if="toolMode === 'measure'"
               v-model:sub-tool="measureSubTool"
+            />
+            <FogToolStrip
+              v-if="toolMode === 'fog' && currentUserGameRole === 'GM'"
+              v-model:sub-tool="fogSubTool"
             />
           </FloatingPanel>
 

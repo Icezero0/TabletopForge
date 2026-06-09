@@ -18,6 +18,8 @@ export const TOKEN_BAND_BASE = 100;
 export const DRAWING_BAND_BASE = 200;
 /** 测距叠层：高于绘制，低于网格 */
 export const MEASURE_LAYER_Z = DRAWING_BAND_BASE + 5;
+/** 战争迷雾：高于指示物，低于绘制、Pointer、测距 */
+export const FOG_LAYER_Z = DRAWING_BAND_BASE - 1;
 /** 网格叠层：SceneCanvas 内最上（不拦截指针） */
 export const GRID_LAYER_Z = DRAWING_BAND_BASE + 10;
 

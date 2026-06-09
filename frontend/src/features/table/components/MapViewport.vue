@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, toRef, useId, watch } from "vue";
 import type { GameRole } from "@/features/room/types";
-import type { RemoteObjectSelection, TableToolMode, TabletopSelection } from "@/features/table/types";
-import type { RoomCombatState, RoomDrawing, RoomMap, RoomToken } from "@/infra/api/rooms.api";
+import type { FogSubTool, RemoteObjectSelection, TableToolMode, TabletopSelection } from "@/features/table/types";
+import type { RoomCombatState, RoomDrawing, RoomFogMapMask, RoomFogState, RoomMap, RoomToken } from "@/infra/api/rooms.api";
 import type { DrawPreview, TextPlacementRequest } from "@/features/table/composables/useDrawingTools";
 import type { MeasureState } from "@/features/table/composables/useMeasureTool";
 import type { MeasureSubTool } from "@/features/table/types";
@@ -17,6 +17,7 @@ import DrawingSelectionOverlay from "@/features/table/components/DrawingSelectio
 import DrawTextBoxEditor from "@/features/table/components/DrawTextBoxEditor.vue";
 import SelectionOverlay from "@/features/table/components/SelectionOverlay.vue";
 import MeasureOverlay from "@/features/table/components/MeasureOverlay.vue";
+import FogOverlay from "@/features/table/components/FogOverlay.vue";
 import PointerOverlay from "@/features/table/components/PointerOverlay.vue";
 import SceneCanvas from "@/features/table/components/SceneCanvas.vue";
 import type { RemoteCursor, RemoteLaser } from "@/features/table/composables/useTabletopPointer";
@@ -27,6 +28,7 @@ const props = withDefaults(
     tokens?: RoomToken[];
     drawings?: RoomDrawing[];
     combatState?: RoomCombatState | null;
+    fogState?: RoomFogState | null;
     gridCellPx?: number;
     gridCellFt?: number;
     scaleBarCells?: number;
@@ -46,6 +48,7 @@ const props = withDefaults(
     remoteObjectSelections?: RemoteObjectSelection[];
     measureState?: MeasureState | null;
     measureSubTool?: MeasureSubTool;
+    fogSubTool?: FogSubTool;
     currentUserId?: number | null;
     characterOwnerById?: Map<number, number>;
     playerColorByUserId?: Map<number, string>;
@@ -75,6 +78,7 @@ const props = withDefaults(
     remoteObjectSelections: () => [],
     measureState: null,
     measureSubTool: "line",
+    fogSubTool: "erase",
     currentUserId: null,
     characterOwnerById: () => new Map<number, number>(),
   },
@@ -120,6 +124,9 @@ const emit = defineEmits<{
   measurePointerUp: [x: number, y: number, event: PointerEvent];
   measureRouteClick: [x: number, y: number];
   measureRouteFinish: [];
+  fogPointerDown: [x: number, y: number, event: PointerEvent];
+  fogPointerMove: [x: number, y: number, event: PointerEvent];
+  fogPointerUp: [x: number, y: number, event: PointerEvent];
 }>();
 
 const toolModeRef = computed(() => props.toolMode);
@@ -132,9 +139,12 @@ const minorPatternId = computed(() => `grid-minor-${patternUid}`);
 
 const gridOrigin = SCENE_ORIGIN;
 const gridSpan = SCENE_SPAN;
+const FOG_BRUSH_RADIUS = 54;
 
 const rootRef = ref<HTMLElement | null>(null);
 const drawingLayerRef = ref<InstanceType<typeof DrawingLayer> | null>(null);
+const fogPreviewPoint = ref<{ x: number; y: number } | null>(null);
+const fogHitMasks = ref<Record<number, { mask: RoomFogMapMask; pixels: Uint8ClampedArray }>>({});
 
 watch(
   rootRef,
@@ -151,9 +161,90 @@ onUnmounted(() => {
 const sceneInteractive = computed(() => props.toolMode === "hand");
 const pointerMode = computed(() => props.toolMode === "pointer");
 const measureMode = computed(() => props.toolMode === "measure");
+const fogMode = computed(() => props.toolMode === "fog" && props.gameRole === "GM");
 
 function scenePointFromClient(clientX: number, clientY: number) {
   return drawingLayerRef.value?.scenePointFromClient(clientX, clientY) ?? { x: 0, y: 0 };
+}
+
+function loadFogMaskPixels(mask: RoomFogMapMask) {
+  return new Promise<{ mask: RoomFogMapMask; pixels: Uint8ClampedArray }>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = mask.width;
+      canvas.height = mask.height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Canvas context unavailable"));
+        return;
+      }
+      ctx.drawImage(img, 0, 0, mask.width, mask.height);
+      resolve({ mask, pixels: ctx.getImageData(0, 0, mask.width, mask.height).data });
+    };
+    img.onerror = reject;
+    img.src = mask.data_url;
+  });
+}
+
+watch(
+  () => ({ gameRole: props.gameRole, masks: props.fogState?.maps ?? {} }),
+  async ({ gameRole, masks }) => {
+    if (gameRole === "GM") {
+      fogHitMasks.value = {};
+      return;
+    }
+    const entries = Object.values(masks);
+    if (!entries.length) {
+      fogHitMasks.value = {};
+      return;
+    }
+    const loaded = await Promise.allSettled(entries.map(loadFogMaskPixels));
+    const next: Record<number, { mask: RoomFogMapMask; pixels: Uint8ClampedArray }> = {};
+    for (const result of loaded) {
+      if (result.status === "fulfilled") {
+        next[result.value.mask.map_id] = result.value;
+      }
+    }
+    fogHitMasks.value = next;
+  },
+  { immediate: true, deep: true },
+);
+
+function isScenePointFogged(x: number, y: number) {
+  if (props.gameRole === "GM") return false;
+  const mapsByTop = [...props.maps].sort((a, b) => b.z_index - a.z_index || b.id - a.id);
+  for (const map of mapsByTop) {
+    const maskMeta = props.fogState?.maps?.[String(map.id)];
+    const hitMask = fogHitMasks.value[map.id];
+    const scaleX = map.scale_x ?? map.scale;
+    const scaleY = map.scale_y ?? map.scale;
+    const localX = (x - map.x) / scaleX;
+    const localY = (y - map.y) / scaleY;
+    const mapWidth = hitMask?.mask.map_width ?? maskMeta?.map_width;
+    const mapHeight = hitMask?.mask.map_height ?? maskMeta?.map_height;
+    if (mapWidth == null || mapHeight == null) continue;
+    if (localX < 0 || localY < 0 || localX > mapWidth || localY > mapHeight) {
+      continue;
+    }
+    if (!hitMask) return true;
+    const maskX = Math.min(hitMask.mask.width - 1, Math.max(0, Math.floor(localX * hitMask.mask.width / hitMask.mask.map_width)));
+    const maskY = Math.min(hitMask.mask.height - 1, Math.max(0, Math.floor(localY * hitMask.mask.height / hitMask.mask.map_height)));
+    const index = (maskY * hitMask.mask.width + maskX) * 4;
+    return (hitMask.pixels[index] ?? 0) > 127;
+  }
+  return false;
+}
+
+function isClientPointFogged(clientX: number, clientY: number) {
+  const pt = scenePointFromClient(clientX, clientY);
+  return isScenePointFogged(pt.x, pt.y);
+}
+
+function updateFogPreview(event: PointerEvent) {
+  const pt = scenePointFromClient(event.clientX, event.clientY);
+  fogPreviewPoint.value = pt;
+  return pt;
 }
 
 function onViewportPointerMove(event: PointerEvent) {
@@ -164,7 +255,14 @@ function onViewportPointerMove(event: PointerEvent) {
   if (measureMode.value) {
     const pt = scenePointFromClient(event.clientX, event.clientY);
     emit("measurePointerMove", pt.x, pt.y, event);
+    return;
   }
+  if (fogMode.value) {
+    const pt = updateFogPreview(event);
+    emit("fogPointerMove", pt.x, pt.y, event);
+    return;
+  }
+  fogPreviewPoint.value = null;
 }
 
 function onViewportPointerDown(event: PointerEvent) {
@@ -179,6 +277,12 @@ function onViewportPointerDown(event: PointerEvent) {
       emit("measurePointerDown", pt.x, pt.y, event);
     }
     // Route mode is handled via click events (onViewportClick)
+    return;
+  }
+  if (fogMode.value && event.button === 0) {
+    event.preventDefault();
+    const pt = updateFogPreview(event);
+    emit("fogPointerDown", pt.x, pt.y, event);
   }
 }
 
@@ -190,7 +294,16 @@ function onViewportPointerUp(event: PointerEvent) {
   if (measureMode.value) {
     const pt = scenePointFromClient(event.clientX, event.clientY);
     emit("measurePointerUp", pt.x, pt.y, event);
+    return;
   }
+  if (fogMode.value) {
+    const pt = updateFogPreview(event);
+    emit("fogPointerUp", pt.x, pt.y, event);
+  }
+}
+
+function onViewportPointerLeave() {
+  fogPreviewPoint.value = null;
 }
 
 const selectedDrawingId = computed(() =>
@@ -202,7 +315,7 @@ const selectedTokenId = computed(() =>
 );
 
 function onContextMenu(event: MouseEvent) {
-  if (props.toolMode === "draw" || props.toolMode === "measure") return;
+  if (props.toolMode === "draw" || props.toolMode === "measure" || props.toolMode === "fog") return;
   if ((event.target as Element).closest(".mapItem, .tokenWrap, .tokenItem, .tokenSelectionOverlay, .drawingLayer")) return;
   event.preventDefault();
   emit("contextMenu", event);
@@ -215,7 +328,7 @@ function onTokenSelectionContextMenu(event: MouseEvent) {
 }
 
 function onViewportClick(event: MouseEvent) {
-  if (props.toolMode === "draw" || props.toolMode === "pointer") return;
+  if (props.toolMode === "draw" || props.toolMode === "pointer" || props.toolMode === "fog") return;
   if (props.toolMode === "measure") {
     if (props.measureSubTool === "route" && event.button === 0) {
       const pt = scenePointFromClient(event.clientX, event.clientY);
@@ -260,6 +373,7 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
       handMode: sceneInteractive,
       pointerMode,
       measureMode,
+      fogMode,
     }"
     @contextmenu="onContextMenu"
     @click="onViewportClick"
@@ -267,6 +381,7 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
     @pointerdown="onViewportPointerDown"
     @pointerup="onViewportPointerUp"
     @pointercancel="onViewportPointerUp"
+    @pointerleave="onViewportPointerLeave"
   >
     <SceneCanvas
       :transform="viewportTransform"
@@ -292,6 +407,7 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
         :character-owner-by-id="characterOwnerById"
         :player-color-by-user-id="playerColorByUserId"
         :remote-selections="remoteObjectSelections.filter((claim) => claim.type === 'token')"
+        :is-client-point-fogged="isClientPointFogged"
         @select-token="emit('selectToken', $event)"
         @token-context-menu="(id, ev) => emit('tokenContextMenu', id, ev)"
       />
@@ -347,6 +463,14 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
           :fill="`url(#${minorPatternId})`"
         />
       </svg>
+      <FogOverlay
+        :fog-state="fogState ?? null"
+        :maps="maps"
+        :game-role="gameRole"
+        :preview-point="fogMode ? fogPreviewPoint : null"
+        :preview-mode="fogSubTool"
+        :preview-radius="FOG_BRUSH_RADIUS"
+      />
       <SelectionOverlay
         :selection="selection"
         :maps="maps"
@@ -429,7 +553,8 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
 }
 
 .mapViewport.pointerMode,
-.mapViewport.measureMode {
+.mapViewport.measureMode,
+.mapViewport.fogMode {
   cursor: crosshair;
 }
 

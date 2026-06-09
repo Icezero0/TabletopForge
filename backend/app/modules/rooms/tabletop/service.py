@@ -335,8 +335,9 @@ class RoomTabletopService:
         changes_settings = bool(settings_fields & payload.model_fields_set)
         changes_combat = "combat_state" in payload.model_fields_set
         changes_music = "music_state" in payload.model_fields_set
+        changes_fog = "fog_state" in payload.model_fields_set
 
-        if game_role != GameRole.GM and (changes_settings or changes_music):
+        if game_role != GameRole.GM and (changes_settings or changes_music or changes_fog):
             raise ForbiddenError(
                 "You do not have permission to perform this action",
                 reason=ErrorReason.ROOM_PERMISSION_DENIED,
@@ -370,6 +371,12 @@ class RoomTabletopService:
                 else None
             ),
             music_state_provided="music_state" in payload.model_fields_set,
+            fog_state=(
+                payload.fog_state.model_dump(mode="json")
+                if payload.fog_state is not None
+                else None
+            ),
+            fog_state_provided="fog_state" in payload.model_fields_set,
         )
         await db.commit()
         return RoomTabletopSettingsResponse.model_validate(updated)
