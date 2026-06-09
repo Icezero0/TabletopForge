@@ -289,13 +289,14 @@ const {
   pointerUp: drawPointerUp,
   confirmText,
   cancelText,
+  undoLastDrawing,
 } = useDrawingTools({
   drawings: tabletopDrawings,
   gridCellPx,
   gridCellFt,
   onCommit: async (payload) => {
     if (!roomId.value) return;
-    await tabletopStore.createDrawing(roomId.value, {
+    return await tabletopStore.createDrawing(roomId.value, {
       ...payload,
       z_index: nextDrawingZIndex(tabletopDrawings.value),
     });
@@ -1096,6 +1097,13 @@ function handleGlobalKeyDown(event: KeyboardEvent) {
       handleCloseInspection();
       return;
     }
+  }
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z") {
+    if (isEditingText()) return;
+    if (toolMode.value !== "draw") return;
+    event.preventDefault();
+    void undoLastDrawing();
+    return;
   }
   if (event.key !== "Delete") return;
   if (isEditingText()) return;

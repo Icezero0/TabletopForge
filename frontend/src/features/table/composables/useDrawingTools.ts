@@ -40,7 +40,7 @@ type UseDrawingToolsOptions = {
     kind: DrawingKind;
     geometry: Record<string, unknown>;
     style: Record<string, unknown>;
-  }) => void | Promise<void>;
+  }) => RoomDrawing | void | Promise<RoomDrawing | void>;
   onDeleteIds: (ids: number[]) => void | Promise<void>;
 };
 
@@ -56,6 +56,7 @@ export function useDrawingTools(options: UseDrawingToolsOptions) {
   let startX = 0;
   let startY = 0;
   let brushPoints: number[][] = [];
+  const committedDrawingIds: number[] = [];
 
   function gridSnap(): GridSnap {
     return { gridCellPx: options.gridCellPx.value, gridCellFt: options.gridCellFt.value };
@@ -73,6 +74,26 @@ export function useDrawingTools(options: UseDrawingToolsOptions) {
     pointerId = null;
     brushPoints = [];
     preview.value = null;
+  }
+
+  async function commitDrawing(payload: {
+    kind: DrawingKind;
+    geometry: Record<string, unknown>;
+    style: Record<string, unknown>;
+  }) {
+    const drawing = await options.onCommit(payload);
+    if (drawing) committedDrawingIds.push(drawing.id);
+  }
+
+  async function undoLastDrawing() {
+    while (committedDrawingIds.length) {
+      const id = committedDrawingIds.pop();
+      if (id == null) continue;
+      if (!options.drawings.value.some((drawing) => drawing.id === id)) continue;
+      await options.onDeleteIds([id]);
+      return true;
+    }
+    return false;
   }
 
   watch(subTool, (tool) => {
@@ -256,7 +277,7 @@ export function useDrawingTools(options: UseDrawingToolsOptions) {
 
     if (kind === "brush") {
       if (points.length < 2) return;
-      await options.onCommit({
+      await commitDrawing({
         kind: "brush",
         geometry: { points },
         style: p.style,
@@ -280,7 +301,7 @@ export function useDrawingTools(options: UseDrawingToolsOptions) {
       if (rx < 2 && ry < 2) return;
     }
 
-    await options.onCommit({
+    await commitDrawing({
       kind,
       geometry: p.geometry,
       style: p.style,
@@ -295,7 +316,7 @@ export function useDrawingTools(options: UseDrawingToolsOptions) {
     const measured = measureTextBoxSize(trimmed, fontSize.value);
     const width = Math.max(measured.width, payload.width, place.width, TEXT_MIN_WIDTH);
     const height = Math.max(measured.height, payload.height, place.height);
-    void options.onCommit({
+    void commitDrawing({
       kind: "text",
       geometry: {
         x: place.x,
@@ -325,5 +346,6 @@ export function useDrawingTools(options: UseDrawingToolsOptions) {
     resetPointer,
     confirmText,
     cancelText,
+    undoLastDrawing,
   };
 }

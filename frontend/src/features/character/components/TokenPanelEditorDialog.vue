@@ -218,15 +218,19 @@ function updateResourceDraft(patch: Partial<TokenResource>) {
   editingResourceDraft.value = { ...editingResourceDraft.value, ...patch };
 }
 
-function saveResourceEdit() {
+function normalizeResource(resource: TokenResource): TokenResource {
+  return {
+    name: resource.name.trim(),
+    max: Math.max(0, resource.max),
+    recovery: resource.recovery.trim(),
+  };
+}
+
+function commitResourceEdit() {
   const index = editingResourceIndex.value;
   const next = editingResourceDraft.value;
-  if (index == null || !next) return;
-  const normalized = {
-    name: next.name.trim(),
-    max: Math.max(0, next.max),
-    recovery: next.recovery.trim(),
-  };
+  if (index == null || !next) return false;
+  const normalized = normalizeResource(next);
   if (index >= draftResources.value.length) {
     draft.value = {
       ...draft.value,
@@ -235,6 +239,11 @@ function saveResourceEdit() {
   } else {
     updateResource(index, normalized);
   }
+  return true;
+}
+
+function saveResourceEdit() {
+  if (!commitResourceEdit()) return;
   cancelResourceEdit();
 }
 
@@ -438,6 +447,7 @@ function syncFromCharacter() {
 
 // ── Save / close ───────────────────────────────────────────────────────────
 function save() {
+  commitResourceEdit();
   // Flush string buffers → number|null before emitting
   const newSaves: Record<string, number | null> = {};
   for (const key of ABILITY_KEYS) {

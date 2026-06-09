@@ -132,15 +132,26 @@ const displayName = computed(() => {
   return character.value?.name ?? "";
 });
 
-type SaveThrowRow = { key: (typeof ABILITY_KEYS)[number]; value: number };
+type SaveThrowRow = {
+  key: (typeof ABILITY_KEYS)[number];
+  value: number;
+  referenceValue: number;
+  overrideValue: number | null;
+  profState: "none" | "proficient";
+};
 const savingThrows = computed<SaveThrowRow[]>(() => {
   const st = tokenPanel.value?.saving_throws as Record<string, number | null> | undefined;
   const profs = tokenPanel.value?.saving_throw_profs as Record<string, boolean> | undefined;
   const rows: SaveThrowRow[] = [];
   for (const key of ABILITY_KEYS) {
+    const referenceValue = abilityMod(abilityScoreValue(key)) + (profs?.[key] ? tokenProfBonusValue() : 0);
+    const overrideValue = panelNumber(st?.[key]);
     rows.push({
       key,
-      value: panelNumber(st?.[key]) ?? abilityMod(abilityScoreValue(key)) + (profs?.[key] ? tokenProfBonusValue() : 0),
+      value: overrideValue ?? referenceValue,
+      referenceValue,
+      overrideValue,
+      profState: profs?.[key] ? "proficient" : "none",
     });
   }
   return rows;
@@ -150,6 +161,9 @@ type SkillRow = {
   key: (typeof DND5E_SKILLS)[number]["key"];
   labelKey: (typeof DND5E_SKILLS)[number]["labelKey"];
   value: number;
+  referenceValue: number;
+  overrideValue: number | null;
+  profState: "none" | "proficient" | "expert";
 };
 const skillRows = computed<SkillRow[]>(() => {
   const sk = tokenPanel.value?.skills as Record<string, number | null> | undefined;
@@ -158,10 +172,15 @@ const skillRows = computed<SkillRow[]>(() => {
   for (const s of DND5E_SKILLS) {
     const prof = profs?.[s.key] ?? "none";
     const multiplier = prof === "proficient" ? 1 : (prof === "expert" || prof === "expertise") ? 2 : 0;
+    const referenceValue = abilityMod(abilityScoreValue(s.ability)) + tokenProfBonusValue() * multiplier;
+    const overrideValue = panelNumber(sk?.[s.key]);
     rows.push({
       key: s.key,
       labelKey: s.labelKey,
-      value: panelNumber(sk?.[s.key]) ?? abilityMod(abilityScoreValue(s.ability)) + tokenProfBonusValue() * multiplier,
+      value: overrideValue ?? referenceValue,
+      referenceValue,
+      overrideValue,
+      profState: prof === "expertise" || prof === "expert" ? "expert" : prof === "proficient" ? "proficient" : "none",
     });
   }
   return rows;
@@ -511,6 +530,78 @@ async function saveState() {
   }
 }
 
+async function saveTokenBonus(
+  section: "saving_throws" | "skills",
+  key: string,
+  raw: string,
+) {
+  if (!canEditVisibleState.value) return;
+  const tokenId = props.inspection?.tokenId;
+  if (tokenId == null) return;
+  const current = ((tokenPanel.value?.[section] ?? {}) as Record<string, number | null>);
+  saving.value = true;
+  saveError.value = "";
+  saveSuccess.value = false;
+  try {
+    const updated = await patchRoomToken(props.roomId, tokenId, {
+      panel: {
+        [section]: {
+          ...current,
+          [key]: parseOptionalInt(raw),
+        },
+      },
+    });
+    tabletopStore.applyTokenUpdated(props.roomId, updated);
+    saveSuccess.value = true;
+  } catch (e) {
+    saveError.value = getBackendErrorMessage(e) || t("table.inspector.saveFailed");
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function saveTokenProf(
+  section: "saving_throw_profs" | "skill_profs",
+  key: string,
+  value: boolean | "none" | "proficient" | "expert",
+) {
+  if (!canEditVisibleState.value) return;
+  const tokenId = props.inspection?.tokenId;
+  if (tokenId == null) return;
+  const current = ((tokenPanel.value?.[section] ?? {}) as Record<string, boolean | string>);
+  saving.value = true;
+  saveError.value = "";
+  saveSuccess.value = false;
+  try {
+    const updated = await patchRoomToken(props.roomId, tokenId, {
+      panel: {
+        [section]: {
+          ...current,
+          [key]: value,
+        },
+      },
+    });
+    tabletopStore.applyTokenUpdated(props.roomId, updated);
+    saveSuccess.value = true;
+  } catch (e) {
+    saveError.value = getBackendErrorMessage(e) || t("table.inspector.saveFailed");
+  } finally {
+    saving.value = false;
+  }
+}
+
+function toggleTokenSaveProf(key: string) {
+  const profs = (tokenPanel.value?.saving_throw_profs ?? {}) as Record<string, boolean>;
+  void saveTokenProf("saving_throw_profs", key, !profs[key]);
+}
+
+function cycleTokenSkillProf(key: string) {
+  const profs = (tokenPanel.value?.skill_profs ?? {}) as Record<string, string>;
+  const cur = profs[key] ?? "none";
+  const next = cur === "none" ? "proficient" : cur === "proficient" ? "expert" : "none";
+  void saveTokenProf("skill_profs", key, next);
+}
+
 async function toggleHiddenData() {
   if (!canToggleHiddenData.value) return;
   const tokenId = props.inspection?.tokenId;
@@ -800,8 +891,28 @@ function openCharacterSheet() {
                 <h4 class="fieldGroupTitle">{{ t("character.token.savingThrows") }}</h4>
                 <div class="tokenCompactGrid saves">
                   <div v-for="st in savingThrows" :key="st.key" class="tokenCompactItem">
+                    <button
+                      v-if="canEditVisibleState"
+                      type="button"
+                      class="tokenProfDot"
+                      :class="st.profState"
+                      :aria-label="`${t(ABILITY_LABEL_KEYS[st.key])}${t('character.token.savingThrows')}`"
+                      :disabled="saving"
+                      @click="toggleTokenSaveProf(st.key)"
+                    />
+                    <span v-else class="tokenProfDot static" :class="st.profState" />
                     <span class="tokenCompactLabel">{{ t(ABILITY_LABEL_KEYS[st.key]).slice(0, 2) }}</span>
-                    <span class="tokenCompactValue">{{ fmtMod(st.value) }}</span>
+                    <input
+                      v-if="canEditVisibleState"
+                      class="tokenCompactInput"
+                      type="text"
+                      inputmode="numeric"
+                      :value="st.overrideValue == null ? '' : fmtMod(st.overrideValue)"
+                      :placeholder="fmtMod(st.referenceValue)"
+                      :aria-label="`${t(ABILITY_LABEL_KEYS[st.key])}${t('character.token.savingThrows')}`"
+                      @change="saveTokenBonus('saving_throws', st.key, ($event.target as HTMLInputElement).value)"
+                    />
+                    <span v-else class="tokenCompactValue">{{ fmtMod(st.value) }}</span>
                   </div>
                 </div>
               </div>
@@ -810,14 +921,35 @@ function openCharacterSheet() {
                 <h4 class="fieldGroupTitle">{{ t("character.token.skills") }}</h4>
                 <div class="tokenCompactGrid skills">
                   <div v-for="sk in skillRows" :key="sk.key" class="tokenCompactItem">
+                    <button
+                      v-if="canEditVisibleState"
+                      type="button"
+                      class="tokenProfDot"
+                      :class="sk.profState"
+                      :aria-label="t(sk.labelKey)"
+                      :disabled="saving"
+                      @click="cycleTokenSkillProf(sk.key)"
+                    />
+                    <span v-else class="tokenProfDot static" :class="sk.profState" />
                     <span class="tokenCompactLabel">{{ t(sk.labelKey) }}</span>
-                    <span class="tokenCompactValue">{{ fmtMod(sk.value) }}</span>
+                    <input
+                      v-if="canEditVisibleState"
+                      class="tokenCompactInput"
+                      type="text"
+                      inputmode="numeric"
+                      :value="sk.overrideValue == null ? '' : fmtMod(sk.overrideValue)"
+                      :placeholder="fmtMod(sk.referenceValue)"
+                      :aria-label="t(sk.labelKey)"
+                      @change="saveTokenBonus('skills', sk.key, ($event.target as HTMLInputElement).value)"
+                    />
+                    <span v-else class="tokenCompactValue">{{ fmtMod(sk.value) }}</span>
                   </div>
                 </div>
               </div>
             </div>
 
             <div v-if="!savingThrows.length && !skillRows.length" class="emptyHint">—</div>
+            <p v-if="saveError" class="saveHint error">{{ saveError }}</p>
           </template>
 
           <template v-else-if="activeTokenTab === 'spells'">
@@ -1332,6 +1464,8 @@ function openCharacterSheet() {
 .dataHidden .tokenAbilityMod,
 .dataHidden .tokenStatusValue,
 .dataHidden .tokenCompactValue,
+.dataHidden .tokenCompactInput,
+.dataHidden .tokenProfDot,
 .dataHidden .spellStatVal,
 .dataHidden .slotBadge,
 .dataHidden .spellName,
@@ -1479,14 +1613,55 @@ function openCharacterSheet() {
 
 .tokenCompactLabel {
   display: block;
-  max-width: calc(50% - 6px);
+  max-width: calc(50% - 18px);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  margin-left: 18px;
   font-size: 11px;
   color: var(--c-text-muted);
   text-align: left;
+}
+
+.tokenProfDot {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 2px solid var(--c-border);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tokenProfDot.static {
+  cursor: default;
+}
+
+.tokenProfDot:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.tokenProfDot.proficient,
+.tokenProfDot.expert {
+  border: 3px solid var(--c-primary);
+}
+
+.tokenProfDot.expert::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--c-primary);
+  transform: translate(-50%, -50%);
 }
 
 .tokenCompactValue {
@@ -1500,6 +1675,35 @@ function openCharacterSheet() {
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.tokenCompactInput {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 34px;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--c-text);
+  padding: 1px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.tokenCompactInput:focus {
+  border-color: var(--c-accent);
+  background: color-mix(in srgb, var(--c-surface) 96%, var(--c-bg));
+}
+
+.tokenCompactInput::placeholder {
+  color: var(--c-text-muted);
+  opacity: 0.72;
 }
 
 .abilityGrid {

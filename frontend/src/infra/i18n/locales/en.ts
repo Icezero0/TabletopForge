@@ -2,6 +2,7 @@ export default {
   common: {
     cancel: "Cancel",
     confirm: "Confirm",
+    comingSoon: "Coming soon",
     edit: "Edit",
     skip: "Skip",
     save: "Save",

@@ -85,8 +85,13 @@ export function useTabletopViewport(
   }
 
   function shouldStartPan(event: PointerEvent) {
-    if (toolMode.value !== "hand") return false;
+    const isPrimaryHandPan = toolMode.value === "hand" && event.button === 0;
+    const isMiddleViewportPan = (toolMode.value === "select" || toolMode.value === "hand") && event.button === 1;
+    if (!isPrimaryHandPan && !isMiddleViewportPan) return false;
     const target = event.target as Element;
+    if (isMiddleViewportPan) {
+      return !target.closest(".textBoxEditor, .drawingLayer.drawMode");
+    }
     if (
       target.closest(
         ".mapItem, .selectionOverlay, .drawingSelectionOverlay, .textBoxEditor, .drawingLayer.drawMode",
@@ -98,15 +103,21 @@ export function useTabletopViewport(
   }
 
   function onPointerDown(event: PointerEvent) {
-    if (toolMode.value !== "hand") return;
-    if (event.button !== 0) return;
     if (!shouldStartPan(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
     panPointerId = event.pointerId;
     panStartX = event.clientX;
     panStartY = event.clientY;
     panOriginX = viewportX.value;
     panOriginY = viewportY.value;
     (event.currentTarget as HTMLElement)?.setPointerCapture?.(event.pointerId);
+  }
+
+  function onAuxClick(event: MouseEvent) {
+    if ((toolMode.value === "select" || toolMode.value === "hand") && event.button === 1) {
+      event.preventDefault();
+    }
   }
 
   function onPointerMove(event: PointerEvent) {
@@ -129,12 +140,14 @@ export function useTabletopViewport(
     el.addEventListener("pointermove", onPointerMove);
     el.addEventListener("pointerup", onPointerUp);
     el.addEventListener("pointercancel", onPointerUp);
+    el.addEventListener("auxclick", onAuxClick);
     return () => {
       el.removeEventListener("wheel", onWheel);
       el.removeEventListener("pointerdown", onPointerDown);
       el.removeEventListener("pointermove", onPointerMove);
       el.removeEventListener("pointerup", onPointerUp);
       el.removeEventListener("pointercancel", onPointerUp);
+      el.removeEventListener("auxclick", onAuxClick);
     };
   }
 

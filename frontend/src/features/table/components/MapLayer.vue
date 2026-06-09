@@ -33,6 +33,7 @@ function isLockedInHandMode(map: RoomMap) {
 
 function onMapPointerDown(event: PointerEvent) {
   if (!canPickMap.value) return;
+  if (event.button === 1) return;
   event.stopPropagation();
 }
 
