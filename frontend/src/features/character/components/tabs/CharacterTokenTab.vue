@@ -141,6 +141,7 @@ function buildPanelFromCharacter(): TokenPanelInitial {
     ac: parseNum(derived["ac"]?.value),
     hp_current: hpMax,
     hp_max: hpMax,
+    initiative: parseNum(derived["initiative"]?.value),
     speed: parseNum(derived["speed"]?.value),
     pp: parseNum(derived["passive_perception"]?.value),
     proficiency_bonus: profBonus,

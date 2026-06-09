@@ -7,6 +7,7 @@ export type TokenPanelInitial = {
   hp_max?: number | null;
   hide_data?: boolean;
   hide_hp?: boolean;
+  initiative?: number | null;
   speed?: number | null;
   pp?: number | null;
   proficiency_bonus?: number | null;

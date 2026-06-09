@@ -406,6 +406,7 @@ function syncFromCharacter() {
     ac: parseNum(derived.ac?.value),
     hp_current: hpMax,
     hp_max: hpMax,
+    initiative: parseNum(derived.initiative?.value),
     speed: parseNum(derived.speed?.value),
     pp: parseNum(derived.passive_perception?.value),
     proficiency_bonus: profBonus,
@@ -547,6 +548,26 @@ const activeTab = ref<PanelTab>("overview");
                   :value="draft.hp_max ?? ''"
                   :placeholder="t('character.token.hpMaxPlaceholder')"
                   @change="setField('hp_max', ($event.target as HTMLInputElement).value)"
+                />
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">{{ t("character.token.initiative") }}</span>
+                <input
+                  class="stat-input no-spin"
+                  type="number"
+                  :value="draft.initiative ?? ''"
+                  :placeholder="'—'"
+                  @change="setField('initiative', ($event.target as HTMLInputElement).value)"
+                />
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">{{ t("character.token.proficiencyBonus") }}</span>
+                <input
+                  class="stat-input no-spin"
+                  type="number"
+                  :value="draft.proficiency_bonus ?? ''"
+                  :placeholder="'—'"
+                  @change="setField('proficiency_bonus', ($event.target as HTMLInputElement).value)"
                 />
               </div>
               <div class="stat-item">

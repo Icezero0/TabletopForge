@@ -150,6 +150,7 @@ export function defaultTokenPanelInitial(isPrimary: boolean) {
     ac: null as number | null,
     hp_current: null as number | null,
     hp_max: null as number | null,
+    initiative: null as number | null,
     speed: null as number | null,
     pp: null as number | null,
     proficiency_bonus: 2 as number | null,

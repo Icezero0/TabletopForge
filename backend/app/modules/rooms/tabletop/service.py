@@ -171,8 +171,8 @@ class RoomTabletopService:
         max_hp = panel.get("hp_max")
         ac = panel.get("ac")
         pp = panel.get("pp")
-        current_hp_int = TabletopService._panel_int(current_hp)
-        max_hp_int = TabletopService._panel_int(max_hp)
+        current_hp_int = RoomTabletopService._panel_int(current_hp)
+        max_hp_int = RoomTabletopService._panel_int(max_hp)
         damage_taken = (
             max(0, max_hp_int - current_hp_int)
             if current_hp_int is not None and max_hp_int is not None

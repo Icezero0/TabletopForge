@@ -297,7 +297,7 @@ export default {
         ac: "AC",
         max_hp: "Max HP",
         speed: "Movement Speed",
-        initiative: "Initiative",
+        initiative: "Initiative Bonus",
         proficiency_bonus: "Proficiency Bonus",
         passive_perception: "Passive Perception",
       },
@@ -407,6 +407,8 @@ export default {
       hpCurrentPlaceholder: "current",
       hpMaxPlaceholder: "max",
       hpMax: "Max HP",
+      initiative: "Initiative Bonus",
+      proficiencyBonus: "Proficiency",
       speed: "Speed",
       pp: "Passive Perception",
       weapons: "Weapons",
@@ -703,7 +705,7 @@ export default {
       members: "Members",
     },
     chat: {
-      title: "Chat",
+      title: "Session",
     },
     map: {
       scale: "{ft} ft per cell",
@@ -862,6 +864,10 @@ export default {
     loadFailed: "Failed to load the room.",
     chatEmpty: "No messages in this room yet.",
     chatSendFailed: "Failed to send message. Please try again later.",
+    workspace: {
+      chatTab: "Chat",
+      adventureLogTab: "Adventure Log",
+    },
     membersEmpty: "No matching members.",
     membersLoadFailed: "Failed to load room members.",
     playerColor: {

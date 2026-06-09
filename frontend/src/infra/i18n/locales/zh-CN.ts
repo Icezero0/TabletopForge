@@ -297,7 +297,7 @@ export default {
         ac: "AC",
         max_hp: "HP 上限",
         speed: "移动速度",
-        initiative: "先攻",
+        initiative: "先攻加值",
         proficiency_bonus: "熟练加值",
         passive_perception: "被动察觉",
       },
@@ -407,6 +407,8 @@ export default {
       hpCurrentPlaceholder: "当前",
       hpMaxPlaceholder: "最大",
       hpMax: "最大 HP",
+      initiative: "先攻加值",
+      proficiencyBonus: "熟练加值",
       speed: "速度",
       pp: "被动感知",
       weapons: "武器",
@@ -703,7 +705,7 @@ export default {
       members: "成员",
     },
     chat: {
-      title: "聊天",
+      title: "会话",
     },
     map: {
       scale: "每格 {ft} ft",
@@ -862,6 +864,10 @@ export default {
     loadFailed: "加载房间失败。",
     chatEmpty: "房间里还没有消息。",
     chatSendFailed: "消息发送失败，请稍后再试。",
+    workspace: {
+      chatTab: "聊天",
+      adventureLogTab: "冒险日志",
+    },
     membersEmpty: "没有符合条件的成员。",
     membersLoadFailed: "加载房间成员失败。",
     playerColor: {

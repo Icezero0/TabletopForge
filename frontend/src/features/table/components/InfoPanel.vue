@@ -41,6 +41,8 @@ const saveSuccess = ref(false);
 const editCurrentHp = ref("");
 const editMaxHp = ref("");
 const editAc = ref("");
+const editInitiative = ref("");
+const editProfBonus = ref("");
 const editSpeed = ref("");
 const editPp = ref("");
 const savingResourceIndex = ref<number | null>(null);
@@ -114,6 +116,10 @@ const tokenCumulativeDamage = computed(() => {
     0
   );
 });
+
+const tokenInitiativeValue = computed(() =>
+  panelNumber(tokenPanel.value?.initiative) ?? abilityMod(abilityScoreValue("dexterity"))
+);
 
 const isDamageOnlyView = computed(() => {
   const s = tokenStateSummary.value;
@@ -272,7 +278,7 @@ const DERIVED_STAT_CONFIG = [
   { key: "ac",                 label: "AC"      },
   { key: "max_hp",             label: "HP 上限"  },
   { key: "speed",              label: "速度"     },
-  { key: "initiative",         label: "先攻"     },
+  { key: "initiative",         label: "先攻加值" },
   { key: "proficiency_bonus",  label: "熟练加值" },
   { key: "passive_perception", label: "被动察觉" },
 ] as const;
@@ -414,6 +420,8 @@ function syncEditFieldsFromSummary() {
   editCurrentHp.value = panel?.hp_current != null ? String(panel.hp_current) : (s?.current_hp != null ? String(s.current_hp) : "");
   editMaxHp.value     = panel?.hp_max     != null ? String(panel.hp_max)     : (s?.max_hp     != null ? String(s.max_hp)     : "");
   editAc.value        = panel?.ac         != null ? String(panel.ac)         : (s?.ac         != null ? String(s.ac)         : "");
+  editInitiative.value = panel?.initiative != null ? String(panel.initiative) : String(tokenInitiativeValue.value);
+  editProfBonus.value = panel?.proficiency_bonus != null ? String(panel.proficiency_bonus) : String(tokenProfBonusValue());
   editSpeed.value     = panel?.speed      != null ? String(panel.speed)      : "";
   editPp.value        = panel?.pp         != null ? String(panel.pp)         : "";
 }
@@ -461,7 +469,7 @@ watch(tokenPanel, () => {
   if (!saving.value) syncEditFieldsFromSummary();
 });
 
-watch([editCurrentHp, editMaxHp, editAc, editSpeed, editPp], () => {
+watch([editCurrentHp, editMaxHp, editAc, editInitiative, editProfBonus, editSpeed, editPp], () => {
   saveSuccess.value = false;
   saveError.value = "";
 });
@@ -488,6 +496,8 @@ async function saveState() {
         hp_current: parseOptionalInt(editCurrentHp.value),
         hp_max:     parseOptionalInt(editMaxHp.value),
         ac:         parseOptionalInt(editAc.value),
+        initiative: parseOptionalInt(editInitiative.value),
+        proficiency_bonus: parseOptionalInt(editProfBonus.value),
         speed:      parseOptionalInt(editSpeed.value),
         pp:         parseOptionalInt(editPp.value),
       },
@@ -698,6 +708,14 @@ function openCharacterSheet() {
                   <input v-model="editAc" class="tokenStatInput no-spin" type="number" placeholder="—" @change="saveState" />
                 </label>
                 <label class="tokenStatusCard">
+                  <span class="tokenStatusLabel">{{ t("character.token.initiative") }}</span>
+                  <input v-model="editInitiative" class="tokenStatInput no-spin" type="number" placeholder="—" @change="saveState" />
+                </label>
+                <label class="tokenStatusCard">
+                  <span class="tokenStatusLabel">{{ t("character.token.proficiencyBonus") }}</span>
+                  <input v-model="editProfBonus" class="tokenStatInput no-spin" type="number" placeholder="—" @change="saveState" />
+                </label>
+                <label class="tokenStatusCard">
                   <span class="tokenStatusLabel">{{ t("character.token.speed") }}</span>
                   <input v-model="editSpeed" class="tokenStatInput no-spin" type="number" placeholder="—" @change="saveState" />
                 </label>
@@ -717,6 +735,14 @@ function openCharacterSheet() {
                   <div class="tokenStatusCard">
                     <span class="tokenStatusLabel">{{ t("table.inspector.ac") }}</span>
                     <span class="tokenStatusValue">{{ tokenPanel?.ac ?? "—" }}</span>
+                  </div>
+                  <div class="tokenStatusCard">
+                    <span class="tokenStatusLabel">{{ t("character.token.initiative") }}</span>
+                    <span class="tokenStatusValue">{{ tokenInitiativeValue ?? "—" }}</span>
+                  </div>
+                  <div class="tokenStatusCard">
+                    <span class="tokenStatusLabel">{{ t("character.token.proficiencyBonus") }}</span>
+                    <span class="tokenStatusValue">{{ tokenProfBonusValue() }}</span>
                   </div>
                   <div class="tokenStatusCard">
                     <span class="tokenStatusLabel">{{ t("character.token.speed") }}</span>
@@ -745,6 +771,14 @@ function openCharacterSheet() {
                 <div class="tokenStatusCard">
                   <span class="tokenStatusLabel">{{ t("table.inspector.ac") }}</span>
                   <span class="tokenStatusValue">{{ tokenStateSummary.ac ?? "—" }}</span>
+                </div>
+                <div class="tokenStatusCard">
+                  <span class="tokenStatusLabel">{{ t("character.token.initiative") }}</span>
+                  <span class="tokenStatusValue">{{ tokenInitiativeValue ?? "—" }}</span>
+                </div>
+                <div class="tokenStatusCard">
+                  <span class="tokenStatusLabel">{{ t("character.token.proficiencyBonus") }}</span>
+                  <span class="tokenStatusValue">{{ tokenProfBonusValue() }}</span>
                 </div>
                 <div class="tokenStatusCard">
                   <span class="tokenStatusLabel">{{ t("character.token.speed") }}</span>
@@ -1218,7 +1252,7 @@ function openCharacterSheet() {
 
 .tokenStatusGrid {
   display: grid;
-  grid-template-columns: minmax(104px, 1.35fr) repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   min-width: 0;
 }
