@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
-import { EyeIcon, EyeSlashIcon, PencilSquareIcon, PlusIcon, TrashIcon } from "@heroicons/vue/24/outline";
+import { BookmarkIcon, EyeIcon, EyeSlashIcon, PencilSquareIcon, PlusIcon, TrashIcon } from "@heroicons/vue/24/outline";
 import { useDiceStore, type DiceDraft } from "@/stores/dice.store";
 import { useAuthStore } from "@/stores/auth.store";
 import { useEntitiesStore } from "@/stores/entities.store";
@@ -9,6 +9,7 @@ import type { DiceRoll, DiceRollDetail, DiceVisibility } from "@/infra/api/dice.
 import type { GameRole } from "@/features/room/types";
 import { canManageToken } from "@/features/table/utils/tokenDisplay";
 import DiceActorAvatar from "@/features/room/components/workspace/DiceActorAvatar.vue";
+import BaseInput from "@/ui/base/BaseInput.vue";
 
 const props = defineProps<{
   roomId: number;
@@ -34,6 +35,13 @@ type ActorOption = {
   avatarUrl?: string | null;
   assetId?: number | null;
 };
+type DicePreset = {
+  id: string;
+  name: string;
+  formula: string;
+  label: string;
+  visibility: DiceVisibility;
+};
 
 const diceStore = useDiceStore();
 const auth = useAuthStore();
@@ -50,6 +58,10 @@ const actorType = ref<"user" | "token">("user");
 const actorTokenId = ref<number | null>(null);
 const actorDisplayName = ref("");
 const panelActorPickerOpen = ref(false);
+const presetMenuOpen = ref(false);
+const presetNameDialogOpen = ref(false);
+const presetNameDraft = ref("");
+const presets = ref<DicePreset[]>([]);
 const timelineRef = ref<HTMLElement | null>(null);
 const preservingHistoryScroll = ref(false);
 const hasActivatedScroll = ref(false);
@@ -63,6 +75,7 @@ const roomState = computed(() => diceStore.getRoomState(props.roomId));
 const rolls = computed(() => roomState.value.items);
 const roomTokens = computed(() => tabletopStore.getTokens(props.roomId));
 const formulaHistoryStorageKey = computed(() => `tabletopforge:dice-formula-history:${props.roomId}`);
+const presetStorageKey = computed(() => `tabletopforge:dice-presets:${auth.me?.id ?? "guest"}`);
 const currentUserActor = computed<ActorOption>(() => ({
   key: auth.me?.id ? `user:${auth.me.id}` : "user:me",
   type: "user",
@@ -135,12 +148,17 @@ watch(rolls, () => {
 
 onMounted(() => {
   loadFormulaHistory();
+  loadPresets();
   void nextTick(scrollToBottom);
 });
 
 watch(() => props.roomId, () => {
   loadFormulaHistory();
   resetFormulaHistoryCursor();
+});
+
+watch(presetStorageKey, () => {
+  loadPresets();
 });
 
 watch(
@@ -197,6 +215,36 @@ function saveFormulaHistory() {
     localStorage.setItem(formulaHistoryStorageKey.value, JSON.stringify(formulaHistory.value));
   } catch {
     // Local history is a convenience feature; storage failures should not block rolling.
+  }
+}
+
+function isPreset(value: unknown): value is DicePreset {
+  if (!value || typeof value !== "object") return false;
+  const preset = value as Partial<DicePreset>;
+  return (
+    typeof preset.id === "string" &&
+    typeof preset.name === "string" &&
+    typeof preset.formula === "string" &&
+    typeof preset.label === "string" &&
+    (preset.visibility === "public" || preset.visibility === "blind")
+  );
+}
+
+function loadPresets() {
+  try {
+    const raw = localStorage.getItem(presetStorageKey.value);
+    const parsed = raw ? JSON.parse(raw) : [];
+    presets.value = Array.isArray(parsed) ? parsed.filter(isPreset) : [];
+  } catch {
+    presets.value = [];
+  }
+}
+
+function savePresets() {
+  try {
+    localStorage.setItem(presetStorageKey.value, JSON.stringify(presets.value));
+  } catch {
+    // Presets are local convenience data; storage failures should not block rolling.
   }
 }
 
@@ -466,6 +514,50 @@ function selectActor(option: ActorOption) {
 
 function togglePanelActorPicker() {
   panelActorPickerOpen.value = !panelActorPickerOpen.value;
+  if (panelActorPickerOpen.value) presetMenuOpen.value = false;
+}
+
+function togglePresetMenu() {
+  presetMenuOpen.value = !presetMenuOpen.value;
+  if (presetMenuOpen.value) panelActorPickerOpen.value = false;
+}
+
+function openSavePresetDialog() {
+  const formula = manualFormula.value.trim();
+  if (!formula) return;
+  presetNameDraft.value = label.value.trim() || formula;
+  presetMenuOpen.value = false;
+  presetNameDialogOpen.value = true;
+}
+
+function confirmSavePreset() {
+  const formula = manualFormula.value.trim();
+  const name = presetNameDraft.value.trim();
+  if (!formula || !name) return;
+  const nextPreset: DicePreset = {
+    id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    name,
+    formula,
+    label: label.value.trim(),
+    visibility: visibility.value,
+  };
+  presets.value = [nextPreset, ...presets.value.filter((preset) => preset.name !== name)].slice(0, 50);
+  savePresets();
+  presetNameDialogOpen.value = false;
+}
+
+function loadPreset(preset: DicePreset) {
+  manualFormula.value = preset.formula;
+  label.value = preset.label;
+  visibility.value = preset.visibility;
+  resetFormulaHistoryCursor();
+  parseFormulaDraft(preset.formula);
+  presetMenuOpen.value = false;
+}
+
+function deletePreset(presetId: string) {
+  presets.value = presets.value.filter((preset) => preset.id !== presetId);
+  savePresets();
 }
 
 async function submitRoll() {
@@ -549,6 +641,52 @@ function toggleVisibility() {
 
     <form class="diceEditor" @submit.prevent="submitRoll">
       <div class="panelActorRow">
+        <div class="presetSelect">
+          <button
+            type="button"
+            class="presetIconBtn"
+            :class="{ open: presetMenuOpen }"
+            title="掷骰预设"
+            aria-label="掷骰预设"
+            aria-haspopup="menu"
+            :aria-expanded="presetMenuOpen"
+            @click="togglePresetMenu"
+          >
+            <BookmarkIcon class="presetIcon" />
+          </button>
+          <div v-if="presetMenuOpen" class="presetMenu" role="menu" @click.stop>
+            <button type="button" class="presetMenuItem" role="menuitem" :disabled="!manualFormula.trim()" @click="openSavePresetDialog">
+              保存预设
+            </button>
+            <div class="presetMenuDivider"></div>
+            <div class="presetMenuTitle">加载预设</div>
+            <div
+              v-for="preset in presets"
+              :key="preset.id"
+              class="presetLoadRow"
+            >
+              <button
+                type="button"
+                class="presetMenuItem presetLoadItem"
+                role="menuitem"
+                @click="loadPreset(preset)"
+              >
+                <span class="presetName">{{ preset.name }}</span>
+                <span class="presetFormula">{{ preset.formula }}</span>
+              </button>
+              <button
+                type="button"
+                class="presetDeleteBtn"
+                title="删除预设"
+                aria-label="删除预设"
+                @click.stop="deletePreset(preset.id)"
+              >
+                <TrashIcon class="presetDeleteIcon" />
+              </button>
+            </div>
+            <div v-if="presets.length === 0" class="presetEmpty">暂无预设</div>
+          </div>
+        </div>
         <div class="panelActorSelect">
           <button
             type="button"
@@ -618,6 +756,32 @@ function toggleVisibility() {
     </form>
 
     <Teleport to="body">
+      <div v-if="presetNameDialogOpen" class="modalBackdrop">
+        <form class="formulaModal presetNameModal" @submit.prevent="confirmSavePreset">
+          <div class="modalHeader">
+            <div>
+              <h3 class="modalTitle">保存预设</h3>
+            </div>
+            <button type="button" class="modalClose" @click="presetNameDialogOpen = false">×</button>
+          </div>
+
+          <label class="presetNameField">
+            <span>预设名称</span>
+            <BaseInput v-model="presetNameDraft" placeholder="输入预设名称" />
+          </label>
+
+          <div class="presetFormulaPreview">
+            <span>公式</span>
+            <code>{{ manualFormula.trim() || "—" }}</code>
+          </div>
+
+          <div class="modalFooter">
+            <button type="button" class="ghostBtn" @click="presetNameDialogOpen = false">取消</button>
+            <button type="submit" class="rollBtn" :disabled="!presetNameDraft.trim() || !manualFormula.trim()">保存</button>
+          </div>
+        </form>
+      </div>
+
       <div v-if="formulaEditorOpen" class="modalBackdrop">
         <div class="formulaModal">
           <div class="modalHeader">
@@ -849,6 +1013,151 @@ function toggleVisibility() {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.presetSelect {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.presetIconBtn {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--c-text-muted);
+  cursor: pointer;
+}
+
+.presetIconBtn:hover,
+.presetIconBtn.open {
+  color: var(--c-text);
+  border-color: color-mix(in srgb, var(--c-primary) 32%, var(--c-border));
+  background: color-mix(in srgb, var(--c-surface) 94%, var(--c-bg));
+}
+
+.presetIcon {
+  width: 16px;
+  height: 16px;
+}
+
+.presetMenu {
+  position: absolute;
+  z-index: 370;
+  left: 0;
+  bottom: calc(100% + 6px);
+  width: 198px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: grid;
+  gap: 3px;
+  padding: 5px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--c-surface) 96%, var(--c-bg));
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
+}
+
+.presetMenuItem {
+  min-width: 0;
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--c-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.presetMenuItem:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--c-primary) 10%, var(--c-surface));
+  border-color: color-mix(in srgb, var(--c-primary) 24%, transparent);
+}
+
+.presetMenuItem:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.presetLoadRow {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  align-items: stretch;
+  gap: 3px;
+}
+
+.presetLoadItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 2px;
+}
+
+.presetDeleteBtn {
+  width: 28px;
+  min-height: 30px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--c-text-muted);
+  cursor: pointer;
+}
+
+.presetDeleteBtn:hover {
+  color: var(--c-danger);
+  background: color-mix(in srgb, var(--c-danger) 10%, var(--c-surface));
+  border-color: color-mix(in srgb, var(--c-danger) 24%, transparent);
+}
+
+.presetDeleteIcon {
+  width: 15px;
+  height: 15px;
+}
+
+.presetName,
+.presetFormula {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presetName {
+  font-weight: 700;
+}
+
+.presetFormula {
+  color: var(--c-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.presetMenuTitle,
+.presetEmpty {
+  padding: 4px 8px 3px;
+  color: var(--c-text-muted);
+  font-size: 11px;
+}
+
+.presetMenuDivider {
+  height: 1px;
+  margin: 3px 4px;
+  background: var(--c-border);
 }
 
 .panelActorSelect {
@@ -1246,6 +1555,43 @@ function toggleVisibility() {
   border-radius: 8px;
   background: var(--c-surface);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.34);
+}
+
+.presetNameModal {
+  width: min(360px, 100%);
+}
+
+.presetNameField {
+  display: grid;
+  gap: 6px;
+  color: var(--c-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.presetNameField :deep(.inp) {
+  width: 100%;
+}
+
+.presetFormulaPreview {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+  color: var(--c-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.presetFormulaPreview code {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--c-surface) 90%, var(--c-bg));
+  color: var(--c-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .modalHeader {

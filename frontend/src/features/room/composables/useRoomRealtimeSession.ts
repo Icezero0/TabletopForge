@@ -304,6 +304,11 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
     bindEvents();
     stopStatusSubscription = wsClient.onStatusChange((status) => {
       realtimeStatus.value = status;
+      if (status !== "ready") {
+        enteredRoomId = null;
+        enteringRoomId = null;
+        isRealtimeActive.value = false;
+      }
       if (
         status === "ready" &&
         enteredRoomId !== options.roomId.value &&

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { RoomDrawing, RoomMap, RoomToken } from "@/infra/api/rooms.api";
 import type { GameRole } from "@/features/room/types";
@@ -13,6 +13,14 @@ import {
   type AbilityKey,
 } from "@/features/character/constants";
 import type { DiceDraft } from "@/stores/dice.store";
+
+type DicePreset = {
+  id: string;
+  name: string;
+  formula: string;
+  label: string;
+  visibility: DiceDraft["visibility"];
+};
 
 const props = defineProps<{
   open: boolean;
@@ -94,7 +102,54 @@ const layerDisabled = computed(() => props.maps.length <= 1);
 const tokenLayerDisabled = computed(() => props.tokens.length <= 1);
 const drawingLayerDisabled = computed(() => props.drawings.length <= 1);
 const diceSubmenuOpen = ref(false);
-const diceBranchOpen = ref<"savingThrows" | "skills" | null>(null);
+const diceBranchOpen = ref<"savingThrows" | "skills" | "presets" | null>(null);
+const dicePresets = ref<DicePreset[]>([]);
+const viewportHeight = ref(typeof window !== "undefined" ? window.innerHeight : 0);
+
+const verticalDirection = computed<"upward" | "downward">(() => {
+  const above = props.clientY;
+  const below = viewportHeight.value - props.clientY;
+  return below < above ? "upward" : "downward";
+});
+
+const menuStyle = computed(() => {
+  if (verticalDirection.value === "upward") {
+    return {
+      left: `${props.clientX}px`,
+      bottom: `${Math.max(0, viewportHeight.value - props.clientY)}px`,
+    };
+  }
+  return {
+    left: `${props.clientX}px`,
+    top: `${props.clientY}px`,
+  };
+});
+
+function updateViewportHeight() {
+  viewportHeight.value = window.innerHeight;
+}
+
+function isDicePreset(value: unknown): value is DicePreset {
+  if (!value || typeof value !== "object") return false;
+  const preset = value as Partial<DicePreset>;
+  return (
+    typeof preset.id === "string" &&
+    typeof preset.name === "string" &&
+    typeof preset.formula === "string" &&
+    typeof preset.label === "string" &&
+    (preset.visibility === "public" || preset.visibility === "blind")
+  );
+}
+
+function loadDicePresets() {
+  try {
+    const raw = localStorage.getItem(`tabletopforge:dice-presets:${props.currentUserId ?? "guest"}`);
+    const parsed = raw ? JSON.parse(raw) : [];
+    dicePresets.value = Array.isArray(parsed) ? parsed.filter(isDicePreset) : [];
+  } catch {
+    dicePresets.value = [];
+  }
+}
 
 function panelNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -119,6 +174,10 @@ function tokenAbilityScore(token: RoomToken, key: AbilityKey) {
   return panelNumber(scores?.[key]) ?? 10;
 }
 
+function tokenProfBonus(token: RoomToken): number {
+  return panelNumber(tokenPanel(token)?.proficiency_bonus) ?? 2;
+}
+
 function tokenSpellAttackBonus(token: RoomToken): number | null {
   const panel = tokenPanel(token);
   const raw = panel?.spell_attack_bonus;
@@ -129,13 +188,25 @@ function tokenSpellAttackBonus(token: RoomToken): number | null {
 }
 
 function tokenSavingThrowBonus(token: RoomToken, key: AbilityKey): number {
-  const saves = tokenPanel(token)?.saving_throws as Record<string, unknown> | undefined;
-  return panelNumber(saves?.[key]) ?? abilityMod(tokenAbilityScore(token, key));
+  const panel = tokenPanel(token);
+  const saves = panel?.saving_throws as Record<string, unknown> | undefined;
+  const override = panelNumber(saves?.[key]);
+  if (override != null) return override;
+
+  const profs = panel?.saving_throw_profs as Record<string, boolean> | undefined;
+  return abilityMod(tokenAbilityScore(token, key)) + (profs?.[key] ? tokenProfBonus(token) : 0);
 }
 
 function tokenSkillBonus(token: RoomToken, key: string, ability: AbilityKey): number {
-  const skills = tokenPanel(token)?.skills as Record<string, unknown> | undefined;
-  return panelNumber(skills?.[key]) ?? abilityMod(tokenAbilityScore(token, ability));
+  const panel = tokenPanel(token);
+  const skills = panel?.skills as Record<string, unknown> | undefined;
+  const override = panelNumber(skills?.[key]);
+  if (override != null) return override;
+
+  const profs = panel?.skill_profs as Record<string, string> | undefined;
+  const prof = profs?.[key] ?? "none";
+  const multiplier = prof === "proficient" ? 1 : (prof === "expert" || prof === "expertise") ? 2 : 0;
+  return abilityMod(tokenAbilityScore(token, ability)) + tokenProfBonus(token) * multiplier;
 }
 
 function userDiceDraft(): DiceDraft {
@@ -149,14 +220,19 @@ function userDiceDraft(): DiceDraft {
   };
 }
 
-function tokenDiceDraft(token: RoomToken, label: string, formula: string): DiceDraft {
+function tokenDiceDraft(
+  token: RoomToken,
+  label: string,
+  formula: string,
+  visibility: DiceDraft["visibility"] = "public",
+): DiceDraft {
   return {
     actorType: "token",
     actorTokenId: token.id,
     actorDisplayName: token.name,
     label,
     formula,
-    visibility: "public",
+    visibility,
   };
 }
 
@@ -213,7 +289,17 @@ const tokenSkillScenes = computed(() => {
   });
 });
 
-function toggleDiceBranch(branch: "savingThrows" | "skills") {
+const tokenPresetDiceScenes = computed(() => {
+  const token = selectedToken.value;
+  if (!token) return [];
+  return dicePresets.value.map((preset) => ({
+    label: preset.name,
+    formula: preset.formula,
+    draft: tokenDiceDraft(token, preset.label, preset.formula, preset.visibility),
+  }));
+});
+
+function toggleDiceBranch(branch: "savingThrows" | "skills" | "presets") {
   diceBranchOpen.value = diceBranchOpen.value === branch ? null : branch;
 }
 
@@ -227,6 +313,7 @@ function onAction(fn: () => void) {
 watch(
   () => props.open,
   (open) => {
+    if (open) loadDicePresets();
     if (!open) diceSubmenuOpen.value = false;
     if (!open) diceBranchOpen.value = null;
   },
@@ -239,6 +326,16 @@ watch(
     diceBranchOpen.value = null;
   },
 );
+
+onMounted(() => {
+  updateViewportHeight();
+  loadDicePresets();
+  window.addEventListener("resize", updateViewportHeight);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener("resize", updateViewportHeight);
+});
 </script>
 
 <template>
@@ -250,7 +347,8 @@ watch(
   >
     <menu
       class="contextMenu"
-      :style="{ left: `${clientX}px`, top: `${clientY}px` }"
+      :class="verticalDirection"
+      :style="menuStyle"
       @click.stop
     >
       <template v-if="selection?.type === 'map' && selectedMap && isGm">
@@ -308,6 +406,36 @@ watch(
             <span class="submenuArrow">›</span>
           </button>
           <div v-if="diceSubmenuOpen" class="submenu" @click.stop>
+            <div class="submenuHost">
+              <button
+                type="button"
+                class="menuItem submenuTrigger"
+                :class="{ active: diceBranchOpen === 'presets' }"
+                @click.stop="toggleDiceBranch('presets')"
+              >
+                <span>使用预设</span>
+                <span class="submenuArrow">›</span>
+              </button>
+              <div
+                v-if="diceBranchOpen === 'presets'"
+                class="submenu nestedSubmenu compactSubmenu presetSubmenu"
+                @click.stop
+              >
+                <button
+                  v-for="scene in tokenPresetDiceScenes"
+                  :key="scene.label"
+                  type="button"
+                  class="menuItem presetMenuItem"
+                  @click="onAction(() => emit('openDiceRoll', scene.draft))"
+                >
+                  <span class="presetName">{{ scene.label }}</span>
+                  <span class="presetFormula">{{ scene.formula }}</span>
+                </button>
+                <button v-if="tokenPresetDiceScenes.length === 0" type="button" class="menuItem" disabled>
+                  暂无预设
+                </button>
+              </div>
+            </div>
             <button
               v-for="scene in tokenPrimaryDiceScenes"
               :key="scene.label"
@@ -581,8 +709,18 @@ watch(
   box-shadow: 0 8px 28px color-mix(in srgb, var(--c-bg) 45%, transparent);
 }
 
+.contextMenu.upward .submenu {
+  top: auto;
+  bottom: 0;
+}
+
 .nestedSubmenu {
   top: -6px;
+}
+
+.contextMenu.upward .nestedSubmenu {
+  top: auto;
+  bottom: -6px;
 }
 
 .compactSubmenu {
@@ -592,6 +730,36 @@ watch(
 
 .compactSubmenu .menuItem {
   padding-block: 7px;
+}
+
+.presetSubmenu {
+  min-width: 180px;
+}
+
+.presetMenuItem {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 2px;
+}
+
+.presetName,
+.presetFormula {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presetName {
+  font-weight: 700;
+}
+
+.presetFormula {
+  color: var(--c-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
 }
 
 .menuDivider {
