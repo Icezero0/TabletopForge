@@ -122,7 +122,7 @@ const emit = defineEmits<{
 
 const toolModeRef = computed(() => props.toolMode);
 const roomIdRef = toRef(props, "roomId");
-const { viewportTransform, viewportScale, setViewportEl, resetViewport } = useTabletopViewport(toolModeRef, roomIdRef);
+const { viewportTransform, viewportScale, setViewportEl, resetViewport, centerScenePoint } = useTabletopViewport(toolModeRef, roomIdRef);
 
 
 const patternUid = useId().replace(/:/g, "");
@@ -247,7 +247,7 @@ function scenePointFromViewportCenter() {
   return scenePointFromClient(rect.left + rect.width / 2, rect.top + rect.height / 2);
 }
 
-defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCenter, resetViewport });
+defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCenter, resetViewport, centerScenePoint });
 </script>
 
 <template>

@@ -886,6 +886,10 @@ export default {
       taken: "Color already taken",
       saveFailed: "Failed to update player color",
     },
+    combat: {
+      permissionDenied: "You do not have permission to perform this combat action.",
+      saveFailed: "Failed to save combat state.",
+    },
     requestsEmpty: "No pending join requests for this room.",
     requestsLoadFailed: "Failed to load room requests.",
     tabs: {

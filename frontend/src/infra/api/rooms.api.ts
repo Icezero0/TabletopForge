@@ -329,7 +329,24 @@ export type DrawingKind = "brush" | "line" | "rect" | "ellipse" | "text";
 export type RoomTabletopSettings = {
   grid_cell_ft: number;
   grid_cell_px: number;
+  combat_state: RoomCombatState | null;
   updated_at: string | null;
+};
+
+export type RoomCombatant = {
+  token_id: number;
+  initiative_bonus: number;
+  roll: number;
+  initiative: number;
+  turn_order: number;
+  ready_round?: number;
+};
+
+export type RoomCombatState = {
+  active: boolean;
+  round: number;
+  turn_index: number;
+  combatants: RoomCombatant[];
 };
 
 export type RoomMap = {
@@ -415,7 +432,11 @@ export async function getRoomTabletop(roomId: number) {
 
 export async function patchRoomTabletopSettings(
   roomId: number,
-  payload: { grid_cell_ft?: number; grid_cell_px?: number },
+  payload: {
+    grid_cell_ft?: number;
+    grid_cell_px?: number;
+    combat_state?: RoomCombatState | null;
+  },
 ) {
   const { data } = await http.patch<RoomTabletopSettings>(
     `/rooms/${roomId}/tabletop/settings`,

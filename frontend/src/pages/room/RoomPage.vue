@@ -8,6 +8,7 @@ import {
   patchMyPlayerColor,
   patchRoom,
   type Room,
+  type RoomCombatState,
   type RoomPatchPayload,
 } from "@/infra/api/rooms.api";
 import { patchLibraryResourceGrid, type LibraryResource } from "@/infra/api/library.api";
@@ -33,6 +34,7 @@ import {
   type ObjectSelectionPayload,
 } from "@/infra/realtime/tabletopRealtime";
 import BottomAssetBar from "@/features/table/components/BottomAssetBar.vue";
+import CombatPanel from "@/features/table/components/CombatPanel.vue";
 import LibraryMapPickerDialog from "@/features/table/components/LibraryMapPickerDialog.vue";
 import MapGridAnnotationDialog from "@/features/table/components/MapGridAnnotationDialog.vue";
 import AddRoomCharacterDialog from "@/features/room/components/AddRoomCharacterDialog.vue";
@@ -66,7 +68,7 @@ import { useTabletopStore } from "@/stores/tabletop.store";
 import { useEntitiesStore } from "@/stores/entities.store";
 import { useAuthStore } from "@/stores/auth.store";
 import { useToastsStore } from "@/stores/toasts.store";
-import { getBackendErrorMessage } from "@/infra/http/client";
+import { getBackendErrorMessage, getBackendErrorReason } from "@/infra/http/client";
 
 const { t } = useI18n();
 const route = useRoute();
@@ -86,6 +88,7 @@ const error = ref("");
 const membersLoading = ref(false);
 const membersError = ref("");
 const settingsSaving = ref(false);
+const combatSaving = ref(false);
 const currentUserRoomRole = ref<RoomRoleState>("unknown");
 const currentUserGameRole = ref<GameRole | "unknown">("unknown");
 
@@ -180,6 +183,7 @@ function handleMeasurePointerMove(x: number, y: number, event: PointerEvent) {
 const tabletopMaps = computed(() => tabletopStore.getMaps(roomId.value));
 const tabletopDrawings = computed(() => tabletopStore.getDrawings(roomId.value));
 const tabletopTokens = computed(() => tabletopStore.getTokens(roomId.value));
+const tabletopSettings = computed(() => tabletopStore.getSettings(roomId.value));
 const currentUserId = computed(() => auth.me?.id ?? null);
 const { selection, selectMap, selectDrawing, selectToken, clearSelection } = useTabletopSelection();
 const OBJECT_SELECTION_LEASE_MS = 30_000;
@@ -582,8 +586,8 @@ function tokenCanInteract(token: (typeof tabletopTokens.value)[number]) {
   return canInspectToken(token) || tokenCanManage(token);
 }
 
-function handleSelectToken(tokenId: number) {
-  if (toolMode.value !== "select" && toolMode.value !== "hand") return;
+function selectTokenForInspection(tokenId: number, options: { respectToolMode?: boolean } = {}) {
+  if (options.respectToolMode !== false && toolMode.value !== "select" && toolMode.value !== "hand") return;
   const token = tabletopTokens.value.find((t) => t.id === tokenId);
   if (!token || !tokenCanInteract(token)) return;
   const next = { type: "token", id: tokenId } as const;
@@ -600,6 +604,24 @@ function handleSelectToken(tokenId: number) {
   } else {
     clearInspection();
   }
+}
+
+function handleSelectToken(tokenId: number) {
+  selectTokenForInspection(tokenId);
+}
+
+function handleCombatSelectToken(tokenId: number) {
+  selectTokenForInspection(tokenId, { respectToolMode: false });
+}
+
+function handleCombatFocusToken(tokenId: number) {
+  const token = tabletopTokens.value.find((t) => t.id === tokenId);
+  if (!token || !tokenCanInteract(token)) return;
+  selectTokenForInspection(tokenId, { respectToolMode: false });
+  mapViewportRef.value?.centerScenePoint?.({
+    x: token.x + token.width / 2,
+    y: token.y + token.height / 2,
+  });
 }
 
 function handleTokenContextMenu(tokenId: number, event: MouseEvent) {
@@ -842,6 +864,25 @@ function handleOpenDiceRoll(draft: DiceDraft) {
   if (!roomId.value) return;
   chatPanelCollapsed.value = false;
   diceStore.setDraft(roomId.value, draft);
+}
+
+async function handleUpdateCombat(state: RoomCombatState | null) {
+  if (!roomId.value || combatSaving.value) return;
+  combatSaving.value = true;
+  try {
+    await tabletopStore.updateSettings(roomId.value, { combat_state: state });
+  } catch (error) {
+    const reason = getBackendErrorReason(error);
+    toasts.push({
+      message:
+        (reason === "room_permission_denied" ? t("room.combat.permissionDenied") : "") ||
+        getBackendErrorMessage(error) ||
+        t("room.combat.saveFailed"),
+      tone: "danger",
+    });
+  } finally {
+    combatSaving.value = false;
+  }
 }
 
 function handleClearSelection() {
@@ -1956,6 +1997,31 @@ watch(
             @toggle-visibility="handleToggleCharacterVisibility"
             @remove="handleRemoveRoomCharacter"
           />
+
+          <FloatingPanel
+            :title="t('table.assets.barTitle')"
+            inline
+            collapse-to="top-left"
+            variant="assets"
+            :storage-key="`room-${roomId}-assets`"
+          >
+            <BottomAssetBar
+              v-model:map-popover-open="mapPopoverOpen"
+              v-model:token-popover-open="tokenPopoverOpen"
+              :can-add-map="canAddMap"
+              :can-add-token="canAddToken"
+              :maps="tabletopMaps"
+              :selected-map-id="selectedMapId"
+              :characters="tokenSpawnCharacters"
+              @add-map="handleAddMapClick"
+              @select-map="selectMap"
+              @open-library-picker="libraryMapPickerOpen = true"
+              @spawn-token="(cid, cfgId) => handleSpawnCharacter(cid, cfgId)"
+              @spawn-all="(cid) => handleSpawnAllTokens(cid)"
+              @add-character="openAddCharacterDialog"
+            />
+          </FloatingPanel>
+
           </div>
 
           <FloatingPanel
@@ -1988,6 +2054,28 @@ watch(
           </FloatingPanel>
 
           <FloatingPanel
+            title="战斗"
+            anchor="bottom-center"
+            collapse-to="bottom"
+            variant="combat"
+            :storage-key="`room-${roomId}-combat`"
+          >
+            <CombatPanel
+              :room-id="roomId"
+              :tokens="tabletopTokens"
+              :members="entityRoomMembers"
+              :combat-state="tabletopSettings?.combat_state ?? null"
+              :game-role="currentUserGameRole"
+              :current-user-id="currentUserId"
+              :saving="combatSaving"
+              @update-combat="handleUpdateCombat"
+              @select-token="handleCombatSelectToken"
+              @focus-token="handleCombatFocusToken"
+              @error="(message) => toasts.push({ message, tone: 'danger' })"
+            />
+          </FloatingPanel>
+
+          <FloatingPanel
             :title="t('table.tools.toolbar')"
             anchor="top-center"
             collapse-to="top"
@@ -2015,30 +2103,6 @@ watch(
             <MeasureToolStrip
               v-if="toolMode === 'measure'"
               v-model:sub-tool="measureSubTool"
-            />
-          </FloatingPanel>
-
-          <FloatingPanel
-            :title="t('table.assets.barTitle')"
-            anchor="bottom-center"
-            collapse-to="bottom"
-            variant="assets"
-            :storage-key="`room-${roomId}-assets`"
-          >
-            <BottomAssetBar
-              v-model:map-popover-open="mapPopoverOpen"
-              v-model:token-popover-open="tokenPopoverOpen"
-              :can-add-map="canAddMap"
-              :can-add-token="canAddToken"
-              :maps="tabletopMaps"
-              :selected-map-id="selectedMapId"
-              :characters="tokenSpawnCharacters"
-              @add-map="handleAddMapClick"
-              @select-map="selectMap"
-              @open-library-picker="libraryMapPickerOpen = true"
-              @spawn-token="(cid, cfgId) => handleSpawnCharacter(cid, cfgId)"
-              @spawn-all="(cid) => handleSpawnAllTokens(cid)"
-              @add-character="openAddCharacterDialog"
             />
           </FloatingPanel>
 

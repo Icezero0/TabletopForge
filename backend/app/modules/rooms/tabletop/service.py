@@ -22,6 +22,7 @@ from app.modules.rooms.tabletop.schemas import (
     RoomDrawingCreate,
     RoomDrawingPatch,
     RoomDrawingResponse,
+    RoomCombatState,
     RoomMapPatch,
     RoomMapResponse,
     RoomTabletopSettingsPatch,
@@ -329,22 +330,119 @@ class RoomTabletopService:
         payload: RoomTabletopSettingsPatch,
     ) -> RoomTabletopSettingsResponse:
         game_role = await self._require_member_game_role(db, room_id=room_id, user=user)
-        if game_role != GameRole.GM:
+        settings = await self._get_or_create_settings(db, room_id=room_id)
+        settings_fields = {"grid_cell_ft", "grid_cell_px"}
+        changes_settings = bool(settings_fields & payload.model_fields_set)
+        changes_combat = "combat_state" in payload.model_fields_set
+
+        if game_role != GameRole.GM and changes_settings:
             raise ForbiddenError(
                 "You do not have permission to perform this action",
                 reason=ErrorReason.ROOM_PERMISSION_DENIED,
                 details={"game_role": game_role},
             )
+        if game_role != GameRole.GM and changes_combat:
+            await self._require_combat_state_update_access(
+                db,
+                room_id=room_id,
+                user=user,
+                current_state=RoomCombatState.model_validate(settings.combat_state)
+                if settings.combat_state is not None
+                else None,
+                next_state=payload.combat_state,
+            )
 
-        settings = await self._get_or_create_settings(db, room_id=room_id)
         updated = await self.repo.update_settings(
             db,
             settings=settings,
             grid_cell_ft=payload.grid_cell_ft,
             grid_cell_px=payload.grid_cell_px,
+            combat_state=(
+                payload.combat_state.model_dump(mode="json")
+                if payload.combat_state is not None
+                else None
+            ),
+            combat_state_provided="combat_state" in payload.model_fields_set,
         )
         await db.commit()
         return RoomTabletopSettingsResponse.model_validate(updated)
+
+    async def _require_combat_state_update_access(
+        self,
+        db: AsyncSession,
+        *,
+        room_id: int,
+        user: User,
+        current_state: RoomCombatState | None,
+        next_state: RoomCombatState | None,
+    ) -> None:
+        if not self._is_player_end_turn_update(current_state, next_state):
+            raise ForbiddenError(
+                "You do not have permission to perform this action",
+                reason=ErrorReason.ROOM_PERMISSION_DENIED,
+                details={"room_id": room_id},
+            )
+
+        assert current_state is not None
+        ordered = sorted(current_state.combatants, key=lambda item: item.turn_order)
+        current_combatant = ordered[current_state.turn_index]
+        token = await self.repo.get_token(
+            db,
+            room_id=room_id,
+            token_id=current_combatant.token_id,
+        )
+        if token is None or token.linked_character_id is None:
+            raise ForbiddenError(
+                "You do not have permission to perform this action",
+                reason=ErrorReason.ROOM_PERMISSION_DENIED,
+                details={"room_id": room_id, "token_id": current_combatant.token_id},
+            )
+        character = await self.character_repo.get_by_id(
+            db,
+            character_id=token.linked_character_id,
+        )
+        if character is None or character.owner_id != user.id:
+            raise ForbiddenError(
+                "You do not have permission to perform this action",
+                reason=ErrorReason.ROOM_PERMISSION_DENIED,
+                details={"room_id": room_id, "token_id": current_combatant.token_id},
+            )
+
+    def _is_player_end_turn_update(
+        self,
+        current_state: RoomCombatState | None,
+        next_state: RoomCombatState | None,
+    ) -> bool:
+        if current_state is None or next_state is None:
+            return False
+        if not current_state.active or not next_state.active:
+            return False
+        if current_state.combatants != next_state.combatants:
+            return False
+
+        ordered = sorted(current_state.combatants, key=lambda item: item.turn_order)
+        if not ordered or current_state.turn_index >= len(ordered):
+            return False
+        current = ordered[current_state.turn_index]
+        if current.ready_round > current_state.round:
+            return False
+
+        next_round = current_state.round
+        next_turn_index: int | None = None
+        for index in range(current_state.turn_index + 1, len(ordered)):
+            if ordered[index].ready_round <= current_state.round:
+                next_turn_index = index
+                break
+        if next_turn_index is None:
+            next_round = current_state.round + 1
+            next_turn_index = next(
+                (index for index, combatant in enumerate(ordered) if combatant.ready_round <= next_round),
+                None,
+            )
+        if next_turn_index is None:
+            return False
+
+        return next_state.round == next_round and next_state.turn_index == next_turn_index
 
     async def create_map(
         self,

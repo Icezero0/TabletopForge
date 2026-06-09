@@ -6,9 +6,26 @@ from pydantic import BaseModel, Field
 from app.modules.rooms.tabletop.constants import DrawingKind
 
 
+class RoomCombatant(BaseModel):
+    token_id: int
+    initiative_bonus: int = 0
+    roll: int = Field(ge=1, le=20)
+    initiative: int
+    turn_order: int = Field(ge=0)
+    ready_round: int = Field(default=1, ge=1)
+
+
+class RoomCombatState(BaseModel):
+    active: bool = True
+    round: int = Field(default=1, ge=1)
+    turn_index: int = Field(default=0, ge=0)
+    combatants: list[RoomCombatant] = Field(default_factory=list)
+
+
 class RoomTabletopSettingsResponse(BaseModel):
     grid_cell_ft: float
     grid_cell_px: int
+    combat_state: RoomCombatState | None = None
     updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
@@ -17,6 +34,7 @@ class RoomTabletopSettingsResponse(BaseModel):
 class RoomTabletopSettingsPatch(BaseModel):
     grid_cell_ft: float | None = Field(default=None, gt=0)
     grid_cell_px: int | None = Field(default=None, ge=28, le=120)
+    combat_state: RoomCombatState | None = None
 
 
 class RoomMapResponse(BaseModel):

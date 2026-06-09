@@ -30,6 +30,7 @@ export function useTabletopViewport(
   let panStartY = 0;
   let panOriginX = 0;
   let panOriginY = 0;
+  let moveAnimationFrame: number | null = null;
 
   // --- persistence ---
 
@@ -57,6 +58,12 @@ export function useTabletopViewport(
     }, 500);
   }
 
+  function cancelMoveAnimation() {
+    if (moveAnimationFrame === null) return;
+    cancelAnimationFrame(moveAnimationFrame);
+    moveAnimationFrame = null;
+  }
+
   if (roomId) {
     watch(roomId, (id) => loadPersistedViewport(id), { immediate: true });
   }
@@ -70,6 +77,7 @@ export function useTabletopViewport(
   function onWheel(event: WheelEvent) {
     if (toolMode.value !== "hand") return;
     event.preventDefault();
+    cancelMoveAnimation();
     const el = event.currentTarget as HTMLElement;
     const rect = el.getBoundingClientRect();
     const mx = event.clientX - rect.left;
@@ -106,6 +114,7 @@ export function useTabletopViewport(
     if (!shouldStartPan(event)) return;
     event.preventDefault();
     event.stopPropagation();
+    cancelMoveAnimation();
     panPointerId = event.pointerId;
     panStartX = event.clientX;
     panStartY = event.clientY;
@@ -170,10 +179,48 @@ export function useTabletopViewport(
   }
 
   function resetViewport() {
+    cancelMoveAnimation();
     viewportX.value = 0;
     viewportY.value = 0;
     viewportScale.value = 1;
     scheduleSave();
+  }
+
+  function centerScenePoint(point: { x: number; y: number }, options: { smooth?: boolean } = {}) {
+    const el = viewportEl.value;
+    if (!el) return;
+    const targetX = el.clientWidth / 2 - point.x * viewportScale.value;
+    const targetY = el.clientHeight / 2 - point.y * viewportScale.value;
+
+    cancelMoveAnimation();
+    if (options.smooth === false) {
+      viewportX.value = targetX;
+      viewportY.value = targetY;
+      scheduleSave();
+      return;
+    }
+
+    const startX = viewportX.value;
+    const startY = viewportY.value;
+    const startedAt = performance.now();
+    const durationMs = 220;
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+    const step = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / durationMs);
+      const eased = easeOutCubic(progress);
+      viewportX.value = startX + (targetX - startX) * eased;
+      viewportY.value = startY + (targetY - startY) * eased;
+
+      if (progress < 1) {
+        moveAnimationFrame = requestAnimationFrame(step);
+        return;
+      }
+      moveAnimationFrame = null;
+      scheduleSave();
+    };
+
+    moveAnimationFrame = requestAnimationFrame(step);
   }
 
   return {
@@ -183,5 +230,6 @@ export function useTabletopViewport(
     viewportTransform,
     setViewportEl,
     resetViewport,
+    centerScenePoint,
   };
 }

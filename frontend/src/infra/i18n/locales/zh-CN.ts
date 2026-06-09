@@ -886,6 +886,10 @@ export default {
       taken: "该颜色已被占用",
       saveFailed: "更新玩家颜色失败",
     },
+    combat: {
+      permissionDenied: "你没有权限执行这个战斗操作。",
+      saveFailed: "保存战斗状态失败。",
+    },
     requestsEmpty: "当前没有待处理的入房请求。",
     requestsLoadFailed: "加载房间请求失败。",
     tabs: {

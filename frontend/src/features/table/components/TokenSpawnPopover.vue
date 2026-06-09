@@ -29,11 +29,19 @@ function syncPosition() {
   const el = props.anchorEl;
   if (!el) { popoverStyle.value = { visibility: "hidden" }; return; }
   const rect = el.getBoundingClientRect();
+  const margin = 12;
+  const minWidth = 240;
+  const left = Math.max(
+    margin,
+    Math.min(rect.left, window.innerWidth - minWidth - margin),
+  );
+  const top = Math.min(rect.bottom + 8, window.innerHeight - margin);
   popoverStyle.value = {
     position: "fixed",
-    left: `${rect.left + rect.width / 2}px`,
-    top: `${rect.top - 8}px`,
-    transform: "translate(-50%, -100%)",
+    left: `${left}px`,
+    top: `${top}px`,
+    maxWidth: `${Math.max(minWidth, window.innerWidth - left - margin)}px`,
+    maxHeight: `${Math.max(180, window.innerHeight - top - margin)}px`,
     zIndex: "450",
   };
 }

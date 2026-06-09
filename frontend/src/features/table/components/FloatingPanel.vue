@@ -14,7 +14,7 @@ const props = withDefaults(
     storageKey?: string;
     defaultCollapsed?: boolean;
     inline?: boolean;
-    variant?: "governance" | "chat" | "tools" | "assets" | "info" | "memo" | "character_list";
+    variant?: "governance" | "chat" | "tools" | "assets" | "combat" | "info" | "memo" | "character_list";
   }>(),
   {
     anchor: "top-left",
@@ -153,10 +153,22 @@ watch(
   max-width: calc(100vw - 24px);
 }
 
+.floatingPanel:not(.inline).bottom-center.combat {
+  width: max-content;
+  min-width: 0;
+  max-width: calc(100vw - 24px);
+}
+
 .floatingPanel.inline {
   position: relative;
   width: min(300px, calc(100vw - 48px));
   max-height: min(40vh, 280px);
+}
+
+.floatingPanel.inline.collapsed {
+  width: max-content;
+  min-width: 0;
+  max-height: none;
 }
 
 .floatingPanel.collapsed:not(.inline).bottom-left,
@@ -172,6 +184,11 @@ watch(
 .floatingPanel.collapsed:not(.inline).top-center,
 .floatingPanel.collapsed:not(.inline).bottom-center {
   height: auto;
+}
+
+.floatingPanel.collapsed:not(.inline).bottom-center.combat {
+  width: auto;
+  min-width: 96px;
 }
 
 .panelHeader {
@@ -227,6 +244,10 @@ watch(
 }
 
 .floatingPanel.assets .panelBody {
+  padding: 0 6px 6px;
+}
+
+.floatingPanel.combat .panelBody {
   padding: 0 6px 6px;
 }
 
