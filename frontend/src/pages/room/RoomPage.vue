@@ -1842,6 +1842,7 @@ watch(
             :maps="tabletopMaps"
             :tokens="tabletopTokens"
             :drawings="tabletopDrawings"
+            :combat-state="tabletopSettings?.combat_state ?? null"
             :grid-cell-px="gridCellPx"
             :grid-cell-ft="gridCellFt"
             :scale-bar-cells="scaleBarCells"

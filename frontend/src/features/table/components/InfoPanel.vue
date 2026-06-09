@@ -653,6 +653,37 @@ async function updateTokenAbilityScore(key: (typeof ABILITY_KEYS)[number], raw: 
   }
 }
 
+async function updateTokenSpellDerived(
+  key: "spell_save_dc" | "spell_attack_bonus",
+  raw: string,
+) {
+  if (!canEditVisibleState.value) return;
+  const tokenId = props.inspection?.tokenId;
+  if (tokenId == null) return;
+  const value = parseOptionalInt(raw);
+  if (value == null) return;
+  saving.value = true;
+  saveError.value = "";
+  saveSuccess.value = false;
+  try {
+    const current = tokenPanel.value?.[key] ?? {};
+    const updated = await patchRoomToken(props.roomId, tokenId, {
+      panel: {
+        [key]: {
+          ...current,
+          value,
+        },
+      },
+    });
+    tabletopStore.applyTokenUpdated(props.roomId, updated);
+    saveSuccess.value = true;
+  } catch (e) {
+    saveError.value = getBackendErrorMessage(e) || t("table.inspector.saveFailed");
+  } finally {
+    saving.value = false;
+  }
+}
+
 async function updateResourceCurrent(index: number, delta: number) {
   if (!canEditVisibleState.value || savingResourceIndex.value != null) return;
   const tokenId = props.inspection?.tokenId;
@@ -964,11 +995,29 @@ function openCharacterSheet() {
                 </div>
                 <div v-if="tokenSpellSaveDC != null" class="spellStat">
                   <span class="spellStatLabel">{{ t("character.spells.spellSaveDC") }}</span>
-                  <span class="spellStatVal">{{ tokenSpellSaveDC }}</span>
+                  <input
+                    v-if="canEditVisibleState"
+                    class="spellStatInput"
+                    type="text"
+                    inputmode="numeric"
+                    :value="tokenSpellSaveDC"
+                    :aria-label="t('character.spells.spellSaveDC')"
+                    @change="updateTokenSpellDerived('spell_save_dc', ($event.target as HTMLInputElement).value)"
+                  />
+                  <span v-else class="spellStatVal">{{ tokenSpellSaveDC }}</span>
                 </div>
                 <div v-if="tokenSpellAttackBonus != null" class="spellStat">
                   <span class="spellStatLabel">{{ t("character.spells.spellAttackBonus") }}</span>
-                  <span class="spellStatVal">{{ fmtMod(tokenSpellAttackBonus) }}</span>
+                  <input
+                    v-if="canEditVisibleState"
+                    class="spellStatInput"
+                    type="text"
+                    inputmode="numeric"
+                    :value="fmtMod(tokenSpellAttackBonus)"
+                    :aria-label="t('character.spells.spellAttackBonus')"
+                    @change="updateTokenSpellDerived('spell_attack_bonus', ($event.target as HTMLInputElement).value)"
+                  />
+                  <span v-else class="spellStatVal">{{ fmtMod(tokenSpellAttackBonus) }}</span>
                 </div>
               </div>
               <div v-if="tokenSpellLevelRows.length" class="spellLevels compact">
@@ -983,6 +1032,7 @@ function openCharacterSheet() {
               </div>
             </template>
             <div v-else class="emptyHint">—</div>
+            <p v-if="saveError" class="saveHint error">{{ saveError }}</p>
           </template>
 
           <template v-else-if="activeTokenTab === 'resources'">
@@ -1467,6 +1517,7 @@ function openCharacterSheet() {
 .dataHidden .tokenCompactInput,
 .dataHidden .tokenProfDot,
 .dataHidden .spellStatVal,
+.dataHidden .spellStatInput,
 .dataHidden .slotBadge,
 .dataHidden .spellName,
 .dataHidden .kvLabel,
@@ -2175,6 +2226,26 @@ function openCharacterSheet() {
 
 .spellStatLabel { font-size: 9px; color: var(--c-text-muted); font-weight: 500; }
 .spellStatVal   { font-size: 14px; font-weight: 700; color: var(--c-text); }
+
+.spellStatInput {
+  width: 42px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--c-text);
+  padding: 1px 2px;
+  text-align: center;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+
+.spellStatInput:focus {
+  border-color: var(--c-accent);
+  background: color-mix(in srgb, var(--c-surface) 96%, var(--c-bg));
+}
 
 .spellLevels { display: grid; gap: 4px; }
 .spellLevels.compact { gap: 6px; }

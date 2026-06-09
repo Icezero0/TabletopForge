@@ -2,7 +2,7 @@
 import { computed, onUnmounted, ref, toRef, useId, watch } from "vue";
 import type { GameRole } from "@/features/room/types";
 import type { RemoteObjectSelection, TableToolMode, TabletopSelection } from "@/features/table/types";
-import type { RoomDrawing, RoomMap, RoomToken } from "@/infra/api/rooms.api";
+import type { RoomCombatState, RoomDrawing, RoomMap, RoomToken } from "@/infra/api/rooms.api";
 import type { DrawPreview, TextPlacementRequest } from "@/features/table/composables/useDrawingTools";
 import type { MeasureState } from "@/features/table/composables/useMeasureTool";
 import type { MeasureSubTool } from "@/features/table/types";
@@ -26,6 +26,7 @@ const props = withDefaults(
     maps?: RoomMap[];
     tokens?: RoomToken[];
     drawings?: RoomDrawing[];
+    combatState?: RoomCombatState | null;
     gridCellPx?: number;
     gridCellFt?: number;
     scaleBarCells?: number;
@@ -54,6 +55,7 @@ const props = withDefaults(
     maps: () => [],
     tokens: () => [],
     drawings: () => [],
+    combatState: null,
     gridCellPx: 40,
     gridCellFt: 5,
     scaleBarCells: 5,
@@ -280,6 +282,7 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
       />
       <TokenLayer
         :tokens="tokens"
+        :combat-state="combatState"
         :tool-mode="toolMode"
         :game-role="gameRole"
         :grid-cell-ft="gridCellFt"

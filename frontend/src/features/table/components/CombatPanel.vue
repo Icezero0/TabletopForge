@@ -277,7 +277,7 @@ function endCurrentTurn() {
 <template>
   <div class="combatPanel">
     <div v-if="!activeCombat" class="emptyState">
-      <span>当前没有战斗发生</span>
+      <span>当前没有战斗</span>
       <button
         v-if="isGm"
         type="button"

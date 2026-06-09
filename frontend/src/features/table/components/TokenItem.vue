@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
+import { Swords } from "lucide-vue-next";
 import type { RoomToken } from "@/infra/api/rooms.api";
 import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthenticatedAssetUrl";
 import { TOKEN_BAND_BASE, sceneBandZ } from "@/features/table/constants";
@@ -13,6 +14,8 @@ const props = defineProps<{
   selected?: boolean;
   inactive?: boolean;
   dimmed?: boolean;
+  inCombat?: boolean;
+  activeCombatTurn?: boolean;
   remoteSelectionColor?: string | null;
   gameRole?: import("@/features/room/types").GameRole | "unknown";
   playerColorByUserId?: Map<number, string>;
@@ -102,6 +105,15 @@ const ownerColor = computed(() => {
       <img v-if="imageUrl" class="tokenImage" :src="imageUrl" alt="" draggable="false" />
       <span v-else class="tokenInitial" :style="{ fontSize: initialFontSize }">{{ initial }}</span>
     </div>
+    <div
+      v-if="inCombat"
+      class="combatBadge"
+      :class="{ active: activeCombatTurn }"
+      title="交战中"
+      aria-label="交战中"
+    >
+      <Swords aria-hidden="true" />
+    </div>
     <div v-if="previewText" class="previewBadge">{{ previewText }}</div>
   </div>
 </template>
@@ -152,6 +164,39 @@ const ownerColor = computed(() => {
   box-shadow:
     0 0 0 3px color-mix(in srgb, var(--remote-selection-color, var(--c-primary)) 42%, transparent),
     0 0 12px color-mix(in srgb, var(--remote-selection-color, var(--c-primary)) 48%, transparent);
+}
+
+.combatBadge {
+  position: absolute;
+  left: 50%;
+  top: -18px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid color-mix(in srgb, var(--c-border) 78%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c-bg, #111) 84%, transparent);
+  color: color-mix(in srgb, var(--c-text, #eee) 78%, transparent);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.28);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.combatBadge svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.4;
+}
+
+.combatBadge.active {
+  border-color: color-mix(in srgb, var(--c-primary) 76%, var(--c-border));
+  background: color-mix(in srgb, var(--c-primary) 24%, var(--c-bg, #111));
+  color: var(--c-primary);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--c-primary) 20%, transparent),
+    0 4px 12px color-mix(in srgb, var(--c-primary) 30%, transparent);
 }
 
 .tokenImage {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { RoomToken } from "@/infra/api/rooms.api";
+import type { RoomCombatState, RoomToken } from "@/infra/api/rooms.api";
 import type { GameRole } from "@/features/room/types";
 import type { RemoteObjectSelection, TableToolMode } from "@/features/table/types";
 import TokenItem from "@/features/table/components/TokenItem.vue";
@@ -8,6 +8,7 @@ import { canInspectToken, canManageToken } from "@/features/table/utils/tokenDis
 
 const props = defineProps<{
   tokens: RoomToken[];
+  combatState?: RoomCombatState | null;
   toolMode: TableToolMode;
   gameRole: GameRole | "unknown";
   gridCellFt: number;
@@ -34,6 +35,18 @@ const sortedTokens = computed(() => {
     })
     .sort((a, b) => a.z_index - b.z_index || a.id - b.id);
 });
+
+const activeCombatants = computed(() => (
+  props.combatState?.active
+    ? [...props.combatState.combatants].sort((a, b) => a.turn_order - b.turn_order)
+    : []
+));
+
+const combatTokenIds = computed(() => new Set(activeCombatants.value.map((combatant) => combatant.token_id)));
+
+const activeCombatTokenId = computed(() =>
+  activeCombatants.value[props.combatState?.turn_index ?? -1]?.token_id ?? null,
+);
 
 function isOwnHiddenToken(token: RoomToken): boolean {
   if (props.gameRole !== "PL" || props.currentUserId == null) return false;
@@ -92,6 +105,8 @@ function onTokenContextMenu(token: RoomToken, event: MouseEvent) {
       :grid-cell-ft="gridCellFt"
       :grid-cell-px="gridCellPx"
       :selected="selectedTokenId === token.id"
+      :in-combat="combatTokenIds.has(token.id)"
+      :active-combat-turn="activeCombatTokenId === token.id"
       :remote-selection-color="remoteSelectionFor(token.id)?.color"
       :inactive="!canPickToken(token)"
       :dimmed="isTokenDimmed(token)"
