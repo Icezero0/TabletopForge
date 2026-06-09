@@ -69,7 +69,7 @@ function onAddCharacter() {
 function entryStats(entry: SpawnPopoverEntry): string {
   if (!entry.inRoom) return "";
   return formatTokenPreview(entry.state, {
-    damageLabel: t("room.characters.damageTakenShort"),
+    damageLabel: t("room.characters.cumulativeDamage"),
   });
 }
 

@@ -76,8 +76,12 @@ export function formatTokenPreview(
   }
 
   const parts: string[] = [];
-  if (summary.current_hp != null || summary.max_hp != null) {
+  const hasHp = summary.current_hp != null || summary.max_hp != null;
+  if (hasHp) {
     parts.push(`HP ${summary.current_hp ?? "?"}/${summary.max_hp ?? "?"}`);
+  } else if (summary.damage_taken != null) {
+    const label = options?.damageLabel ?? "DMG";
+    parts.push(`${label} ${summary.damage_taken}`);
   }
   const ac = summary.ac ?? summary.armor_class ?? null;
   if (ac != null) parts.push(`AC ${ac}`);

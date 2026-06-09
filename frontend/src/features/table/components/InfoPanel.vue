@@ -93,9 +93,26 @@ const canEditState = computed(() => {
   return false;
 });
 
+const canToggleHiddenData = computed(() => props.gameRole === "GM" && props.inspection?.tokenId != null);
+const tokenHideData = computed(() => tokenPanel.value?.hide_data === true || tokenPanel.value?.hide_hp === true);
+const isDataHiddenForViewer = computed(() => props.gameRole !== "GM" && tokenHideData.value);
+const canEditVisibleState = computed(() => canEditState.value && !isDataHiddenForViewer.value);
+
+const canOpenCharacterSheet = computed(() => character.value != null);
 const canFullEdit = computed(() => {
   if (!character.value || props.currentUserId == null) return false;
   return character.value.owner_id === props.currentUserId;
+});
+
+const tokenCumulativeDamage = computed(() => {
+  const panel = tokenPanel.value;
+  const s = tokenStateSummary.value;
+  return (
+    cumulativeDamageFromHp(panel?.hp_current, panel?.hp_max) ??
+    cumulativeDamageFromHp(s?.current_hp, s?.max_hp) ??
+    panelNumber(s?.damage_taken) ??
+    0
+  );
 });
 
 const isDamageOnlyView = computed(() => {
@@ -176,6 +193,13 @@ function panelNumber(value: unknown): number | null {
     return Number.isFinite(n) ? n : null;
   }
   return null;
+}
+
+function cumulativeDamageFromHp(current: unknown, max: unknown): number | null {
+  const currentHp = panelNumber(current);
+  const maxHp = panelNumber(max);
+  if (currentHp == null || maxHp == null) return null;
+  return Math.max(0, maxHp - currentHp);
 }
 
 function abilityScoreValue(key: (typeof ABILITY_KEYS)[number]) {
@@ -386,11 +410,12 @@ function toggleSpellLevel(lvl: string) {
 // ── Loading ──────────────────────────────────────────────────────────────
 function syncEditFieldsFromSummary() {
   const s = tokenStateSummary.value;
-  editCurrentHp.value = s?.current_hp != null ? String(s.current_hp) : "";
-  editMaxHp.value     = s?.max_hp     != null ? String(s.max_hp)     : "";
-  editAc.value        = s?.ac         != null ? String(s.ac)         : "";
-  editSpeed.value     = tokenPanel.value?.speed != null ? String(tokenPanel.value.speed) : "";
-  editPp.value        = tokenPanel.value?.pp    != null ? String(tokenPanel.value.pp)    : "";
+  const panel = tokenPanel.value;
+  editCurrentHp.value = panel?.hp_current != null ? String(panel.hp_current) : (s?.current_hp != null ? String(s.current_hp) : "");
+  editMaxHp.value     = panel?.hp_max     != null ? String(panel.hp_max)     : (s?.max_hp     != null ? String(s.max_hp)     : "");
+  editAc.value        = panel?.ac         != null ? String(panel.ac)         : (s?.ac         != null ? String(s.ac)         : "");
+  editSpeed.value     = panel?.speed      != null ? String(panel.speed)      : "";
+  editPp.value        = panel?.pp         != null ? String(panel.pp)         : "";
 }
 
 async function loadInspection() {
@@ -451,7 +476,7 @@ function parseOptionalInt(raw: string | number | null | undefined): number | nul
 }
 
 async function saveState() {
-  if (!canEditState.value) return;
+  if (!canEditVisibleState.value) return;
   const tokenId = props.inspection?.tokenId;
   if (tokenId == null) return;
   saving.value = true;
@@ -476,8 +501,28 @@ async function saveState() {
   }
 }
 
+async function toggleHiddenData() {
+  if (!canToggleHiddenData.value) return;
+  const tokenId = props.inspection?.tokenId;
+  if (tokenId == null) return;
+  saving.value = true;
+  saveError.value = "";
+  saveSuccess.value = false;
+  try {
+    const updated = await patchRoomToken(props.roomId, tokenId, {
+      panel: { hide_data: !tokenHideData.value, hide_hp: false },
+    });
+    tabletopStore.applyTokenUpdated(props.roomId, updated);
+    saveSuccess.value = true;
+  } catch (e) {
+    saveError.value = getBackendErrorMessage(e) || t("table.inspector.saveFailed");
+  } finally {
+    saving.value = false;
+  }
+}
+
 async function updateTokenAbilityScore(key: (typeof ABILITY_KEYS)[number], raw: string) {
-  if (!canEditState.value) return;
+  if (!canEditVisibleState.value) return;
   const tokenId = props.inspection?.tokenId;
   if (tokenId == null) return;
   const value = parseOptionalInt(raw);
@@ -508,7 +553,7 @@ async function updateTokenAbilityScore(key: (typeof ABILITY_KEYS)[number], raw: 
 }
 
 async function updateResourceCurrent(index: number, delta: number) {
-  if (!canEditState.value || savingResourceIndex.value != null) return;
+  if (!canEditVisibleState.value || savingResourceIndex.value != null) return;
   const tokenId = props.inspection?.tokenId;
   if (tokenId == null) return;
   const resources = tokenResources.value;
@@ -536,8 +581,8 @@ async function updateResourceCurrent(index: number, delta: number) {
   }
 }
 
-function openFullEdit() {
-  if (!character.value || !canFullEdit.value) return;
+function openCharacterSheet() {
+  if (!character.value) return;
   void router.push(
     buildPathWithReturn(
       `/characters/${character.value.id}`,
@@ -553,12 +598,24 @@ function openFullEdit() {
     <div class="panelHead">
       <PanelSectionHeader :title="t('table.inspector.infoTitle')" />
       <div class="headActions">
+        <label v-if="canToggleHiddenData" class="hiddenDataToggle">
+          <span>{{ t("table.inspector.hideData") }}</span>
+          <input
+            type="checkbox"
+            :checked="tokenHideData"
+            :disabled="saving"
+            @change="toggleHiddenData"
+          />
+          <span class="switchTrack" aria-hidden="true">
+            <span class="switchThumb"></span>
+          </span>
+        </label>
         <button
-          v-if="character && canFullEdit && inspection?.tokenId == null"
+          v-if="canOpenCharacterSheet && inspection?.tokenId == null"
           type="button"
           class="headBtn"
-          @click="openFullEdit"
-        >编辑</button>
+          @click="openCharacterSheet"
+        >{{ canFullEdit ? t("common.edit") : t("common.view") }}</button>
         <button v-if="inspection" type="button" class="headBtn closeBtn" @click="emit('close')">
           ×
         </button>
@@ -590,7 +647,7 @@ function openFullEdit() {
           >{{ t(tab.labelKey) }}</button>
         </div>
 
-        <div class="tabPane">
+        <div class="tabPane" :class="{ dataHidden: isDataHiddenForViewer }">
           <template v-if="activeTokenTab === 'overview'">
             <div v-if="abilityScores.length" class="fieldGroup">
               <h4 class="fieldGroupTitle">{{ t("character.token.abilityScores") }}</h4>
@@ -598,7 +655,7 @@ function openFullEdit() {
                 <div v-for="item in abilityScores" :key="item.key" class="tokenAbilityCell">
                   <span class="tokenAbilityName">{{ t(ABILITY_LABEL_KEYS[item.key]) }}</span>
                   <input
-                    v-if="canEditState"
+                    v-if="canEditVisibleState"
                     class="tokenAbilityInput no-spin"
                     type="number"
                     :value="item.score"
@@ -613,7 +670,7 @@ function openFullEdit() {
 
             <div class="fieldGroup">
               <h4 class="fieldGroupTitle">{{ t("character.token.derivedStats") }}</h4>
-              <div v-if="canEditState" class="tokenStatusGrid">
+              <div v-if="canEditVisibleState" class="tokenStatusGrid">
                 <div class="tokenStatusCard hpCard">
                   <span class="tokenStatusLabel">{{ t("character.token.hp") }}</span>
                   <div class="tokenHpEdit">
@@ -649,8 +706,34 @@ function openFullEdit() {
                   <input v-model="editPp" class="tokenStatInput no-spin" type="number" placeholder="—" @change="saveState" />
                 </label>
               </div>
+              <div v-else-if="isDataHiddenForViewer" class="hiddenDataState">
+                <div class="tokenStatusGrid readonly">
+                  <div class="tokenStatusCard hpCard">
+                    <span class="tokenStatusLabel">{{ t("character.token.hp") }}</span>
+                    <span class="tokenStatusValue">
+                      {{ tokenPanel?.hp_current ?? "—" }}/{{ tokenPanel?.hp_max ?? "—" }}
+                    </span>
+                  </div>
+                  <div class="tokenStatusCard">
+                    <span class="tokenStatusLabel">{{ t("table.inspector.ac") }}</span>
+                    <span class="tokenStatusValue">{{ tokenPanel?.ac ?? "—" }}</span>
+                  </div>
+                  <div class="tokenStatusCard">
+                    <span class="tokenStatusLabel">{{ t("character.token.speed") }}</span>
+                    <span class="tokenStatusValue">{{ tokenPanel?.speed ?? "—" }}</span>
+                  </div>
+                  <div class="tokenStatusCard">
+                    <span class="tokenStatusLabel">{{ t("character.token.pp") }}</span>
+                    <span class="tokenStatusValue">{{ tokenPanel?.pp ?? "—" }}</span>
+                  </div>
+                </div>
+                <div class="cumulativeDamageRow">
+                  <span>{{ t("room.characters.cumulativeDamage") }}</span>
+                  <strong>{{ tokenCumulativeDamage }}</strong>
+                </div>
+              </div>
               <div v-else-if="tokenStateSummary && isDamageOnlyView" class="stateReadonly">
-                {{ t("room.characters.damageTaken") }}: {{ tokenStateSummary.damage_taken }}
+                {{ t("room.characters.cumulativeDamage") }}: {{ tokenCumulativeDamage }}
               </div>
               <div v-else-if="tokenStateSummary" class="tokenStatusGrid readonly">
                 <div class="tokenStatusCard hpCard">
@@ -742,7 +825,7 @@ function openFullEdit() {
                 <span class="kvLabel">{{ resource.name }}</span>
                 <div class="resourceCounter">
                   <button
-                    v-if="canEditState"
+                    v-if="canEditVisibleState"
                     type="button"
                     class="counterBtn"
                     :disabled="savingResourceIndex !== null || resourceCurrent(resource) <= 0"
@@ -752,7 +835,7 @@ function openFullEdit() {
                     {{ resourceCurrent(resource) }}/{{ resource.max }}
                   </span>
                   <button
-                    v-if="canEditState"
+                    v-if="canEditVisibleState"
                     type="button"
                     class="counterBtn"
                     :disabled="savingResourceIndex !== null || resourceCurrent(resource) >= resource.max"
@@ -1140,6 +1223,64 @@ function openFullEdit() {
   min-width: 0;
 }
 
+.hiddenDataToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--c-text-muted);
+  font-size: 12px;
+  user-select: none;
+  cursor: pointer;
+}
+
+.hiddenDataToggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.switchTrack {
+  position: relative;
+  width: 34px;
+  height: 18px;
+  flex: 0 0 auto;
+  border: 1px solid var(--c-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c-bg-subtle) 86%, var(--c-surface));
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+
+.switchThumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--c-text-muted);
+  transition: transform 0.16s ease, background 0.16s ease;
+}
+
+.hiddenDataToggle input:checked + .switchTrack {
+  border-color: color-mix(in srgb, var(--c-primary) 70%, var(--c-border));
+  background: color-mix(in srgb, var(--c-primary) 28%, var(--c-bg-subtle));
+}
+
+.hiddenDataToggle input:checked + .switchTrack .switchThumb {
+  transform: translateX(16px);
+  background: var(--c-primary);
+}
+
+.hiddenDataToggle input:disabled + .switchTrack {
+  opacity: 0.6;
+}
+
 .tokenStatusCard {
   min-width: 0;
   display: grid;
@@ -1151,6 +1292,51 @@ function openFullEdit() {
   border: 1px solid var(--c-border);
   border-radius: 7px;
   background: color-mix(in srgb, var(--c-bg-subtle) 78%, var(--c-surface));
+}
+
+.dataHidden .tokenAbilityScore,
+.dataHidden .tokenAbilityMod,
+.dataHidden .tokenStatusValue,
+.dataHidden .tokenCompactValue,
+.dataHidden .spellStatVal,
+.dataHidden .slotBadge,
+.dataHidden .spellName,
+.dataHidden .kvLabel,
+.dataHidden .kvVal,
+.dataHidden .resourceRecovery {
+  color: transparent;
+  text-shadow:
+    0 0 6px color-mix(in srgb, var(--c-text) 75%, transparent),
+    4px 0 0 color-mix(in srgb, var(--c-text) 35%, transparent),
+    -4px 0 0 color-mix(in srgb, var(--c-text-muted) 35%, transparent);
+  filter: blur(3px);
+  user-select: none;
+  pointer-events: none;
+}
+
+.hiddenDataState {
+  display: grid;
+  gap: 7px;
+}
+
+.cumulativeDamageRow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--c-danger, #ef4444) 34%, var(--c-border));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--c-danger, #ef4444) 7%, var(--c-surface));
+  color: var(--c-text-muted);
+  font-size: 12px;
+}
+
+.cumulativeDamageRow strong {
+  color: var(--c-text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
 }
 
 .tokenStatusCard.hpCard {

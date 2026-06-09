@@ -284,17 +284,28 @@ class RoomCharacterService:
             )
             for rid in added_lib_ids:
                 await self.character_service.library_service.increment_usage(db, resource_id=rid)
-        entry = await self.repo.create(
+        await self.repo.create(
             db,
             room_id=room_id,
             character_id=character.id,
             added_by_user_id=user.id,
         )
         await db.commit()
-        await db.refresh(character)
+
+        created = await self.repo.get_by_room_and_character(
+            db,
+            room_id=room_id,
+            character_id=character.id,
+        )
+        if created is None:
+            raise BadRequestError(
+                "Failed to create room character",
+                reason=ErrorReason.REQUEST_VALIDATION_FAILED,
+                details={"character_id": character.id, "room_id": room_id},
+            )
         return self._entry_response(
-            entry,
-            state,
+            created,
+            created.character.state or state,
             game_role=game_role,
             viewer_user_id=user.id,
         )

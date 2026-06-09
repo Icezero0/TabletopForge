@@ -37,11 +37,36 @@ const initial = computed(() => tokenInitial(props.token.name));
 
 const initialFontSize = computed(() => `${Math.max(14, Math.round(displaySize.value * 0.42))}px`);
 
+function panelNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function cumulativeDamageFromHp(current: unknown, max: unknown): number | null {
+  const currentHp = panelNumber(current);
+  const maxHp = panelNumber(max);
+  if (currentHp == null || maxHp == null) return null;
+  return Math.max(0, maxHp - currentHp);
+}
+
 const previewText = computed(() => {
+  const panel = props.token.panel;
+  if (panel && panel.hide_data === true) {
+    const panelDamage =
+      cumulativeDamageFromHp(panel.hp_current, panel.hp_max) ??
+      cumulativeDamageFromHp(props.token.state_summary?.current_hp, props.token.state_summary?.max_hp);
+    return formatTokenPreview({ damage_taken: panelDamage ?? props.token.state_summary?.damage_taken ?? 0 }, {
+      damageLabel: t("room.characters.cumulativeDamage"),
+    });
+  }
   const summary = props.token.state_summary;
   if (!summary) return "";
   return formatTokenPreview(summary, {
-    damageLabel: t("room.characters.damageTakenShort"),
+    damageLabel: t("room.characters.cumulativeDamage"),
   });
 });
 

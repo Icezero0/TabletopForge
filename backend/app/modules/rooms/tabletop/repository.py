@@ -357,7 +357,9 @@ class RoomTabletopRepository:
         if _linked_character_id_set:
             token.linked_character_id = linked_character_id
         if panel_merge is not None:
-            token.panel = {**(token.panel or {}), **panel_merge}
+            panel = {**(token.panel or {}), **panel_merge}
+            panel.pop("damage_taken", None)
+            token.panel = panel
         await db.flush()
         await db.refresh(token)
         return token

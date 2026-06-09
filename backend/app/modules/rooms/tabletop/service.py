@@ -138,7 +138,32 @@ class RoomTabletopService:
         return character
 
     @staticmethod
-    def _build_panel_state_summary(token: RoomToken) -> TokenStateSummary | None:
+    def _panel_without_deprecated_fields(panel: dict | None) -> dict | None:
+        if not panel:
+            return panel
+        cleaned = dict(panel)
+        cleaned.pop("damage_taken", None)
+        return cleaned
+
+    @staticmethod
+    def _panel_int(value: object) -> int | None:
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str) and value.strip():
+            try:
+                return int(value)
+            except ValueError:
+                return None
+        return None
+
+    @staticmethod
+    def _build_panel_state_summary(
+        token: RoomToken,
+        *,
+        game_role: GameRole,
+    ) -> TokenStateSummary | None:
         panel = token.panel
         if not panel:
             return None
@@ -146,7 +171,16 @@ class RoomTabletopService:
         max_hp = panel.get("hp_max")
         ac = panel.get("ac")
         pp = panel.get("pp")
-        damage_taken = panel.get("damage_taken")
+        current_hp_int = TabletopService._panel_int(current_hp)
+        max_hp_int = TabletopService._panel_int(max_hp)
+        damage_taken = (
+            max(0, max_hp_int - current_hp_int)
+            if current_hp_int is not None and max_hp_int is not None
+            else None
+        )
+        if game_role != GameRole.GM and panel.get("hide_hp") is True:
+            current_hp = None
+            max_hp = None
         if all(v is None for v in (current_hp, max_hp, ac, pp, damage_taken)):
             return None
         return TokenStateSummary(
@@ -160,6 +194,7 @@ class RoomTabletopService:
     @staticmethod
     def _build_spawn_panel_from_config(panel_initial: dict | None) -> dict:
         panel = dict(panel_initial or {})
+        panel.pop("damage_taken", None)
         resources = panel.get("resources")
         if not isinstance(resources, list):
             return panel
@@ -222,8 +257,12 @@ class RoomTabletopService:
                 and token.linked_character_id in hidden_ids
             )
             base = RoomTokenResponse.model_validate(token)
-            state_summary = self._build_panel_state_summary(token)
-            updates: dict = {"state_summary": state_summary, "character_hidden": character_hidden}
+            state_summary = self._build_panel_state_summary(token, game_role=game_role)
+            updates: dict = {
+                "panel": self._panel_without_deprecated_fields(token.panel),
+                "state_summary": state_summary,
+                "character_hidden": character_hidden,
+            }
             if character is not None:
                 updates["linked_character_owner_id"] = character.owner_id
             responses.append(base.model_copy(update=updates))
@@ -749,6 +788,8 @@ class RoomTabletopService:
                 character_id=payload.linked_character_id,
             )
 
+        panel_merge = self._panel_without_deprecated_fields(payload.panel)
+
         updated = await self.repo.update_token(
             db,
             token=token,
@@ -763,7 +804,7 @@ class RoomTabletopService:
             locked=payload.locked,
             linked_character_id=payload.linked_character_id,
             _linked_character_id_set=linked_character_id_set,
-            panel_merge=payload.panel,
+            panel_merge=panel_merge,
         )
         await db.commit()
         return await self._token_response(

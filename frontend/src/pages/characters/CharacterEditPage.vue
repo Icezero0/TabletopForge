@@ -13,6 +13,7 @@ import {
 import { postRoomCharacter } from "@/infra/api/roomCharacters.api";
 import { usePageReturnTo, RETURN_TO_QUERY } from "@/composables/useNavigationReturn";
 import { useToastsStore } from "@/stores/toasts.store";
+import { useAuthStore } from "@/stores/auth.store";
 import CharacterImportDialog from "@/features/character/components/CharacterImportDialog.vue";
 import CharacterIdentityTab from "@/features/character/components/tabs/CharacterIdentityTab.vue";
 import CharacterAttributesTab from "@/features/character/components/tabs/CharacterAttributesTab.vue";
@@ -29,6 +30,7 @@ const router = useRouter();
 const { t } = useI18n();
 const { backTo, backText } = usePageReturnTo("/characters");
 const toasts = useToastsStore();
+const auth = useAuthStore();
 
 const characterId = computed(() => {
   const id = route.params.id;
@@ -76,6 +78,7 @@ const formSpells = ref<Record<string, unknown>>(defaultSpells() as unknown as Re
 const formEquipment = ref<Record<string, unknown>>(defaultEquipment() as unknown as Record<string, unknown>);
 const formExtras = ref<Record<string, unknown>>({});
 const formTokenConfigs = ref<TokenConfigUpsert[]>([]);
+const ownerId = ref<number | null>(null);
 
 const isLoading = ref(false);
 const isSaving = ref(false);
@@ -99,12 +102,17 @@ const currentSnapshot = computed(() => JSON.stringify({
   tokenConfigs: formTokenConfigs.value,
 }));
 const savedSnapshot = ref<string>("");
-const isDirty = computed(() => currentSnapshot.value !== savedSnapshot.value);
+const canEditCharacter = computed(() =>
+  !isEdit.value || (ownerId.value != null && auth.me?.id === ownerId.value),
+);
+const isReadOnly = computed(() => isEdit.value && !canEditCharacter.value);
+const isDirty = computed(() => canEditCharacter.value && currentSnapshot.value !== savedSnapshot.value);
 
 async function loadCharacter(id: number) {
   isLoading.value = true;
   try {
     const char = await getCharacter(id);
+    ownerId.value = char.owner_id;
     formSystem.value = char.system;
     formPortraitAssetId.value = char.portrait_asset_id;
     // Ensure name is in identity block
@@ -135,6 +143,7 @@ async function loadCharacter(id: number) {
 }
 
 async function save() {
+  if (!canEditCharacter.value) return;
   if (!charName.value) {
     activeTab.value = "identity";
     toasts.push({ message: t("character.errors.nameRequired"), tone: "danger" });
@@ -289,6 +298,7 @@ function applyImportDraft(draft: CharacterImportPreview) {
 }
 
 function openImportDialog() {
+  if (!canEditCharacter.value) return;
   if (isDirty.value || isEdit.value) {
     if (!window.confirm(t("character.import.overwriteConfirm"))) return;
   }
@@ -332,7 +342,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload)
 
 <template>
   <AppPageShell :title="pageTitle" :back-to="backTo" :back-text="backTo.startsWith('/rooms/') ? backText : t('character.title')" :max-width="900">
-    <template #actions>
+    <template v-if="canEditCharacter" #actions>
       <BaseButton variant="default" @click="openImportDialog">
         {{ t("character.import.aiImport") }}
       </BaseButton>
@@ -358,7 +368,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload)
       </div>
 
       <!-- Tab content -->
-      <div class="tab-panel">
+      <div class="tab-panel" :class="{ readonlyPanel: isReadOnly }" :aria-readonly="isReadOnly">
         <CharacterIdentityTab
           v-show="activeTab === 'identity'"
           v-model="formIdentity"
@@ -410,7 +420,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload)
   </AppPageShell>
 
   <CharacterImportDialog
-    :open="importDialogOpen"
+    :open="canEditCharacter && importDialogOpen"
     @close="importDialogOpen = false"
     @imported="handleImportApplied"
   />
@@ -452,5 +462,27 @@ onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload)
   border-radius: var(--r-2);
   background: var(--c-surface);
   padding: 24px;
+}
+
+.readonlyPanel {
+  position: relative;
+}
+
+.readonlyPanel :deep(input),
+.readonlyPanel :deep(textarea),
+.readonlyPanel :deep(.trigger),
+.readonlyPanel :deep(.tag-input) {
+  pointer-events: none;
+}
+
+.readonlyPanel :deep(.auto-btn),
+.readonlyPanel :deep(.action-btn),
+.readonlyPanel :deep(.del-btn),
+.readonlyPanel :deep(.remove-link),
+.readonlyPanel :deep(.gallery-add),
+.readonlyPanel :deep(.stepBtn),
+.readonlyPanel :deep(.iconBtn),
+.readonlyPanel :deep(.btn) {
+  pointer-events: none;
 }
 </style>
