@@ -11,6 +11,7 @@ import {
   kindFromSubTool,
   type DrawSubTool,
   type GridSnap,
+  type ShapeDrawMode,
 } from "@/features/table/drawingTypes";
 import { TEXT_INITIAL_WIDTH } from "@/features/table/constants";
 import { scenePxToFt } from "@/features/table/utils/gridMeasure";
@@ -49,6 +50,8 @@ export function useDrawingTools(options: UseDrawingToolsOptions) {
   const strokeColor = ref(DEFAULT_STROKE_COLOR);
   const strokeWidth = ref(DEFAULT_STROKE_WIDTH);
   const fontSize = ref(DEFAULT_FONT_SIZE);
+  const shapeMode = ref<ShapeDrawMode>("outline");
+  const maskOpacity = ref(0.3);
   const preview = ref<DrawPreview>(null);
   const textPlacement = ref<TextPlacementRequest>(null);
 
@@ -62,12 +65,20 @@ export function useDrawingTools(options: UseDrawingToolsOptions) {
     return { gridCellPx: options.gridCellPx.value, gridCellFt: options.gridCellFt.value };
   }
 
-  function currentStyle() {
-    return {
+  function currentStyle(kind?: DrawingKind) {
+    const style: Record<string, unknown> = {
       color: strokeColor.value,
       width: strokeWidth.value,
       fontSize: fontSize.value,
     };
+    if (kind === "rect" || kind === "ellipse") {
+      style.shapeMode = shapeMode.value;
+      if (shapeMode.value === "mask") {
+        style.fill = strokeColor.value;
+        style.fillOpacity = maskOpacity.value;
+      }
+    }
+    return style;
   }
 
   function resetPointer() {
@@ -151,7 +162,7 @@ export function useDrawingTools(options: UseDrawingToolsOptions) {
       preview.value = {
         kind: "brush",
         geometry: { points: brushPoints },
-        style: currentStyle(),
+        style: currentStyle("brush"),
       };
       return;
     }
@@ -159,7 +170,7 @@ export function useDrawingTools(options: UseDrawingToolsOptions) {
     preview.value = {
       kind,
       geometry: startGeometry(kind, x, y),
-      style: currentStyle(),
+      style: currentStyle(kind),
     };
   }
 
@@ -203,7 +214,7 @@ export function useDrawingTools(options: UseDrawingToolsOptions) {
       preview.value = {
         kind: "brush",
         geometry: { points: [...brushPoints] },
-        style: currentStyle(),
+        style: currentStyle("brush"),
       };
       return;
     }
@@ -212,12 +223,12 @@ export function useDrawingTools(options: UseDrawingToolsOptions) {
       preview.value = {
         kind: "line",
         geometry: { x1: startX, y1: startY, x2: x, y2: y },
-        style: currentStyle(),
+        style: currentStyle("line"),
       };
       return;
     }
 
-    const constrain = !(event.ctrlKey || event.metaKey);
+    const constrain = event.ctrlKey || event.metaKey;
     const snap = constrain ? gridSnap() : undefined;
 
     if (kind === "rect") {
@@ -225,19 +236,19 @@ export function useDrawingTools(options: UseDrawingToolsOptions) {
       preview.value = {
         kind: "rect",
         geometry,
-        style: currentStyle(),
+        style: currentStyle("rect"),
         measureLabel: constrain ? measureRectLabel(geometry) : undefined,
       };
       return;
     }
 
     if (kind === "ellipse") {
-      const geometry = constrainEllipseGeometry(startX, startY, x, y, constrain, snap);
+      const geometry = constrainEllipseGeometry(startX, startY, x, y, true, snap);
       preview.value = {
         kind: "ellipse",
         geometry,
-        style: currentStyle(),
-        measureLabel: constrain ? measureEllipseLabel(geometry) : undefined,
+        style: currentStyle("ellipse"),
+        measureLabel: measureEllipseLabel(geometry),
       };
     }
   }
@@ -338,6 +349,8 @@ export function useDrawingTools(options: UseDrawingToolsOptions) {
     strokeColor,
     strokeWidth,
     fontSize,
+    shapeMode,
+    maskOpacity,
     preview,
     textPlacement,
     pointerDown,

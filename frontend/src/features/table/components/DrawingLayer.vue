@@ -183,6 +183,20 @@ function strokeW(d: { style: Record<string, unknown> }) {
   return Number(d.style.width ?? 3);
 }
 
+function shapeMode(d: { style: Record<string, unknown> }) {
+  return d.style.shapeMode === "mask" ? "mask" : "outline";
+}
+
+function shapeFill(d: { style: Record<string, unknown> }) {
+  return shapeMode(d) === "mask" ? String(d.style.fill ?? d.style.color ?? "#e11d48") : "none";
+}
+
+function shapeFillOpacity(d: { style: Record<string, unknown> }) {
+  if (shapeMode(d) !== "mask") return undefined;
+  const value = Number(d.style.fillOpacity ?? 0.3);
+  return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.3;
+}
+
 function textFontSize(d: { style: Record<string, unknown> }) {
   return Number(d.style.fontSize ?? 16);
 }
@@ -304,11 +318,12 @@ function previewLabelPos(p: DrawPreview) {
       <rect
         v-if="drawing.kind === 'rect' && showPickTargets"
         class="hitTarget"
+        :class="{ fillHit: shapeMode(drawing) === 'mask' }"
         :x="Number(drawing.geometry.width) < 0 ? Number(drawing.geometry.x) + Number(drawing.geometry.width) : Number(drawing.geometry.x)"
         :y="Number(drawing.geometry.height) < 0 ? Number(drawing.geometry.y) + Number(drawing.geometry.height) : Number(drawing.geometry.y)"
         :width="Math.abs(Number(drawing.geometry.width))"
         :height="Math.abs(Number(drawing.geometry.height))"
-        fill="none"
+        :fill="shapeMode(drawing) === 'mask' ? 'rgba(0,0,0,0.001)' : 'none'"
         stroke="transparent"
         :stroke-width="DRAWING_PICK_STROKE_HIT"
       />
@@ -319,18 +334,20 @@ function previewLabelPos(p: DrawPreview) {
         :y="Number(drawing.geometry.height) < 0 ? Number(drawing.geometry.y) + Number(drawing.geometry.height) : Number(drawing.geometry.y)"
         :width="Math.abs(Number(drawing.geometry.width))"
         :height="Math.abs(Number(drawing.geometry.height))"
-        fill="none"
+        :fill="shapeFill(drawing)"
+        :fill-opacity="shapeFillOpacity(drawing)"
         :stroke="stroke(drawing)"
         :stroke-width="strokeW(drawing)"
       />
       <ellipse
         v-if="drawing.kind === 'ellipse' && showPickTargets"
         class="hitTarget"
+        :class="{ fillHit: shapeMode(drawing) === 'mask' }"
         :cx="Number(drawing.geometry.cx)"
         :cy="Number(drawing.geometry.cy)"
         :rx="Number(drawing.geometry.rx)"
         :ry="Number(drawing.geometry.ry)"
-        fill="none"
+        :fill="shapeMode(drawing) === 'mask' ? 'rgba(0,0,0,0.001)' : 'none'"
         stroke="transparent"
         :stroke-width="DRAWING_PICK_STROKE_HIT"
       />
@@ -341,7 +358,8 @@ function previewLabelPos(p: DrawPreview) {
         :cy="Number(drawing.geometry.cy)"
         :rx="Number(drawing.geometry.rx)"
         :ry="Number(drawing.geometry.ry)"
-        fill="none"
+        :fill="shapeFill(drawing)"
+        :fill-opacity="shapeFillOpacity(drawing)"
         :stroke="stroke(drawing)"
         :stroke-width="strokeW(drawing)"
       />
@@ -426,7 +444,8 @@ function previewLabelPos(p: DrawPreview) {
         :y="normalizedRect(preview.geometry).y"
         :width="normalizedRect(preview.geometry).width"
         :height="normalizedRect(preview.geometry).height"
-        fill="none"
+        :fill="shapeFill(preview)"
+        :fill-opacity="shapeFillOpacity(preview)"
         :stroke="stroke(preview)"
         :stroke-width="strokeW(preview)"
         stroke-dasharray="4 3"
@@ -437,7 +456,8 @@ function previewLabelPos(p: DrawPreview) {
         :cy="Number(preview.geometry.cy)"
         :rx="Number(preview.geometry.rx)"
         :ry="Number(preview.geometry.ry)"
-        fill="none"
+        :fill="shapeFill(preview)"
+        :fill-opacity="shapeFillOpacity(preview)"
         :stroke="stroke(preview)"
         :stroke-width="strokeW(preview)"
       />

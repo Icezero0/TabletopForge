@@ -286,6 +286,8 @@ const {
   strokeColor,
   strokeWidth,
   fontSize,
+  shapeMode,
+  maskOpacity,
   preview: drawPreview,
   textPlacement,
   pointerDown: drawPointerDown,
@@ -1127,7 +1129,24 @@ function isEditingText() {
   const el = document.activeElement;
   if (!el) return false;
   const tag = el.tagName.toLowerCase();
-  if (tag === "input" || tag === "textarea" || tag === "select") return true;
+  if (tag === "textarea" || tag === "select") return true;
+  if (tag === "input") {
+    const type = ((el as HTMLInputElement).type || "text").toLowerCase();
+    return [
+      "date",
+      "datetime-local",
+      "email",
+      "month",
+      "number",
+      "password",
+      "search",
+      "tel",
+      "text",
+      "time",
+      "url",
+      "week",
+    ].includes(type);
+  }
   return (el as HTMLElement).isContentEditable;
 }
 
@@ -2100,6 +2119,8 @@ watch(
               v-model:stroke-color="strokeColor"
               v-model:stroke-width="strokeWidth"
               v-model:font-size="fontSize"
+              v-model:shape-mode="shapeMode"
+              v-model:mask-opacity="maskOpacity"
             />
             <MeasureToolStrip
               v-if="toolMode === 'measure'"

@@ -3,12 +3,15 @@ import { DRAWING_PICK_HIT_RADIUS } from "@/features/table/constants";
 import { snapSideToFt } from "@/features/table/utils/gridMeasure";
 
 export type DrawSubTool = "brush" | "line" | "rect" | "ellipse" | "text" | "eraser" | "boxSelect";
+export type ShapeDrawMode = "outline" | "mask";
 
 export type DrawingStyle = {
   color?: string;
   width?: number;
   fontSize?: number;
   fill?: string;
+  fillOpacity?: number;
+  shapeMode?: ShapeDrawMode;
 };
 
 export type DrawingBounds = {
