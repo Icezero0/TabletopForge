@@ -18,9 +18,11 @@ import type {
   TokenStateSummary,
 } from "@/infra/api/rooms.api";
 import type { MessageResponse } from "@/infra/api/messages.api";
+import type { DiceRoll } from "@/infra/api/dice.api";
 import type { RoomCharacterEntry } from "@/infra/api/roomCharacters.api";
 import { useAuthStore } from "@/stores/auth.store";
 import { useMessagesStore } from "@/stores/messages.store";
+import { useDiceStore } from "@/stores/dice.store";
 import { useTabletopStore } from "@/stores/tabletop.store";
 
 import type {
@@ -66,6 +68,7 @@ function normalizePresentUserIds(snapshot: RoomRealtimeSnapshot) {
 export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
   const auth = useAuthStore();
   const messagesStore = useMessagesStore();
+  const diceStore = useDiceStore();
   const tabletopStore = useTabletopStore();
   const presentUserIds = ref<number[]>([]);
   const hasPresenceSnapshot = ref(false);
@@ -159,6 +162,11 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
     messagesStore.appendRealtimeMessage(payload);
   }
 
+  function handleDiceRoll(payload: DiceRoll) {
+    if (!payload?.room_id || payload.room_id !== options.roomId.value) return;
+    diceStore.appendRealtimeRoll(payload);
+  }
+
   async function fetchPresenceSnapshot() {
     const response = await getRoomRealtimePresence();
     const presence = response.presence;
@@ -195,6 +203,7 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
       }),
       wsClient.onEvent<RoomRealtimePresenceState>("room_user_presence", handlePresence),
       wsClient.onEvent<MessageResponse>("message", handleMessage),
+      wsClient.onEvent<DiceRoll>("dice_roll", handleDiceRoll),
       wsClient.onEvent<RoomRealtimeSessionClosed>("session_closed", handleSessionClosed),
       wsClient.onEvent<{ room_id: number; settings: RoomTabletopSettings }>(
         "tabletop_settings_updated",

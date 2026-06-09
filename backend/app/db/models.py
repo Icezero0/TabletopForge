@@ -9,6 +9,7 @@ from app.modules.rooms.models import (
     RoomMember,
     RoomPersonalMemo,
     RoomCharacter,
+    RoomDiceRoll,
     RoomTabletopSettings,
 )
 from app.modules.notifications.models import Notification

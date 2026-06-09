@@ -867,6 +867,15 @@ export default {
     workspace: {
       chatTab: "聊天",
       adventureLogTab: "冒险日志",
+      diceLogTab: "掷骰日志",
+    },
+    dice: {
+      errors: {
+        emptyFormula: "掷骰公式不能为空。",
+        unsupportedFormula: "不支持的掷骰公式。",
+        formulaOutOfRange: "掷骰公式超出允许范围。",
+        rollOutOfRange: "掷骰结果超出允许范围。",
+      },
     },
     membersEmpty: "没有符合条件的成员。",
     membersLoadFailed: "加载房间成员失败。",

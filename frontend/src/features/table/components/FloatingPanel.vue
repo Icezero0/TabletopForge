@@ -132,7 +132,7 @@ watch(
   bottom: 12px;
   left: 12px;
   width: min(360px, calc(100vw - 24px));
-  height: min(42vh, 360px);
+  height: min(48vh, 420px);
 }
 
 .floatingPanel:not(.inline).top-center {

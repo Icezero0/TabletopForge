@@ -97,6 +97,30 @@ class RealtimePublisher:
             data=message.model_dump(mode="json"),
         )
 
+    async def publish_dice_roll(
+        self,
+        *,
+        room_id: int,
+        roll: dict[str, Any],
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.DICE_ROLL,
+            data=roll,
+        )
+
+    async def publish_dice_roll_to_user(
+        self,
+        *,
+        user_id: int,
+        roll: dict[str, Any],
+    ) -> None:
+        await self._publish_event(
+            channel=user_channel(user_id),
+            event=WsEventType.DICE_ROLL,
+            data=roll,
+        )
+
     async def publish_tabletop_settings_updated(
         self,
         *,

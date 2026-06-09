@@ -17,6 +17,7 @@ export type WSEventName =
   | "room_user_presence"
   | "session_closed"
   | "message"
+  | "dice_roll"
   | "tabletop_settings_updated"
   | "map_created"
   | "map_updated"

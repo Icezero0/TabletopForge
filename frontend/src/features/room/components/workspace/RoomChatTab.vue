@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import ChatPanel from "@/features/chat/components/ChatPanel.vue";
+import DiceRollPanel from "@/features/room/components/workspace/DiceRollPanel.vue";
+import { useDiceStore } from "@/stores/dice.store";
 import type { ChatMessage, ChatSegment } from "@/features/chat/types";
-import type { MemberStatus } from "@/features/room/types";
+import type { GameRole, MemberStatus } from "@/features/room/types";
 
-defineProps<{
+const props = defineProps<{
   roomKey: number;
   active?: boolean;
+  gameRole: GameRole | "unknown";
+  currentUserId?: number | null;
+  characterOwnerById: Map<number, number>;
   messages: ChatMessage[];
   sendLabel: string;
   loading?: boolean;
@@ -27,7 +32,15 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
-const activeTab = ref<"chat" | "adventureLog">("chat");
+const diceStore = useDiceStore();
+const activeTab = ref<"chat" | "adventureLog" | "dice">("chat");
+
+watch(
+  () => diceStore.getRoomState(props.roomKey).draft,
+  (draft) => {
+    if (draft) activeTab.value = "dice";
+  },
+);
 </script>
 
 <template>
@@ -49,13 +62,21 @@ const activeTab = ref<"chat" | "adventureLog">("chat");
         :aria-selected="activeTab === 'adventureLog'"
         @click="activeTab = 'adventureLog'"
       >{{ t("room.workspace.adventureLogTab") }}</button>
+      <button
+        type="button"
+        class="workspaceTab"
+        :class="{ active: activeTab === 'dice' }"
+        role="tab"
+        :aria-selected="activeTab === 'dice'"
+        @click="activeTab = 'dice'"
+      >{{ t("room.workspace.diceLogTab") }}</button>
     </div>
 
     <ChatPanel
-      v-if="activeTab === 'chat'"
+      v-show="activeTab === 'chat'"
       class="chatPanelFill chatPanelWithDivider"
       :room-key="roomKey"
-      :active="active"
+      :active="active && activeTab === 'chat'"
       :messages="messages"
       :send-label="sendLabel"
       :loading="loading"
@@ -70,7 +91,22 @@ const activeTab = ref<"chat" | "adventureLog">("chat");
       @send="emit('send', $event)"
       @load-older="emit('loadOlder')"
     />
-    <div v-else class="adventureLogPane" role="tabpanel" :aria-label="t('room.workspace.adventureLogTab')"></div>
+    <div
+      v-show="activeTab === 'adventureLog'"
+      class="adventureLogPane"
+      role="tabpanel"
+      :aria-label="t('room.workspace.adventureLogTab')"
+    >
+      <span class="adventureLogPlaceholder">{{ t("common.comingSoon") }}</span>
+    </div>
+    <DiceRollPanel
+      v-show="activeTab === 'dice'"
+      :room-id="roomKey"
+      :active="active && activeTab === 'dice'"
+      :game-role="gameRole"
+      :current-user-id="currentUserId"
+      :character-owner-by-id="characterOwnerById"
+    />
   </div>
 </template>
 
@@ -100,7 +136,7 @@ const activeTab = ref<"chat" | "adventureLog">("chat");
 }
 
 .workspaceTab {
-  min-width: 72px;
+  min-width: 64px;
   height: 26px;
   padding: 0 10px;
   border: 0;
@@ -135,9 +171,16 @@ const activeTab = ref<"chat" | "adventureLog">("chat");
 
 .adventureLogPane {
   min-height: 0;
+  display: grid;
+  place-items: center;
   border: 1px solid color-mix(in srgb, var(--c-border) 76%, transparent);
   border-radius: 10px;
   background: color-mix(in srgb, var(--c-surface) 82%, var(--c-bg));
+}
+
+.adventureLogPlaceholder {
+  color: var(--c-text-muted);
+  font-size: 13px;
 }
 
 @media (max-width: 720px) {

@@ -1,10 +1,18 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { RoomDrawing, RoomMap, RoomToken } from "@/infra/api/rooms.api";
 import type { GameRole } from "@/features/room/types";
 import type { TabletopSelection } from "@/features/table/types";
 import { canInspectToken, canManageToken } from "@/features/table/utils/tokenDisplay";
+import {
+  ABILITY_KEYS,
+  ABILITY_LABEL_KEYS,
+  DND5E_SKILLS,
+  abilityMod,
+  type AbilityKey,
+} from "@/features/character/constants";
+import type { DiceDraft } from "@/stores/dice.store";
 
 const props = defineProps<{
   open: boolean;
@@ -31,6 +39,7 @@ const emit = defineEmits<{
   mapLayer: [action: "up" | "down" | "top" | "bottom"];
   tokenLayer: [action: "up" | "down" | "top" | "bottom"];
   drawingLayer: [action: "up" | "down" | "top" | "bottom"];
+  openDiceRoll: [draft: DiceDraft];
 }>();
 
 const { t } = useI18n();
@@ -66,6 +75,8 @@ const canManageSelectedToken = computed(() => {
   );
 });
 
+const canRollWithSelectedToken = computed(() => canManageSelectedToken.value);
+
 const canInspectSelectedToken = computed(() => {
   const token = selectedToken.value;
   return token != null && canInspectToken(token);
@@ -82,11 +93,152 @@ const canEditTextDrawing = computed(
 const layerDisabled = computed(() => props.maps.length <= 1);
 const tokenLayerDisabled = computed(() => props.tokens.length <= 1);
 const drawingLayerDisabled = computed(() => props.drawings.length <= 1);
+const diceSubmenuOpen = ref(false);
+const diceBranchOpen = ref<"savingThrows" | "skills" | null>(null);
+
+function panelNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
+function formatD20Formula(bonus: number | null) {
+  const value = bonus ?? 0;
+  return `1d20${value > 0 ? `+${value}` : value < 0 ? `${value}` : ""}`;
+}
+
+function tokenPanel(token: RoomToken) {
+  return token.panel as Record<string, unknown> | null | undefined;
+}
+
+function tokenAbilityScore(token: RoomToken, key: AbilityKey) {
+  const scores = tokenPanel(token)?.ability_scores as Record<string, unknown> | undefined;
+  return panelNumber(scores?.[key]) ?? 10;
+}
+
+function tokenSpellAttackBonus(token: RoomToken): number | null {
+  const panel = tokenPanel(token);
+  const raw = panel?.spell_attack_bonus;
+  if (raw && typeof raw === "object") {
+    return panelNumber((raw as { value?: unknown }).value);
+  }
+  return panelNumber(raw);
+}
+
+function tokenSavingThrowBonus(token: RoomToken, key: AbilityKey): number {
+  const saves = tokenPanel(token)?.saving_throws as Record<string, unknown> | undefined;
+  return panelNumber(saves?.[key]) ?? abilityMod(tokenAbilityScore(token, key));
+}
+
+function tokenSkillBonus(token: RoomToken, key: string, ability: AbilityKey): number {
+  const skills = tokenPanel(token)?.skills as Record<string, unknown> | undefined;
+  return panelNumber(skills?.[key]) ?? abilityMod(tokenAbilityScore(token, ability));
+}
+
+function userDiceDraft(): DiceDraft {
+  return {
+    actorType: "user",
+    actorTokenId: null,
+    actorDisplayName: "",
+    label: "",
+    formula: "1d20",
+    visibility: "public",
+  };
+}
+
+function tokenDiceDraft(token: RoomToken, label: string, formula: string): DiceDraft {
+  return {
+    actorType: "token",
+    actorTokenId: token.id,
+    actorDisplayName: token.name,
+    label,
+    formula,
+    visibility: "public",
+  };
+}
+
+const tokenPrimaryDiceScenes = computed(() => {
+  const token = selectedToken.value;
+  if (!token) return [];
+  return [
+    { label: "攻击投掷", draft: tokenDiceDraft(token, "攻击投掷", "1d20") },
+    {
+      label: "法术攻击投掷",
+      draft: tokenDiceDraft(
+        token,
+        "法术攻击投掷",
+        formatD20Formula(tokenSpellAttackBonus(token)),
+      ),
+    },
+  ];
+});
+
+const tokenUtilityDiceScenes = computed(() => {
+  const token = selectedToken.value;
+  if (!token) return [];
+  return [
+    { label: "数值投掷", draft: tokenDiceDraft(token, "数值投掷", "1d6") },
+    { label: "自定义", draft: tokenDiceDraft(token, "", "1d20") },
+  ];
+});
+
+const tokenSavingThrowScenes = computed(() => {
+  const token = selectedToken.value;
+  if (!token) return [];
+  return ABILITY_KEYS.map((key) => {
+    const label = `${t(ABILITY_LABEL_KEYS[key])}豁免`;
+    return {
+      label,
+      draft: tokenDiceDraft(token, label, formatD20Formula(tokenSavingThrowBonus(token, key))),
+    };
+  });
+});
+
+const tokenSkillScenes = computed(() => {
+  const token = selectedToken.value;
+  if (!token) return [];
+  return DND5E_SKILLS.map((skill) => {
+    const label = `${t(skill.labelKey)}检定`;
+    return {
+      label,
+      draft: tokenDiceDraft(
+        token,
+        label,
+        formatD20Formula(tokenSkillBonus(token, skill.key, skill.ability)),
+      ),
+    };
+  });
+});
+
+function toggleDiceBranch(branch: "savingThrows" | "skills") {
+  diceBranchOpen.value = diceBranchOpen.value === branch ? null : branch;
+}
 
 function onAction(fn: () => void) {
   fn();
+  diceSubmenuOpen.value = false;
+  diceBranchOpen.value = null;
   emit("close");
 }
+
+watch(
+  () => props.open,
+  (open) => {
+    if (!open) diceSubmenuOpen.value = false;
+    if (!open) diceBranchOpen.value = null;
+  },
+);
+
+watch(
+  () => props.selection,
+  () => {
+    diceSubmenuOpen.value = false;
+    diceBranchOpen.value = null;
+  },
+);
 </script>
 
 <template>
@@ -145,6 +297,90 @@ function onAction(fn: () => void) {
         </button>
       </template>
       <template v-else-if="selection?.type === 'token' && selectedToken">
+        <div v-if="canRollWithSelectedToken" class="submenuHost">
+          <button
+            type="button"
+            class="menuItem submenuTrigger"
+            :class="{ active: diceSubmenuOpen }"
+            @click.stop="diceSubmenuOpen = !diceSubmenuOpen"
+          >
+            <span>掷骰</span>
+            <span class="submenuArrow">›</span>
+          </button>
+          <div v-if="diceSubmenuOpen" class="submenu" @click.stop>
+            <button
+              v-for="scene in tokenPrimaryDiceScenes"
+              :key="scene.label"
+              type="button"
+              class="menuItem"
+              @click="onAction(() => emit('openDiceRoll', scene.draft))"
+            >
+              {{ scene.label }}
+            </button>
+            <div class="submenuHost">
+              <button
+                type="button"
+                class="menuItem submenuTrigger"
+                :class="{ active: diceBranchOpen === 'savingThrows' }"
+                @click.stop="toggleDiceBranch('savingThrows')"
+              >
+                <span>豁免检定</span>
+                <span class="submenuArrow">›</span>
+              </button>
+              <div
+                v-if="diceBranchOpen === 'savingThrows'"
+                class="submenu nestedSubmenu compactSubmenu"
+                @click.stop
+              >
+                <button
+                  v-for="scene in tokenSavingThrowScenes"
+                  :key="scene.label"
+                  type="button"
+                  class="menuItem"
+                  @click="onAction(() => emit('openDiceRoll', scene.draft))"
+                >
+                  {{ scene.label }}
+                </button>
+              </div>
+            </div>
+            <div class="submenuHost">
+              <button
+                type="button"
+                class="menuItem submenuTrigger"
+                :class="{ active: diceBranchOpen === 'skills' }"
+                @click.stop="toggleDiceBranch('skills')"
+              >
+                <span>技能检定</span>
+                <span class="submenuArrow">›</span>
+              </button>
+              <div
+                v-if="diceBranchOpen === 'skills'"
+                class="submenu nestedSubmenu compactSubmenu"
+                @click.stop
+              >
+                <button
+                  v-for="scene in tokenSkillScenes"
+                  :key="scene.label"
+                  type="button"
+                  class="menuItem"
+                  @click="onAction(() => emit('openDiceRoll', scene.draft))"
+                >
+                  {{ scene.label }}
+                </button>
+              </div>
+            </div>
+            <button
+              v-for="scene in tokenUtilityDiceScenes"
+              :key="scene.label"
+              type="button"
+              class="menuItem"
+              @click="onAction(() => emit('openDiceRoll', scene.draft))"
+            >
+              {{ scene.label }}
+            </button>
+          </div>
+        </div>
+        <div v-if="canRollWithSelectedToken" class="menuDivider" />
         <button
           v-if="canInspectSelectedToken"
           type="button"
@@ -199,6 +435,15 @@ function onAction(fn: () => void) {
             {{ t("table.menu.layerBottom") }}
           </button>
         </template>
+      </template>
+      <template v-else-if="!selection">
+        <button
+          type="button"
+          class="menuItem"
+          @click="onAction(() => emit('openDiceRoll', userDiceDraft()))"
+        >
+          掷骰
+        </button>
       </template>
       <template v-else-if="selection?.type === 'drawing' && canEraseDrawing">
         <button
@@ -301,6 +546,52 @@ function onAction(fn: () => void) {
 
 .menuItem.danger {
   color: var(--c-danger, #dc2626);
+}
+
+.submenuHost {
+  position: relative;
+}
+
+.submenuTrigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.submenuTrigger.active {
+  background: color-mix(in srgb, var(--c-primary) 14%, transparent);
+}
+
+.submenuArrow {
+  color: var(--c-text-muted);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.submenu {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 6px);
+  min-width: 150px;
+  padding: 6px;
+  border: 1px solid var(--c-border);
+  border-radius: 10px;
+  background: var(--c-surface);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--c-bg) 45%, transparent);
+}
+
+.nestedSubmenu {
+  top: -6px;
+}
+
+.compactSubmenu {
+  max-height: min(360px, calc(100vh - 48px));
+  overflow-y: auto;
+}
+
+.compactSubmenu .menuItem {
+  padding-block: 7px;
 }
 
 .menuDivider {

@@ -361,8 +361,12 @@ class RoomTabletopRepository:
             panel.pop("damage_taken", None)
             token.panel = panel
         await db.flush()
-        await db.refresh(token)
-        return token
+        result = await db.execute(
+            select(RoomToken)
+            .where(RoomToken.id == token.id)
+            .options(selectinload(RoomToken.library_resource))
+        )
+        return result.scalar_one()
 
     async def delete_token(self, db: AsyncSession, *, token: RoomToken) -> None:
         await db.delete(token)

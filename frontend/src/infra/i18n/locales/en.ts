@@ -867,6 +867,15 @@ export default {
     workspace: {
       chatTab: "Chat",
       adventureLogTab: "Adventure Log",
+      diceLogTab: "Dice Log",
+    },
+    dice: {
+      errors: {
+        emptyFormula: "Dice formula is empty.",
+        unsupportedFormula: "Unsupported dice formula.",
+        formulaOutOfRange: "Dice formula is out of range.",
+        rollOutOfRange: "Dice roller returned out-of-range value.",
+      },
     },
     membersEmpty: "No matching members.",
     membersLoadFailed: "Failed to load room members.",

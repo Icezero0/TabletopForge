@@ -61,6 +61,7 @@ import { computeMapScaleForViewport } from "@/features/table/utils/mapScale";
 import { canInspectToken, canManageToken } from "@/features/table/utils/tokenDisplay";
 import { fitGridFromSamples, circularMeanPhase, type GridSampleRect, type GridSampleLegacy } from "@/features/table/utils/gridFit";
 import { useMessagesStore } from "@/stores/messages.store";
+import { useDiceStore, type DiceDraft } from "@/stores/dice.store";
 import { useTabletopStore } from "@/stores/tabletop.store";
 import { useEntitiesStore } from "@/stores/entities.store";
 import { useAuthStore } from "@/stores/auth.store";
@@ -73,6 +74,7 @@ const router = useRouter();
 const auth = useAuthStore();
 const entitiesStore = useEntitiesStore();
 const messagesStore = useMessagesStore();
+const diceStore = useDiceStore();
 const tabletopStore = useTabletopStore();
 const toasts = useToastsStore();
 
@@ -325,6 +327,7 @@ watch(textEdit, (edit) => {
 const contextMenuOpen = ref(false);
 const contextMenuX = ref(0);
 const contextMenuY = ref(0);
+const chatPanelCollapsed = ref(false);
 
 watch(tabletopMaps, (maps) => {
   if (!maps.length) {
@@ -821,7 +824,10 @@ function handleMapNaturalSize(payload: { mapId: number; w: number; h: number }) 
 
 function handleContextMenu(event: MouseEvent) {
   if (toolMode.value === "draw" || toolMode.value === "measure") return;
-  if (currentUserGameRole.value !== "GM") return;
+  releaseLocalObjectSelection();
+  clearSelection();
+  clearInspection();
+  selectedCharacterListId.value = null;
   contextMenuX.value = event.clientX;
   contextMenuY.value = event.clientY;
   contextMenuOpen.value = true;
@@ -829,6 +835,12 @@ function handleContextMenu(event: MouseEvent) {
 
 function closeContextMenu() {
   contextMenuOpen.value = false;
+}
+
+function handleOpenDiceRoll(draft: DiceDraft) {
+  if (!roomId.value) return;
+  chatPanelCollapsed.value = false;
+  diceStore.setDraft(roomId.value, draft);
 }
 
 function handleClearSelection() {
@@ -1572,6 +1584,15 @@ async function fetchRoomMessages() {
   }
 }
 
+async function fetchRoomDiceRolls() {
+  if (!roomId.value) return;
+  try {
+    await diceStore.refreshRoomRolls(roomId.value, 30);
+  } catch {
+    // dice.store keeps the panel error state
+  }
+}
+
 async function loadOlderRoomMessages() {
   if (!roomId.value) return;
 
@@ -1701,6 +1722,7 @@ onMounted(() => {
   applyOpenCharacterPopoverFromQuery();
   void fetchRoom();
   void fetchRoomMessages();
+  void fetchRoomDiceRolls();
   void fetchRoomMembers();
   if (roomId.value) {
     void tabletopStore.loadSnapshot(roomId.value);
@@ -1725,6 +1747,7 @@ watch(roomId, (newId, oldId) => {
   }
   void fetchRoom();
   void fetchRoomMessages();
+  void fetchRoomDiceRolls();
   void fetchRoomMembers();
   if (newId) {
     void tabletopStore.loadSnapshot(newId);
@@ -1845,6 +1868,7 @@ watch(
             @map-layer="handleContextMapLayer"
             @token-layer="handleContextTokenLayer"
             @drawing-layer="handleContextDrawingLayer"
+            @open-dice-roll="handleOpenDiceRoll"
           />
           <AddRoomCharacterDialog
             :open="addCharacterDialogOpen"
@@ -1927,6 +1951,7 @@ watch(
           </div>
 
           <FloatingPanel
+            v-model:collapsed="chatPanelCollapsed"
             :title="t('table.chat.title')"
             anchor="bottom-left"
             collapse-to="bottom-left"
@@ -1936,6 +1961,9 @@ watch(
             <RoomChatTab
               :room-key="roomId"
               :active="true"
+              :game-role="currentUserGameRole"
+              :current-user-id="currentUserId"
+              :character-owner-by-id="characterOwnerById"
               :messages="roomChatMessages"
               :member-status-by-user-id="roomMemberStatusByUserId"
               :send-label="t('room.chat.send')"

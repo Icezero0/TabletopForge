@@ -164,14 +164,9 @@ export function useChatTimelineScroll(options: UseChatTimelineScrollOptions) {
     }
   }
 
-  function restoreViewportAnchor(anchor: ViewportAnchor) {
+  function restoreInactiveViewportAnchor(anchor: ViewportAnchor) {
     const timeline = timelineRef.value;
     if (!isTimelineMeasurable(timeline)) return;
-
-    if (anchor.stickToBottom) {
-      scrollToBottom();
-      return;
-    }
 
     const anchorElement = getMessageElement(anchor.messageId);
     if (!anchorElement) {
@@ -183,7 +178,11 @@ export function useChatTimelineScroll(options: UseChatTimelineScrollOptions) {
     }
 
     shouldStickToBottom.value = getDistanceToBottom() <= BOTTOM_STICKY_THRESHOLD_PX;
-    pruneVisibleNewMessages();
+    if (shouldStickToBottom.value) {
+      resetUnseenNewMessages();
+    } else {
+      pruneVisibleNewMessages();
+    }
   }
 
   function restoreViewportAfterInactiveIfNeeded() {
@@ -194,7 +193,7 @@ export function useChatTimelineScroll(options: UseChatTimelineScrollOptions) {
     shouldRestoreViewportAfterInactive = false;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        restoreViewportAnchor(anchor);
+        restoreInactiveViewportAnchor(anchor);
         rememberVisibleViewportAnchor();
       });
     });

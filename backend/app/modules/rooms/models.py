@@ -347,6 +347,46 @@ class RoomToken(Base):
         return None
 
 
+class RoomDiceRoll(Base):
+    __tablename__ = "room_dice_rolls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    room_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("rooms.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    roller_user_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    actor_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    actor_token_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("room_tokens.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    actor_display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    label: Mapped[str] = mapped_column(String(255), nullable=False, default="", server_default="")
+    formula: Mapped[str] = mapped_column(String(255), nullable=False)
+    visibility: Mapped[str] = mapped_column(String(16), nullable=False, default="public", server_default="public")
+    total: Mapped[int] = mapped_column(Integer, nullable=False)
+    detail: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        index=True,
+    )
+
+    room: Mapped["Room"] = relationship("Room")
+    roller: Mapped["User"] = relationship("User", foreign_keys=[roller_user_id])
+    actor_token: Mapped[Optional["RoomToken"]] = relationship("RoomToken")
+
+
 class RoomCharacter(Base):
     __tablename__ = "room_characters"
 

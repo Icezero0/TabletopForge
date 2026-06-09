@@ -36,6 +36,7 @@ class WsEventType(StrEnum):
     SESSION_CLOSED = "session_closed"
 
     MESSAGE = "message"
+    DICE_ROLL = "dice_roll"
 
     TABLETOP_SETTINGS_UPDATED = "tabletop_settings_updated"
     MAP_CREATED = "map_created"
