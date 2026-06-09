@@ -101,6 +101,18 @@ export const useTabletopStore = defineStore("tabletop", {
       const state = this.ensureRoom(roomId);
       if (!state.snapshot) return;
       state.snapshot.maps = state.snapshot.maps.filter((m) => m.id !== mapId);
+      const settings = state.snapshot.settings;
+      const fogState = settings.fog_state;
+      if (fogState?.maps?.[String(mapId)]) {
+        const { [String(mapId)]: _removed, ...remainingMaps } = fogState.maps;
+        state.snapshot.settings = {
+          ...settings,
+          fog_state: {
+            shapes: fogState.shapes ?? [],
+            maps: remainingMaps,
+          },
+        };
+      }
     },
 
     applyDrawingCreated(roomId: number, drawing: RoomDrawing) {

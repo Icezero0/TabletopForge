@@ -624,6 +624,15 @@ class RoomTabletopService:
             )
         library_resource = room_map.library_resource
         await self.repo.delete_map(db, room_map=room_map)
+        settings = await self.repo.get_settings(db, room_id=room_id)
+        if settings is not None and settings.fog_state:
+            fog_maps = dict((settings.fog_state or {}).get("maps") or {})
+            if str(map_id) in fog_maps:
+                fog_maps.pop(str(map_id), None)
+                settings.fog_state = {
+                    **settings.fog_state,
+                    "maps": fog_maps,
+                }
         await self.library_repo.adjust_usage_count(db, resource=library_resource, delta=-1)
         await db.commit()
 

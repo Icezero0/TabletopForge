@@ -39,6 +39,7 @@ class WsEventType(StrEnum):
     DICE_ROLL = "dice_roll"
 
     TABLETOP_SETTINGS_UPDATED = "tabletop_settings_updated"
+    TABLETOP_SNAPSHOT_REPLACED = "tabletop_snapshot_replaced"
     MAP_CREATED = "map_created"
     MAP_UPDATED = "map_updated"
     MAP_DELETED = "map_deleted"

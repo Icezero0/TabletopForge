@@ -19,6 +19,7 @@ export type WSEventName =
   | "message"
   | "dice_roll"
   | "tabletop_settings_updated"
+  | "tabletop_snapshot_replaced"
   | "map_created"
   | "map_updated"
   | "map_deleted"

@@ -435,6 +435,20 @@ export type RoomTabletopSnapshot = {
   tokens: RoomToken[];
 };
 
+export type RoomScene = {
+  id: number;
+  room_id: number;
+  name: string;
+  is_active: boolean;
+  created_by_user_id: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type RoomSceneDetail = RoomScene & {
+  snapshot: Record<string, unknown>;
+};
+
 export type TokenStateSummary = {
   current_hp: number | null;
   max_hp: number | null;
@@ -473,6 +487,35 @@ export function assetContentUrl(assetId: number) {
 export async function getRoomTabletop(roomId: number) {
   const { data } = await http.get<RoomTabletopSnapshot>(`/rooms/${roomId}/tabletop`);
   return data;
+}
+
+export async function getRoomScenes(roomId: number) {
+  const { data } = await http.get<RoomScene[]>(`/rooms/${roomId}/scenes`);
+  return data;
+}
+
+export async function createRoomScene(roomId: number, payload: { name: string }) {
+  const { data } = await http.post<RoomScene>(`/rooms/${roomId}/scenes`, payload);
+  return data;
+}
+
+export async function saveRoomSceneSnapshot(roomId: number, sceneId: number) {
+  const { data } = await http.post<RoomScene>(`/rooms/${roomId}/scenes/${sceneId}/snapshot`);
+  return data;
+}
+
+export async function activateRoomScene(roomId: number, sceneId: number) {
+  const { data } = await http.post<RoomScene>(`/rooms/${roomId}/scenes/${sceneId}/activate`);
+  return data;
+}
+
+export async function renameRoomScene(roomId: number, sceneId: number, payload: { name: string }) {
+  const { data } = await http.patch<RoomScene>(`/rooms/${roomId}/scenes/${sceneId}`, payload);
+  return data;
+}
+
+export async function deleteRoomScene(roomId: number, sceneId: number) {
+  await http.delete(`/rooms/${roomId}/scenes/${sceneId}`);
 }
 
 export async function patchRoomTabletopSettings(

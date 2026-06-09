@@ -32,6 +32,8 @@ from app.modules.rooms.personal_memo.schemas import (
     RoomPersonalMemoResponse,
 )
 from app.modules.rooms.personal_memo.service import RoomPersonalMemoService
+from app.modules.rooms.scenes.schemas import RoomSceneCreate, RoomSceneDetailResponse, RoomSceneRename, RoomSceneResponse
+from app.modules.rooms.scenes.service import RoomSceneService
 from app.modules.rooms.tabletop.schemas import (
     RoomDrawingCreate,
     RoomDrawingPatch,
@@ -77,6 +79,7 @@ join_request_service = RoomJoinRequestService()
 personal_memo_service = RoomPersonalMemoService()
 tabletop_service = RoomTabletopService()
 room_characters_service = RoomCharacterService()
+room_scene_service = RoomSceneService()
 
 
 @router.post("", response_model=RoomResponse, status_code=status.HTTP_201_CREATED)
@@ -229,6 +232,96 @@ async def get_room_tabletop(
         room_id=room_id,
         user=current_user,
     )
+
+
+@router.get("/{room_id}/scenes", response_model=list[RoomSceneResponse])
+async def list_room_scenes(
+    room_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[RoomSceneResponse]:
+    return await room_scene_service.list_scenes(db, room_id=room_id, user=current_user)
+
+
+@router.post("/{room_id}/scenes", response_model=RoomSceneResponse, status_code=status.HTTP_201_CREATED)
+async def create_room_scene(
+    room_id: int,
+    payload: RoomSceneCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RoomSceneResponse:
+    return await room_scene_service.create_scene(db, room_id=room_id, user=current_user, payload=payload)
+
+
+@router.get("/{room_id}/scenes/{scene_id}", response_model=RoomSceneDetailResponse)
+async def get_room_scene(
+    room_id: int,
+    scene_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RoomSceneDetailResponse:
+    return await room_scene_service.get_scene_detail(db, room_id=room_id, scene_id=scene_id, user=current_user)
+
+
+@router.patch("/{room_id}/scenes/{scene_id}", response_model=RoomSceneResponse)
+async def rename_room_scene(
+    room_id: int,
+    scene_id: int,
+    payload: RoomSceneRename,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RoomSceneResponse:
+    return await room_scene_service.rename_scene(
+        db,
+        room_id=room_id,
+        scene_id=scene_id,
+        user=current_user,
+        payload=payload,
+    )
+
+
+@router.post("/{room_id}/scenes/{scene_id}/snapshot", response_model=RoomSceneResponse)
+async def update_room_scene_snapshot(
+    room_id: int,
+    scene_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RoomSceneResponse:
+    return await room_scene_service.update_scene_snapshot(
+        db,
+        room_id=room_id,
+        scene_id=scene_id,
+        user=current_user,
+    )
+
+
+@router.post("/{room_id}/scenes/{scene_id}/activate", response_model=RoomSceneResponse)
+async def activate_room_scene(
+    room_id: int,
+    scene_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> RoomSceneResponse:
+    scene = await room_scene_service.activate_scene(
+        db,
+        room_id=room_id,
+        scene_id=scene_id,
+        user=current_user,
+    )
+    await publisher.publish_tabletop_snapshot_replaced(room_id=room_id, scene_id=scene.id)
+    await publisher.publish_room_characters(room_id=room_id)
+    return scene
+
+
+@router.delete("/{room_id}/scenes/{scene_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_room_scene(
+    room_id: int,
+    scene_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    await room_scene_service.delete_scene(db, room_id=room_id, scene_id=scene_id, user=current_user)
 
 
 @router.patch(

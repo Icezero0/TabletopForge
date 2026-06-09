@@ -133,6 +133,18 @@ class RealtimePublisher:
             data={"room_id": room_id, "settings": settings},
         )
 
+    async def publish_tabletop_snapshot_replaced(
+        self,
+        *,
+        room_id: int,
+        scene_id: int,
+    ) -> None:
+        await self._publish_event(
+            channel=room_channel(room_id),
+            event=WsEventType.TABLETOP_SNAPSHOT_REPLACED,
+            data={"room_id": room_id, "scene_id": scene_id},
+        )
+
     async def publish_map_created(
         self,
         *,

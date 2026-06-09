@@ -20,6 +20,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   patchMap: [mapId: number, payload: { x?: number; y?: number; scale?: number; scale_x?: number | null; scale_y?: number | null }];
+  contextMenu: [mapId: number, event: MouseEvent];
 }>();
 
 const corners: { id: Corner; class: string; cursor: string }[] = [
@@ -146,6 +147,14 @@ function onDragUp(event: PointerEvent) {
   dragPointerId = null;
   dragTargetMapId = null;
   (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+}
+
+function onContextMenu(event: MouseEvent) {
+  const map = selectedMap.value;
+  if (!map) return;
+  event.preventDefault();
+  event.stopPropagation();
+  emit("contextMenu", map.id, event);
 }
 
 function startDrag(event: PointerEvent, map?: RoomMap) {
@@ -319,6 +328,7 @@ function onEdgeUp(event: PointerEvent) {
       @pointermove="onDragMove"
       @pointerup="onDragUp"
       @pointercancel="onDragUp"
+      @contextmenu="onContextMenu"
     />
     <!-- corner handles: proportional resize -->
     <div
@@ -332,6 +342,7 @@ function onEdgeUp(event: PointerEvent) {
       @pointermove="onResizeMove"
       @pointerup="onResizeUp"
       @pointercancel="onResizeUp"
+      @contextmenu="onContextMenu"
     />
     <!-- edge handles: single-axis resize -->
     <div
@@ -345,6 +356,7 @@ function onEdgeUp(event: PointerEvent) {
       @pointermove="onEdgeMove"
       @pointerup="onEdgeUp"
       @pointercancel="onEdgeUp"
+      @contextmenu="onContextMenu"
     />
   </div>
 </template>

@@ -39,6 +39,7 @@ type UseRoomRealtimeSessionOptions = {
   refreshRoomMembers: () => void | Promise<void>;
   refreshRoomRequests: () => void | Promise<void>;
   refreshRoomCharacters?: () => void | Promise<void>;
+  refreshRoomScenes?: () => void | Promise<void>;
   onCharacterStateUpdated?: (characterId: number, summary: TokenStateSummary) => void;
   onRoomCharacterUpdated?: (entry: RoomCharacterEntry) => void;
   onSessionClosed?: (payload: RoomRealtimeSessionClosed) => void;
@@ -210,6 +211,15 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
         (payload) => {
           if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
           tabletopStore.applySettings(options.roomId.value, payload.settings);
+        },
+      ),
+      wsClient.onEvent<{ room_id: number; scene_id: number }>(
+        "tabletop_snapshot_replaced",
+        (payload) => {
+          if (!isCurrentRoomPayload(payload, options.roomId.value)) return;
+          void tabletopStore.loadSnapshot(options.roomId.value);
+          void options.refreshRoomCharacters?.();
+          void options.refreshRoomScenes?.();
         },
       ),
       wsClient.onEvent<{ room_id: number; map: RoomMap }>("map_created", (payload) => {

@@ -8,13 +8,14 @@ const ZOOM_SENSITIVITY = 0.001;
 
 type PersistedViewport = { x: number; y: number; scale: number };
 
-function viewportStorageKey(roomId: number) {
-  return `room-${roomId}-viewport`;
+function viewportStorageKey(roomId: number, sceneId?: number | null) {
+  return sceneId ? `room-${roomId}-scene-${sceneId}-viewport` : `room-${roomId}-viewport`;
 }
 
 export function useTabletopViewport(
   toolMode: Ref<TableToolMode>,
   roomId?: Ref<number | null | undefined>,
+  sceneId?: Ref<number | null | undefined>,
 ) {
   const viewportX = ref(0);
   const viewportY = ref(0);
@@ -34,27 +35,41 @@ export function useTabletopViewport(
 
   // --- persistence ---
 
-  function loadPersistedViewport(id: number | null | undefined) {
+  function currentStorageKey() {
+    if (!roomId?.value) return null;
+    return viewportStorageKey(roomId.value, sceneId?.value ?? null);
+  }
+
+  function persistViewport(key = currentStorageKey()) {
+    if (!key) return;
+    writePersistedState<PersistedViewport>(key, {
+      x: viewportX.value,
+      y: viewportY.value,
+      scale: viewportScale.value,
+    });
+  }
+
+  function loadPersistedViewport(id: number | null | undefined, activeSceneId?: number | null | undefined) {
     if (!id) return;
-    const saved = readPersistedState<PersistedViewport | null>(viewportStorageKey(id), null);
+    const saved = readPersistedState<PersistedViewport | null>(viewportStorageKey(id, activeSceneId), null);
     if (saved) {
       viewportX.value = saved.x;
       viewportY.value = saved.y;
       viewportScale.value = Math.min(MAX_VIEWPORT_SCALE, Math.max(MIN_VIEWPORT_SCALE, saved.scale));
+      return;
     }
+    viewportX.value = 0;
+    viewportY.value = 0;
+    viewportScale.value = 1;
   }
 
   let saveTimer: ReturnType<typeof setTimeout> | null = null;
   function scheduleSave() {
-    if (!roomId?.value) return;
+    const key = currentStorageKey();
+    if (!key) return;
     if (saveTimer !== null) clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      if (!roomId?.value) return;
-      writePersistedState<PersistedViewport>(viewportStorageKey(roomId.value), {
-        x: viewportX.value,
-        y: viewportY.value,
-        scale: viewportScale.value,
-      });
+      persistViewport(key);
     }, 500);
   }
 
@@ -65,7 +80,22 @@ export function useTabletopViewport(
   }
 
   if (roomId) {
-    watch(roomId, (id) => loadPersistedViewport(id), { immediate: true });
+    watch(
+      () => [roomId.value, sceneId?.value ?? null] as const,
+      ([nextRoomId, nextSceneId], previous) => {
+        const prevRoomId = previous?.[0] ?? null;
+        const prevSceneId = previous?.[1] ?? null;
+        if (saveTimer !== null) {
+          clearTimeout(saveTimer);
+          saveTimer = null;
+        }
+        if (prevRoomId) {
+          persistViewport(viewportStorageKey(prevRoomId, prevSceneId));
+        }
+        loadPersistedViewport(nextRoomId, nextSceneId);
+      },
+      { immediate: true },
+    );
   }
 
   // --- viewport interaction ---
@@ -170,6 +200,7 @@ export function useTabletopViewport(
   onUnmounted(() => {
     unbind?.();
     if (saveTimer !== null) clearTimeout(saveTimer);
+    persistViewport();
   });
 
   function setViewportEl(el: HTMLElement | null) {

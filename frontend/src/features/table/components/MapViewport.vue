@@ -53,6 +53,7 @@ const props = withDefaults(
     characterOwnerById?: Map<number, number>;
     playerColorByUserId?: Map<number, string>;
     roomId?: number | null;
+    activeSceneId?: number | null;
   }>(),
   {
     maps: () => [],
@@ -131,7 +132,8 @@ const emit = defineEmits<{
 
 const toolModeRef = computed(() => props.toolMode);
 const roomIdRef = toRef(props, "roomId");
-const { viewportTransform, viewportScale, setViewportEl, resetViewport, centerScenePoint } = useTabletopViewport(toolModeRef, roomIdRef);
+const activeSceneIdRef = toRef(props, "activeSceneId");
+const { viewportTransform, viewportScale, setViewportEl, resetViewport, centerScenePoint } = useTabletopViewport(toolModeRef, roomIdRef, activeSceneIdRef);
 
 
 const patternUid = useId().replace(/:/g, "");
@@ -479,6 +481,7 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
         :game-role="gameRole"
         :viewport-scale="viewportScale"
         @patch-map="(id, p) => emit('patchMap', id, p)"
+        @context-menu="(id, ev) => emit('mapContextMenu', id, ev)"
       />
       <TokenSelectionOverlay
         :selection="selection"

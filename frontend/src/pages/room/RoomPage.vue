@@ -3,18 +3,27 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import {
+  activateRoomScene,
+  createRoomScene,
+  deleteRoomScene,
   getRoomById,
   getRoomMembers,
+  getRoomScenes,
   patchMyPlayerColor,
   patchRoom,
+  renameRoomScene,
   type Room,
   type RoomCombatState,
   type RoomFogMapMask,
   type RoomFogState,
   type RoomPatchPayload,
+  type RoomScene,
 } from "@/infra/api/rooms.api";
 import { patchLibraryResourceGrid, type LibraryResource } from "@/infra/api/library.api";
 import BaseLayout from "@/ui/layout/BaseLayout.vue";
+import BaseButton from "@/ui/base/BaseButton.vue";
+import BaseConfirmDialog from "@/ui/base/BaseConfirmDialog.vue";
+import BaseInput from "@/ui/base/BaseInput.vue";
 import RoomChatTab from "@/features/room/components/workspace/RoomChatTab.vue";
 import type { GameRole, MemberStatus, RoomRole } from "@/features/room/types";
 import type { ChatSegment } from "@/features/chat/types";
@@ -93,6 +102,15 @@ const membersLoading = ref(false);
 const membersError = ref("");
 const settingsSaving = ref(false);
 const combatSaving = ref(false);
+const scenes = ref<RoomScene[]>([]);
+const scenesLoading = ref(false);
+const sceneSaving = ref(false);
+const sceneCreateDialogOpen = ref(false);
+const sceneNameDraft = ref("");
+const sceneNameMode = ref<"create" | "edit">("create");
+const editingSceneId = ref<number | null>(null);
+const sceneDeleteConfirmOpen = ref(false);
+const sceneDeleteTarget = ref<RoomScene | null>(null);
 const currentUserRoomRole = ref<RoomRoleState>("unknown");
 const currentUserGameRole = ref<GameRole | "unknown">("unknown");
 
@@ -136,6 +154,11 @@ const memberDangerActionDisabled = computed(() => currentUserRoomRole.value === 
 
 const canAddMap = computed(() => currentUserGameRole.value === "GM");
 const canAddToken = computed(() => currentUserGameRole.value === "GM" || currentUserGameRole.value === "PL");
+const assetPanelActionCount = computed(() =>
+  Number(currentUserGameRole.value === "GM") +
+  Number(canAddMap.value) +
+  Number(canAddToken.value),
+);
 
 const tokenSpawnCharacters = computed(() => {
   if (currentUserGameRole.value === "GM") return roomCharacters.value;
@@ -145,6 +168,7 @@ const tokenSpawnCharacters = computed(() => {
   return [];
 });
 const canEditGrid = computed(() => currentUserGameRole.value === "GM");
+const activeScene = computed(() => scenes.value.find((scene) => scene.is_active) ?? null);
 
 const { toolMode, disabledTools } = useTableToolMode(currentUserGameRole);
 const {
@@ -169,6 +193,7 @@ const fogBrushSession = ref<{
   lastX: number;
   lastY: number;
 } | null>(null);
+let pendingFogSave: Promise<void> | null = null;
 
 const {
   measureState,
@@ -214,6 +239,30 @@ const fogStateForViewport = computed<RoomFogState | null>(() => {
     },
   };
 });
+
+watch(
+  () => tabletopSettings.value?.fog_state,
+  () => {
+    fogMaskOverrides.value = {};
+    fogBrushSession.value = null;
+  },
+);
+
+function removeFogMaskOverride(mapId: number) {
+  if (!(mapId in fogMaskOverrides.value)) return;
+  const { [mapId]: _removed, ...remaining } = fogMaskOverrides.value;
+  fogMaskOverrides.value = remaining;
+}
+
+function fogStateWithoutMap(mapId: number) {
+  const next = currentFogState();
+  if (!next.maps?.[String(mapId)]) return null;
+  const { [String(mapId)]: _removed, ...remainingMaps } = next.maps;
+  return {
+    shapes: next.shapes ?? [],
+    maps: remainingMaps,
+  };
+}
 const currentUserId = computed(() => auth.me?.id ?? null);
 const { selection, selectMap, selectDrawing, selectToken, clearSelection } = useTabletopSelection();
 const OBJECT_SELECTION_LEASE_MS = 30_000;
@@ -239,6 +288,7 @@ watch(gridAnnotationOpen, (open) => {
 const addCharacterDialogOpen = ref(false);
 const characterPopoverOpen = ref(false);
 const mapPopoverOpen = ref(false);
+const scenePopoverOpen = ref(false);
 const tokenPopoverOpen = ref(false);
 const libraryMapPickerOpen = ref(false);
 const libraryCharacters = ref<Character[]>([]);
@@ -894,6 +944,17 @@ async function saveFogState(next: RoomFogState) {
   }
 }
 
+function queueFogSave(next: RoomFogState) {
+  pendingFogSave = saveFogState(next).finally(() => {
+    pendingFogSave = null;
+  });
+  return pendingFogSave;
+}
+
+async function waitForPendingFogSave() {
+  if (pendingFogSave) await pendingFogSave;
+}
+
 function fogMaskSize(natural: { w: number; h: number }) {
   const maxEdge = Math.max(natural.w, natural.h);
   const ratio = maxEdge > FOG_MASK_MAX_SIZE ? FOG_MASK_MAX_SIZE / maxEdge : 1;
@@ -1049,7 +1110,7 @@ function handleFogPointerUp(x: number, y: number) {
     ...(next.maps ?? {}),
     [String(session.mapId)]: mask,
   };
-  void saveFogState(next);
+  void queueFogSave(next);
 }
 
 async function handleFillMapFog(mapId: number) {
@@ -1070,7 +1131,7 @@ async function handleFillMapFog(mapId: number) {
     ...(next.maps ?? {}),
     [String(mapId)]: mask,
   };
-  await saveFogState(next);
+  await queueFogSave(next);
 }
 
 function handleContextMenu(event: MouseEvent) {
@@ -1110,6 +1171,107 @@ async function handleUpdateCombat(state: RoomCombatState | null) {
     });
   } finally {
     combatSaving.value = false;
+  }
+}
+
+async function fetchRoomScenes() {
+  if (!roomId.value) return;
+  scenesLoading.value = true;
+  try {
+    scenes.value = await getRoomScenes(roomId.value);
+  } catch (error) {
+    toasts.push({ message: getBackendErrorMessage(error), tone: "danger" });
+  } finally {
+    scenesLoading.value = false;
+  }
+}
+
+function defaultSceneName() {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `场景 ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+}
+
+function handleCreateScene() {
+  if (currentUserGameRole.value !== "GM") return;
+  sceneNameMode.value = "create";
+  editingSceneId.value = null;
+  sceneNameDraft.value = defaultSceneName();
+  sceneCreateDialogOpen.value = true;
+}
+
+function handleEditScene(scene: RoomScene) {
+  if (currentUserGameRole.value !== "GM") return;
+  sceneNameMode.value = "edit";
+  editingSceneId.value = scene.id;
+  sceneNameDraft.value = scene.name;
+  sceneCreateDialogOpen.value = true;
+}
+
+async function handleConfirmSceneName() {
+  if (!roomId.value || sceneSaving.value || currentUserGameRole.value !== "GM") return;
+  const name = sceneNameDraft.value.trim();
+  if (!name) return;
+  sceneSaving.value = true;
+  try {
+    if (sceneNameMode.value === "edit" && editingSceneId.value != null) {
+      await renameRoomScene(roomId.value, editingSceneId.value, { name });
+    } else {
+      await createRoomScene(roomId.value, { name });
+    }
+    sceneCreateDialogOpen.value = false;
+    editingSceneId.value = null;
+    await fetchRoomScenes();
+  } catch (error) {
+    toasts.push({ message: getBackendErrorMessage(error), tone: "danger" });
+  } finally {
+    sceneSaving.value = false;
+  }
+}
+
+function openDeleteSceneConfirm(sceneId: number) {
+  if (currentUserGameRole.value !== "GM") return;
+  const scene = scenes.value.find((item) => item.id === sceneId);
+  if (!scene) return;
+  sceneDeleteTarget.value = scene;
+  sceneDeleteConfirmOpen.value = true;
+}
+
+async function handleConfirmDeleteScene() {
+  const scene = sceneDeleteTarget.value;
+  if (!roomId.value || !scene || sceneSaving.value || currentUserGameRole.value !== "GM") return;
+  sceneSaving.value = true;
+  try {
+    await deleteRoomScene(roomId.value, scene.id);
+    sceneDeleteConfirmOpen.value = false;
+    sceneDeleteTarget.value = null;
+    await tabletopStore.loadSnapshot(roomId.value);
+    await fetchRoomCharacters();
+    await fetchRoomScenes();
+    clearSelection();
+    clearInspection();
+  } catch (error) {
+    toasts.push({ message: getBackendErrorMessage(error), tone: "danger" });
+  } finally {
+    sceneSaving.value = false;
+  }
+}
+
+async function handleActivateScene(sceneId: number) {
+  if (!roomId.value || sceneSaving.value || currentUserGameRole.value !== "GM") return;
+  sceneSaving.value = true;
+  try {
+    await waitForPendingFogSave();
+    await activateRoomScene(roomId.value, sceneId);
+    await tabletopStore.loadSnapshot(roomId.value);
+    await fetchRoomCharacters();
+    await fetchRoomScenes();
+    clearSelection();
+    clearInspection();
+  } catch (error) {
+    toasts.push({ message: getBackendErrorMessage(error), tone: "danger" });
+  } finally {
+    sceneSaving.value = false;
   }
 }
 
@@ -1178,6 +1340,11 @@ async function handleContextAlignMapToGrid(mapId: number) {
 async function handleContextDeleteMap(mapId: number) {
   if (!roomId.value) return;
   try {
+    removeFogMaskOverride(mapId);
+    const nextFogState = fogStateWithoutMap(mapId);
+    if (nextFogState) {
+      await saveFogState(nextFogState);
+    }
     await tabletopStore.removeMap(roomId.value, mapId);
     clearSelection();
   } catch (error) {
@@ -1652,6 +1819,7 @@ const realtime = useRoomRealtimeSession({
   refreshRoomMembers: fetchRoomMembers,
   refreshRoomRequests: () => fetchRoomRequests({ force: true }),
   refreshRoomCharacters: fetchRoomCharacters,
+  refreshRoomScenes: fetchRoomScenes,
   onCharacterStateUpdated: (characterId, summary) => {
     updateRoomCharacterState(characterId, summary);
   },
@@ -2021,6 +2189,7 @@ onMounted(() => {
   if (roomId.value) {
     void tabletopStore.loadSnapshot(roomId.value);
     void fetchRoomCharacters();
+    void fetchRoomScenes();
   }
   window.addEventListener("keydown", handleGlobalKeyDown);
 });
@@ -2039,6 +2208,7 @@ watch(roomId, (newId, oldId) => {
   if (oldId) {
     tabletopStore.resetRoom(oldId);
   }
+  scenes.value = [];
   void fetchRoom();
   void fetchRoomMessages();
   void fetchRoomDiceRolls();
@@ -2046,6 +2216,7 @@ watch(roomId, (newId, oldId) => {
   if (newId) {
     void tabletopStore.loadSnapshot(newId);
     void fetchRoomCharacters();
+    void fetchRoomScenes();
   }
 });
 watch(() => auth.me?.id, () => {
@@ -2084,6 +2255,7 @@ watch(
           <MapViewport
             ref="mapViewportRef"
             :room-id="roomId"
+            :active-scene-id="activeScene?.id ?? null"
             :maps="tabletopMaps"
             :tokens="tabletopTokens"
             :drawings="tabletopDrawings"
@@ -2194,6 +2366,40 @@ watch(
             @annotate="handleAnnotate"
             @cancel="handleCancelAnnotation"
           />
+          <Teleport to="body">
+            <div v-if="sceneCreateDialogOpen" class="sceneCreateBackdrop">
+              <form class="sceneCreateDialog" @submit.prevent="handleConfirmSceneName">
+                <h3 class="sceneCreateTitle">{{ sceneNameMode === "edit" ? "编辑场景" : "添加场景" }}</h3>
+                <label class="sceneCreateField">
+                  <span>场景名称</span>
+                  <BaseInput v-model="sceneNameDraft" placeholder="输入场景名称" />
+                </label>
+                <div class="sceneCreateActions">
+                  <BaseButton type="button" variant="default" :disabled="sceneSaving" @click="sceneCreateDialogOpen = false">
+                    {{ t("common.cancel") }}
+                  </BaseButton>
+                  <BaseButton
+                    type="submit"
+                    variant="primary"
+                    :disabled="!sceneNameDraft.trim() || sceneSaving"
+                    :loading="sceneSaving"
+                  >
+                    {{ sceneNameMode === "edit" ? t("common.save") : "创建" }}
+                  </BaseButton>
+                </div>
+              </form>
+            </div>
+          </Teleport>
+          <BaseConfirmDialog
+            v-model="sceneDeleteConfirmOpen"
+            title="删除场景"
+            :message="sceneDeleteTarget ? `确定要删除场景「${sceneDeleteTarget.name}」吗？` : ''"
+            confirm-text="删除"
+            :cancel-text="t('common.cancel')"
+            variant="danger"
+            :loading="sceneSaving"
+            @confirm="handleConfirmDeleteScene"
+          />
         </template>
 
         <template #overlays>
@@ -2251,6 +2457,7 @@ watch(
           />
 
           <FloatingPanel
+            :class="{ assetPanelWide: assetPanelActionCount > 1 }"
             :title="t('table.assets.barTitle')"
             inline
             collapse-to="top-left"
@@ -2259,15 +2466,24 @@ watch(
           >
             <BottomAssetBar
               v-model:map-popover-open="mapPopoverOpen"
+              v-model:scene-popover-open="scenePopoverOpen"
               v-model:token-popover-open="tokenPopoverOpen"
               :can-add-map="canAddMap"
+              :can-manage-scenes="currentUserGameRole === 'GM'"
               :can-add-token="canAddToken"
               :maps="tabletopMaps"
               :selected-map-id="selectedMapId"
+              :scenes="scenes"
+              :selected-scene-id="activeScene?.id ?? null"
+              :scene-saving="sceneSaving || scenesLoading"
               :characters="tokenSpawnCharacters"
               @add-map="handleAddMapClick"
               @select-map="selectMap"
               @open-library-picker="libraryMapPickerOpen = true"
+              @select-scene="handleActivateScene"
+              @add-scene="handleCreateScene"
+              @edit-scene="handleEditScene"
+              @delete-scene="openDeleteSceneConfirm"
               @spawn-token="(cid, cfgId) => handleSpawnCharacter(cid, cfgId)"
               @spawn-all="(cid) => handleSpawnAllTokens(cid)"
               @add-character="openAddCharacterDialog"
@@ -2440,6 +2656,48 @@ watch(
   color: var(--c-danger);
 }
 
+.sceneCreateBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 460;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--c-bg) 55%, transparent);
+}
+
+.sceneCreateDialog {
+  width: min(420px, calc(100vw - 32px));
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 16px;
+  border: 1px solid var(--c-border);
+  background: var(--c-surface);
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--c-bg) 55%, transparent);
+}
+
+.sceneCreateTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--c-text);
+}
+
+.sceneCreateField {
+  display: grid;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+.sceneCreateActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .rightStack {
   position: absolute;
   top: 12px;
@@ -2496,6 +2754,15 @@ watch(
   left: auto;
   width: min(320px, calc(100vw - 24px));
   max-height: min(52vh, 420px);
+}
+
+.leftStack :deep(.floatingPanel.assets.assetPanelWide:not(.collapsed)) {
+  width: min(390px, calc(100vw - 24px));
+}
+
+.leftStack :deep(.floatingPanel.assets:not(.assetPanelWide):not(.collapsed)) {
+  width: max-content;
+  max-width: calc(100vw - 24px);
 }
 
 .roomTableStage.drawPassthrough :deep(.leftStack > *),
