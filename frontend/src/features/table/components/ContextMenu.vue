@@ -103,9 +103,10 @@ const layerDisabled = computed(() => props.maps.length <= 1);
 const tokenLayerDisabled = computed(() => props.tokens.length <= 1);
 const drawingLayerDisabled = computed(() => props.drawings.length <= 1);
 const diceSubmenuOpen = ref(false);
-const diceBranchOpen = ref<"savingThrows" | "skills" | "presets" | null>(null);
+const diceBranchOpen = ref<"abilityChecks" | "savingThrows" | "skills" | "presets" | null>(null);
 const dicePresets = ref<DicePreset[]>([]);
 const viewportHeight = ref(typeof window !== "undefined" ? window.innerHeight : 0);
+const submenuDirections = ref<Record<string, "upward" | "downward">>({});
 
 const verticalDirection = computed<"upward" | "downward">(() => {
   const above = props.clientY;
@@ -274,6 +275,18 @@ const tokenSavingThrowScenes = computed(() => {
   });
 });
 
+const tokenAbilityCheckScenes = computed(() => {
+  const token = selectedToken.value;
+  if (!token) return [];
+  return ABILITY_KEYS.map((key) => {
+    const label = `${t(ABILITY_LABEL_KEYS[key])}检定`;
+    return {
+      label,
+      draft: tokenDiceDraft(token, label, formatD20Formula(abilityMod(tokenAbilityScore(token, key)))),
+    };
+  });
+});
+
 const tokenSkillScenes = computed(() => {
   const token = selectedToken.value;
   if (!token) return [];
@@ -300,7 +313,33 @@ const tokenPresetDiceScenes = computed(() => {
   }));
 });
 
-function toggleDiceBranch(branch: "savingThrows" | "skills" | "presets") {
+function directionForHost(host: Element | null): "upward" | "downward" {
+  if (!host) return verticalDirection.value;
+  const rect = host.getBoundingClientRect();
+  const anchorY = rect.top + rect.height / 2;
+  const above = anchorY;
+  const below = viewportHeight.value - anchorY;
+  return below < above ? "upward" : "downward";
+}
+
+function updateSubmenuDirection(key: string, event: MouseEvent) {
+  submenuDirections.value = {
+    ...submenuDirections.value,
+    [key]: directionForHost((event.currentTarget as HTMLElement).closest(".submenuHost")),
+  };
+}
+
+function submenuDirectionClass(key: string) {
+  return submenuDirections.value[key] ?? verticalDirection.value;
+}
+
+function toggleDiceSubmenu(event: MouseEvent) {
+  updateSubmenuDirection("dice", event);
+  diceSubmenuOpen.value = !diceSubmenuOpen.value;
+}
+
+function toggleDiceBranch(branch: "abilityChecks" | "savingThrows" | "skills" | "presets", event: MouseEvent) {
+  updateSubmenuDirection(branch, event);
   diceBranchOpen.value = diceBranchOpen.value === branch ? null : branch;
 }
 
@@ -317,6 +356,7 @@ watch(
     if (open) loadDicePresets();
     if (!open) diceSubmenuOpen.value = false;
     if (!open) diceBranchOpen.value = null;
+    if (!open) submenuDirections.value = {};
   },
 );
 
@@ -325,6 +365,7 @@ watch(
   () => {
     diceSubmenuOpen.value = false;
     diceBranchOpen.value = null;
+    submenuDirections.value = {};
   },
 );
 
@@ -404,23 +445,30 @@ onBeforeUnmount(() => {
         </button>
       </template>
       <template v-else-if="selection?.type === 'token' && selectedToken">
-        <div v-if="canRollWithSelectedToken" class="submenuHost">
+        <div
+          v-if="canRollWithSelectedToken"
+          class="submenuHost"
+          :class="submenuDirectionClass('dice')"
+        >
           <button
             type="button"
             class="menuItem submenuTrigger"
             :class="{ active: diceSubmenuOpen }"
-            @click.stop="diceSubmenuOpen = !diceSubmenuOpen"
+            @click.stop="toggleDiceSubmenu"
           >
             <span>掷骰</span>
             <span class="submenuArrow">›</span>
           </button>
           <div v-if="diceSubmenuOpen" class="submenu" @click.stop>
-            <div class="submenuHost">
+            <div
+              class="submenuHost"
+              :class="submenuDirectionClass('presets')"
+            >
               <button
                 type="button"
                 class="menuItem submenuTrigger"
                 :class="{ active: diceBranchOpen === 'presets' }"
-                @click.stop="toggleDiceBranch('presets')"
+                @click.stop="toggleDiceBranch('presets', $event)"
               >
                 <span>使用预设</span>
                 <span class="submenuArrow">›</span>
@@ -454,12 +502,15 @@ onBeforeUnmount(() => {
             >
               {{ scene.label }}
             </button>
-            <div class="submenuHost">
+            <div
+              class="submenuHost"
+              :class="submenuDirectionClass('savingThrows')"
+            >
               <button
                 type="button"
                 class="menuItem submenuTrigger"
                 :class="{ active: diceBranchOpen === 'savingThrows' }"
-                @click.stop="toggleDiceBranch('savingThrows')"
+                @click.stop="toggleDiceBranch('savingThrows', $event)"
               >
                 <span>豁免检定</span>
                 <span class="submenuArrow">›</span>
@@ -480,12 +531,44 @@ onBeforeUnmount(() => {
                 </button>
               </div>
             </div>
-            <div class="submenuHost">
+            <div
+              class="submenuHost"
+              :class="submenuDirectionClass('abilityChecks')"
+            >
+              <button
+                type="button"
+                class="menuItem submenuTrigger"
+                :class="{ active: diceBranchOpen === 'abilityChecks' }"
+                @click.stop="toggleDiceBranch('abilityChecks', $event)"
+              >
+                <span>六维检定</span>
+                <span class="submenuArrow">›</span>
+              </button>
+              <div
+                v-if="diceBranchOpen === 'abilityChecks'"
+                class="submenu nestedSubmenu compactSubmenu"
+                @click.stop
+              >
+                <button
+                  v-for="scene in tokenAbilityCheckScenes"
+                  :key="scene.label"
+                  type="button"
+                  class="menuItem"
+                  @click="onAction(() => emit('openDiceRoll', scene.draft))"
+                >
+                  {{ scene.label }}
+                </button>
+              </div>
+            </div>
+            <div
+              class="submenuHost"
+              :class="submenuDirectionClass('skills')"
+            >
               <button
                 type="button"
                 class="menuItem submenuTrigger"
                 :class="{ active: diceBranchOpen === 'skills' }"
-                @click.stop="toggleDiceBranch('skills')"
+                @click.stop="toggleDiceBranch('skills', $event)"
               >
                 <span>技能检定</span>
                 <span class="submenuArrow">›</span>
@@ -644,7 +727,7 @@ onBeforeUnmount(() => {
 .contextMenuBackdrop {
   position: fixed;
   inset: 0;
-  z-index: 300;
+  z-index: 920;
 }
 
 .contextMenu {
@@ -718,7 +801,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 8px 28px color-mix(in srgb, var(--c-bg) 45%, transparent);
 }
 
-.contextMenu.upward .submenu {
+.submenuHost.upward > .submenu {
   top: auto;
   bottom: 0;
 }
@@ -727,7 +810,7 @@ onBeforeUnmount(() => {
   top: -6px;
 }
 
-.contextMenu.upward .nestedSubmenu {
+.submenuHost.upward > .nestedSubmenu {
   top: auto;
   bottom: -6px;
 }
