@@ -39,6 +39,8 @@ const props = withDefaults(
     mapNaturalSize?: { w: number; h: number };
     drawInteractive?: boolean;
     drawSubTool?: string;
+    drawStrokeWidth?: number;
+    drawStrokeColor?: string;
     textPlacement?: TextPlacementRequest;
     textEdit?: TextEditRequest;
     editingDrawingId?: number | null;
@@ -49,6 +51,7 @@ const props = withDefaults(
     measureState?: MeasureState | null;
     measureSubTool?: MeasureSubTool;
     fogSubTool?: FogSubTool;
+    fogBrushRadius?: number;
     currentUserId?: number | null;
     characterOwnerById?: Map<number, number>;
     playerColorByUserId?: Map<number, string>;
@@ -70,6 +73,8 @@ const props = withDefaults(
     mapNaturalSize: () => ({ w: 0, h: 0 }),
     drawInteractive: false,
     drawSubTool: "brush",
+    drawStrokeWidth: 3,
+    drawStrokeColor: "#e11d48",
     textPlacement: null,
     textEdit: null,
     editingDrawingId: null,
@@ -80,6 +85,7 @@ const props = withDefaults(
     measureState: null,
     measureSubTool: "line",
     fogSubTool: "erase",
+    fogBrushRadius: 54,
     currentUserId: null,
     characterOwnerById: () => new Map<number, number>(),
   },
@@ -141,8 +147,6 @@ const minorPatternId = computed(() => `grid-minor-${patternUid}`);
 
 const gridOrigin = SCENE_ORIGIN;
 const gridSpan = SCENE_SPAN;
-const FOG_BRUSH_RADIUS = 54;
-
 const rootRef = ref<HTMLElement | null>(null);
 const drawingLayerRef = ref<InstanceType<typeof DrawingLayer> | null>(null);
 const fogPreviewPoint = ref<{ x: number; y: number } | null>(null);
@@ -424,6 +428,9 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
         :editing-drawing-id="editingDrawingId"
         :interactive="drawInteractive"
         :sub-tool="drawSubTool"
+        :stroke-width="drawStrokeWidth"
+        :stroke-color="drawStrokeColor"
+        :viewport-scale="viewportScale"
         @select-drawing="emit('selectDrawing', $event)"
         @edit-text="emit('editText', $event)"
         @pointer-down="(x, y, e) => emit('drawPointerDown', x, y, e)"
@@ -471,7 +478,7 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
         :game-role="gameRole"
         :preview-point="fogMode ? fogPreviewPoint : null"
         :preview-mode="fogSubTool"
-        :preview-radius="FOG_BRUSH_RADIUS"
+        :preview-radius="fogBrushRadius"
       />
       <SelectionOverlay
         :selection="selection"

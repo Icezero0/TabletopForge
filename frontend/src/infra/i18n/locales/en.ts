@@ -769,6 +769,7 @@ export default {
       toolbar: "Fog of war tools",
       erase: "Erase fog",
       fill: "Fill fog",
+      brushSize: "Brush size",
     },
     draw: {
       toolbar: "Drawing tools",
@@ -780,6 +781,7 @@ export default {
       eraser: "Eraser",
       boxSelect: "Box delete",
       color: "Color",
+      brushSize: "Brush size",
       outline: "Outline",
       mask: "Mask",
       opacity: "Opacity",
@@ -876,6 +878,7 @@ export default {
       uploadSuccess: "Map uploaded",
       uploadFailed: "Failed to upload map",
       uploadInvalidType: "Please choose an image file",
+      mapUploadDialogTitle: "Map details",
       addToken: "Add Token",
       tokenPopoverTitle: "Select Character",
       tokenSpawnAll: "Spawn All",

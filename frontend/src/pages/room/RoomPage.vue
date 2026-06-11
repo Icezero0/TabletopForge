@@ -23,7 +23,9 @@ import { patchLibraryResourceGrid, type LibraryResource } from "@/infra/api/libr
 import BaseLayout from "@/ui/layout/BaseLayout.vue";
 import BaseButton from "@/ui/base/BaseButton.vue";
 import BaseConfirmDialog from "@/ui/base/BaseConfirmDialog.vue";
+import BaseDialog from "@/ui/base/BaseDialog.vue";
 import BaseInput from "@/ui/base/BaseInput.vue";
+import BaseTextarea from "@/ui/base/BaseTextarea.vue";
 import RoomChatTab from "@/features/room/components/workspace/RoomChatTab.vue";
 import type { GameRole, MemberStatus, RoomRole } from "@/features/room/types";
 import type { ChatSegment } from "@/features/chat/types";
@@ -183,7 +185,7 @@ const {
 
 const measureSubTool = ref<"line" | "route">("line");
 const fogSubTool = ref<FogSubTool>("erase");
-const FOG_BRUSH_RADIUS = 54;
+const fogBrushRadius = ref(54);
 const FOG_MASK_MAX_SIZE = 2048;
 const fogMaskOverrides = ref<Record<number, RoomFogMapMask>>({});
 const fogBrushSession = ref<{
@@ -276,6 +278,10 @@ const mapNaturalSizes = ref<Record<number, { w: number; h: number }>>({});
 const mapViewportRef = ref<InstanceType<typeof MapViewport> | null>(null);
 const mapUploadInput = ref<HTMLInputElement | null>(null);
 const mapUploading = ref(false);
+const mapUploadDialogOpen = ref(false);
+const pendingMapUploadFile = ref<File | null>(null);
+const mapUploadNameDraft = ref("");
+const mapUploadCommentDraft = ref("");
 const pendingAnnotationMap = ref<{ id: number; assetId: number; libraryResourceId: number; dims: { w: number; h: number } } | null>(null);
 const gridAnnotationOpen = ref(false);
 
@@ -989,8 +995,8 @@ function pointToMask(mapId: number, x: number, y: number, mask: RoomFogMapMask) 
   return {
     x: ((x - map.x) / scaleX) * (mask.width / mask.map_width),
     y: ((y - map.y) / scaleY) * (mask.height / mask.map_height),
-    radiusX: (FOG_BRUSH_RADIUS / scaleX) * (mask.width / mask.map_width),
-    radiusY: (FOG_BRUSH_RADIUS / scaleY) * (mask.height / mask.map_height),
+    radiusX: (fogBrushRadius.value / scaleX) * (mask.width / mask.map_width),
+    radiusY: (fogBrushRadius.value / scaleY) * (mask.height / mask.map_height),
   };
 }
 
@@ -1636,6 +1642,18 @@ function handleAddMapClick() {
   mapUploadInput.value?.click();
 }
 
+function defaultMapNameFromFile(file: File) {
+  return file.name.replace(/\.[^.]+$/, "").trim() || file.name;
+}
+
+function closeMapUploadDialog() {
+  if (mapUploading.value) return;
+  mapUploadDialogOpen.value = false;
+  pendingMapUploadFile.value = null;
+  mapUploadNameDraft.value = "";
+  mapUploadCommentDraft.value = "";
+}
+
 async function handlePickLibraryMap(resource: LibraryResource) {
   if (!roomId.value) return;
   mapUploading.value = true;
@@ -1664,12 +1682,28 @@ async function handleMapFileChange(event: Event) {
     toasts.push({ message: t("table.assets.uploadInvalidType"), tone: "warning" });
     return;
   }
+  pendingMapUploadFile.value = file;
+  mapUploadNameDraft.value = defaultMapNameFromFile(file);
+  mapUploadCommentDraft.value = "";
+  mapUploadDialogOpen.value = true;
+}
+
+async function handleConfirmMapUpload() {
+  const file = pendingMapUploadFile.value;
+  if (!file || !roomId.value || !mapUploadNameDraft.value.trim()) return;
   mapUploading.value = true;
   try {
     const dims = await readImageDimensions(file);
-    const map = await tabletopStore.uploadMap(roomId.value, file);
+    const map = await tabletopStore.uploadMap(roomId.value, file, {
+      name: mapUploadNameDraft.value.trim(),
+      comment: mapUploadCommentDraft.value.trim() || undefined,
+    });
     selectMap(map.id);
     pendingAnnotationMap.value = { id: map.id, assetId: map.asset_id ?? 0, libraryResourceId: map.library_resource_id, dims };
+    mapUploadDialogOpen.value = false;
+    pendingMapUploadFile.value = null;
+    mapUploadNameDraft.value = "";
+    mapUploadCommentDraft.value = "";
     gridAnnotationOpen.value = true;
   } catch (error) {
     toasts.push({
@@ -2252,6 +2286,56 @@ watch(
             class="mapUploadInput"
             @change="handleMapFileChange"
           />
+          <BaseDialog
+            :model-value="mapUploadDialogOpen"
+            :max-width="480"
+            :close-on-overlay="!mapUploading"
+            :close-on-esc="!mapUploading"
+            :aria-label="t('table.assets.mapUploadDialogTitle')"
+            @update:model-value="(open) => { if (!open) closeMapUploadDialog(); }"
+          >
+            <form class="mapUploadDialog" @submit.prevent="handleConfirmMapUpload">
+              <div class="mapUploadTitle">{{ t("table.assets.mapUploadDialogTitle") }}</div>
+              <label class="mapUploadField">
+                <span>{{ t("library.upload.nameLabel") }}</span>
+                <BaseInput
+                  v-model="mapUploadNameDraft"
+                  :placeholder="t('library.upload.namePlaceholder')"
+                  :disabled="mapUploading"
+                />
+              </label>
+              <label class="mapUploadField">
+                <span>{{ t("library.upload.commentLabel") }}</span>
+                <BaseTextarea
+                  v-model="mapUploadCommentDraft"
+                  min-height="84px"
+                  :placeholder="t('library.upload.commentPlaceholder')"
+                  :disabled="mapUploading"
+                />
+              </label>
+              <div class="mapUploadFileName">
+                {{ pendingMapUploadFile?.name }}
+              </div>
+              <div class="mapUploadActions">
+                <BaseButton
+                  type="button"
+                  variant="default"
+                  :disabled="mapUploading"
+                  @click="closeMapUploadDialog"
+                >
+                  {{ t("common.cancel") }}
+                </BaseButton>
+                <BaseButton
+                  type="submit"
+                  variant="primary"
+                  :disabled="!mapUploadNameDraft.trim() || mapUploading"
+                  :loading="mapUploading"
+                >
+                  {{ t("library.upload.submit") }}
+                </BaseButton>
+              </div>
+            </form>
+          </BaseDialog>
           <MapViewport
             ref="mapViewportRef"
             :room-id="roomId"
@@ -2272,6 +2356,8 @@ watch(
             :map-natural-size="selectedMapNaturalSize"
             :draw-interactive="drawingLayerInteractive"
             :draw-sub-tool="subTool"
+            :draw-stroke-width="strokeWidth"
+            :draw-stroke-color="strokeColor"
             :text-placement="textPlacement"
             :text-edit="textEdit"
             :editing-drawing-id="editingDrawingId"
@@ -2314,6 +2400,7 @@ watch(
             @measure-route-click="routeClick"
             @measure-route-finish="routeFinish"
             :fog-sub-tool="fogSubTool"
+            :fog-brush-radius="fogBrushRadius"
             @fog-pointer-down="handleFogPointerDown"
             @fog-pointer-move="handleFogPointerMove"
             @fog-pointer-up="handleFogPointerUp"
@@ -2584,6 +2671,7 @@ watch(
             <FogToolStrip
               v-if="toolMode === 'fog' && currentUserGameRole === 'GM'"
               v-model:sub-tool="fogSubTool"
+              v-model:brush-radius="fogBrushRadius"
             />
           </FloatingPanel>
 
@@ -2620,6 +2708,47 @@ watch(
 <style scoped>
 .mapUploadInput {
   display: none;
+}
+
+.mapUploadDialog {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-3);
+  background: var(--c-surface);
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--c-bg) 55%, transparent);
+}
+
+.mapUploadTitle {
+  color: var(--c-text);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.mapUploadField {
+  display: grid;
+  gap: 8px;
+  color: var(--c-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mapUploadFileName {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-2);
+  color: var(--c-text-muted);
+  font-size: 12px;
+  word-break: break-all;
+  background: color-mix(in srgb, var(--c-surface-raised) 72%, transparent);
+}
+
+.mapUploadActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 
 .roomPageWrap {

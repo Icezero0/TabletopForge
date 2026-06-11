@@ -769,6 +769,7 @@ export default {
       toolbar: "战争迷雾工具",
       erase: "擦除战争迷雾",
       fill: "填充战争迷雾",
+      brushSize: "笔刷大小",
     },
     draw: {
       toolbar: "绘制工具",
@@ -780,6 +781,7 @@ export default {
       eraser: "橡皮",
       boxSelect: "框选删除",
       color: "颜色",
+      brushSize: "笔刷大小",
       outline: "轮廓",
       mask: "遮罩",
       opacity: "透明度",
@@ -876,6 +878,7 @@ export default {
       uploadSuccess: "地图已上传",
       uploadFailed: "地图上传失败",
       uploadInvalidType: "请选择图片文件",
+      mapUploadDialogTitle: "地图信息",
       addToken: "添加指示物",
       tokenPopoverTitle: "选择角色",
       tokenSpawnAll: "全部上场",

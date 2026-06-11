@@ -356,6 +356,8 @@ async def patch_room_tabletop_settings(
 async def create_room_map(
     room_id: int,
     file: UploadFile = File(...),
+    name: str | None = Form(default=None),
+    comment: str | None = Form(default=None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     publisher: RealtimePublisher = Depends(get_realtime_publisher),
@@ -365,6 +367,8 @@ async def create_room_map(
         room_id=room_id,
         user=current_user,
         file=file,
+        name=name,
+        comment=comment,
     )
     await publisher.publish_map_created(
         room_id=room_id,

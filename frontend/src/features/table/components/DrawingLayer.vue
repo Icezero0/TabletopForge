@@ -21,6 +21,9 @@ const props = defineProps<{
   editingDrawingId?: number | null;
   interactive?: boolean;
   subTool?: string;
+  strokeWidth?: number;
+  strokeColor?: string;
+  viewportScale?: number;
 }>();
 
 const emit = defineEmits<{
@@ -33,6 +36,7 @@ const emit = defineEmits<{
 }>();
 
 const svgRef = ref<SVGSVGElement | null>(null);
+const brushPreviewPoint = ref<{ x: number; y: number } | null>(null);
 let pickPointerId: number | null = null;
 
 const canDraw = computed(
@@ -53,6 +57,20 @@ const layerActive = computed(() => canDraw.value || canPickDrawing.value);
 const drawCursor = computed(() => (canDraw.value ? "crosshair" : undefined));
 
 const showPickTargets = computed(() => canPickDrawing.value && !canDraw.value);
+
+const brushPreviewRadius = computed(() =>
+  Math.max(1, (props.strokeWidth ?? 3) / 2 / Math.max(0.1, props.viewportScale ?? 1)),
+);
+
+const brushPreviewColor = computed(() => props.strokeColor ?? "#e11d48");
+
+const showBrushPreview = computed(
+  () =>
+    canDraw.value &&
+    props.subTool === "brush" &&
+    brushPreviewPoint.value != null &&
+    props.preview?.kind !== "brush",
+);
 
 function remoteSelectionFor(drawingId: number) {
   return props.remoteSelections?.find((claim) => claim.type === "drawing" && claim.id === drawingId) ?? null;
@@ -113,6 +131,7 @@ function onPointerDown(event: PointerEvent) {
   if (!canDraw.value) return;
   event.stopPropagation();
   event.preventDefault();
+  brushPreviewPoint.value = pt;
   if (props.subTool !== "text") {
     svgRef.value?.setPointerCapture(event.pointerId);
   }
@@ -121,7 +140,11 @@ function onPointerDown(event: PointerEvent) {
 
 function onPointerMove(event: PointerEvent) {
   const pt = scenePoint(event);
-  if (!canDraw.value) return;
+  if (!canDraw.value) {
+    brushPreviewPoint.value = null;
+    return;
+  }
+  brushPreviewPoint.value = pt;
   emit("pointerMove", pt.x, pt.y, event);
 }
 
@@ -144,6 +167,10 @@ function onPointerUp(event: PointerEvent) {
   const pt = scenePoint(event);
   svgRef.value?.releasePointerCapture(event.pointerId);
   emit("pointerUp", pt.x, pt.y, event);
+}
+
+function onPointerLeave() {
+  brushPreviewPoint.value = null;
 }
 
 function onPickClick(event: MouseEvent) {
@@ -253,6 +280,7 @@ function previewLabelPos(p: DrawPreview) {
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
     @pointercancel="onPointerUp"
+    @pointerleave="onPointerLeave"
     @click="onPickClick"
     @contextmenu="onDrawingContextMenu"
   >
@@ -482,6 +510,14 @@ function previewLabelPos(p: DrawPreview) {
       stroke-width="1"
       stroke-dasharray="4 3"
     />
+    <circle
+      v-if="showBrushPreview && brushPreviewPoint"
+      class="brushCursorPreview"
+      :cx="brushPreviewPoint.x"
+      :cy="brushPreviewPoint.y"
+      :r="brushPreviewRadius"
+      :stroke="brushPreviewColor"
+    />
 
   </svg>
 </template>
@@ -579,6 +615,14 @@ function previewLabelPos(p: DrawPreview) {
   paint-order: stroke;
   stroke: var(--c-surface);
   stroke-width: 3px;
+  pointer-events: none;
+}
+
+.brushCursorPreview {
+  fill: rgb(255 255 255 / 8%);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  vector-effect: non-scaling-stroke;
   pointer-events: none;
 }
 

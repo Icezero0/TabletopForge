@@ -216,8 +216,8 @@ export const useTabletopStore = defineStore("tabletop", {
       }
     },
 
-    async uploadMap(roomId: number, file: File) {
-      const map = await postRoomMap(roomId, file);
+    async uploadMap(roomId: number, file: File, payload?: Parameters<typeof postRoomMap>[2]) {
+      const map = await postRoomMap(roomId, file, payload);
       this.applyMapCreated(roomId, map);
       return map;
     },

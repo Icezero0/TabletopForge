@@ -35,8 +35,13 @@ function selectSubTool(id: DrawSubTool) {
   emit("update:subTool", id);
 }
 
-function bumpWidth(delta: number) {
-  emit("update:strokeWidth", Math.min(24, Math.max(1, props.strokeWidth + delta)));
+const STROKE_WIDTH_MIN = 1;
+const STROKE_WIDTH_MAX = 48;
+
+function setStrokeWidth(raw: string) {
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return;
+  emit("update:strokeWidth", Math.min(STROKE_WIDTH_MAX, Math.max(STROKE_WIDTH_MIN, value)));
 }
 
 function bumpFontSize(delta: number) {
@@ -77,9 +82,18 @@ function setMaskOpacity(raw: string) {
           @input="emit('update:strokeColor', ($event.target as HTMLInputElement).value)"
         />
       </label>
-      <button type="button" class="subBtn" @click="bumpWidth(-1)">−</button>
-      <span class="value">{{ strokeWidth }}px</span>
-      <button type="button" class="subBtn" @click="bumpWidth(1)">+</button>
+      <label class="strokeControl">
+        <span>{{ t("table.draw.brushSize") }}</span>
+        <input
+          type="range"
+          :min="STROKE_WIDTH_MIN"
+          :max="STROKE_WIDTH_MAX"
+          step="1"
+          :value="strokeWidth"
+          @input="setStrokeWidth(($event.target as HTMLInputElement).value)"
+        />
+        <span class="value">{{ strokeWidth }}px</span>
+      </label>
     </div>
     <div
       v-if="subTool === 'rect' || subTool === 'ellipse'"
@@ -207,6 +221,19 @@ function setMaskOpacity(raw: string) {
 
 .opacityControl input {
   width: 86px;
+  accent-color: var(--c-primary);
+}
+
+.strokeControl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--c-text-muted);
+  font-size: 12px;
+}
+
+.strokeControl input {
+  width: 96px;
   accent-color: var(--c-primary);
 }
 

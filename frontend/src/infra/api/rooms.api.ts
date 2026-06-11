@@ -535,9 +535,15 @@ export async function patchRoomTabletopSettings(
   return data;
 }
 
-export async function postRoomMap(roomId: number, file: File) {
+export async function postRoomMap(
+  roomId: number,
+  file: File,
+  payload?: { name?: string; comment?: string },
+) {
   const form = new FormData();
   form.append("file", file);
+  if (payload?.name) form.append("name", payload.name);
+  if (payload?.comment) form.append("comment", payload.comment);
   const { data } = await http.post<RoomMap>(`/rooms/${roomId}/maps`, form, {
     headers: { "Content-Type": "multipart/form-data" },
   });

@@ -465,6 +465,8 @@ class RoomTabletopService:
         room_id: int,
         user: User,
         file: UploadFile,
+        name: str | None = None,
+        comment: str | None = None,
         x: float = 0.0,
         y: float = 0.0,
         scale: float = 1.0,
@@ -485,12 +487,17 @@ class RoomTabletopService:
             asset_type=AssetType.MAP_BACKGROUND,
             owner_id=user.id,
         )
+        resource_name = name.strip() if name and name.strip() else file.filename or asset.filename
+        resource_meta = {}
+        if comment and comment.strip():
+            resource_meta["comment"] = comment.strip()
         resource = await self.library_repo.create(
             db,
             owner_id=user.id,
             type=ResourceType.MAP_BACKGROUND,
-            name=file.filename or asset.filename,
+            name=resource_name,
             primary_asset_id=asset.id,
+            meta=resource_meta,
         )
         resource.usage_count = 1
         await db.flush()
