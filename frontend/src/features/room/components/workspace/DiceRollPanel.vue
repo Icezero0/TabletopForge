@@ -49,6 +49,7 @@ const entitiesStore = useEntitiesStore();
 const tabletopStore = useTabletopStore();
 const mode = ref<EditorMode>("check");
 const d20Mode = ref<"normal" | "advantage" | "disadvantage">("normal");
+const rollRepeat = ref(1);
 const extraTerms = ref<ExtraTerm[]>([]);
 const manualFormula = ref("");
 const formulaEditorOpen = ref(false);
@@ -121,14 +122,19 @@ const selectedActor = computed<ActorOption>(() => {
 });
 const structuredFormula = computed(() => {
   const terms = extraTerms.value.map((term, index) => termFormula(term, mode.value === "value" && index === 0)).filter(Boolean);
-  if (mode.value === "value") return terms.join("");
+  const repeat = Math.max(1, Math.floor(Number(rollRepeat.value) || 1));
+  const prefix = repeat > 1 ? `${repeat}#` : "";
+  if (mode.value === "value") {
+    const body = terms.join("");
+    return body ? `${prefix}${body}` : "";
+  }
   const main =
     d20Mode.value === "advantage"
       ? "2d20kh1"
       : d20Mode.value === "disadvantage"
         ? "2d20kl1"
         : "1d20";
-  return `${main}${terms.join("")}`;
+  return `${prefix}${main}${terms.join("")}`;
 });
 
 let nextTermId = 1;
@@ -136,6 +142,7 @@ let nextTermId = 1;
 watch(() => roomState.value.draft, (draft) => {
   if (!draft) return;
   applyDraft(draft);
+  diceStore.clearDraft(props.roomId);
   formulaEditorOpen.value = true;
   void nextTick(scrollToBottom);
 }, { immediate: true });
@@ -196,6 +203,15 @@ function applyDraft(draft: DiceDraft) {
   manualFormula.value = draft.formula || "1d20";
   resetFormulaHistoryCursor();
   parseFormulaDraft(draft.formula);
+}
+
+function parseRollCommand(raw: string) {
+  let normalized = raw.trim();
+  if (/^[rR]/.test(normalized)) normalized = normalized.slice(1).trim();
+  const match = normalized.match(/^(\d+)\s*#\s*(.+)$/);
+  if (!match) return { repeat: 1, formula: normalized };
+  const repeat = Math.max(1, Math.floor(Number(match[1]) || 1));
+  return { repeat, formula: match[2]?.trim() ?? "" };
 }
 
 function loadFormulaHistory() {
@@ -313,17 +329,20 @@ function termFormula(term: ExtraTerm, omitLeadingPlus = false) {
     if (omitLeadingPlus && value > 0) return `${value}`;
     return value > 0 ? `+${value}` : `${value}`;
   }
-  const count = Math.max(1, Number(term.count) || 1);
+  const rawCount = Number(term.count) || 1;
+  const sign = rawCount < 0 ? "-" : "+";
+  const count = Math.max(1, Math.abs(rawCount));
   const faces = Math.max(2, Number(term.faces) || 6);
-  return `${omitLeadingPlus ? "" : "+"}${count}d${faces}`;
+  if (omitLeadingPlus && sign === "+") return `${count}d${faces}`;
+  return `${sign}${count}d${faces}`;
 }
 
 function parsedTermToEditor(term: ParsedTerm): ExtraTerm | null {
   if (term.type === "modifier") {
     return makeTerm("modifier", { value: term.sign * term.value });
   }
-  if (term.sign < 0 || term.keep) return null;
-  return makeTerm("dice", { count: term.count, faces: term.faces });
+  if (term.keep) return null;
+  return makeTerm("dice", { count: term.sign * term.count, faces: term.faces });
 }
 
 type ParsedTerm =
@@ -331,7 +350,8 @@ type ParsedTerm =
   | { type: "modifier"; sign: number; value: number };
 
 function normalizeFormulaInput(raw: string) {
-  return raw
+  return parseRollCommand(raw)
+    .formula
     .trim()
     .toLowerCase()
     .replace(/\s+/g, "")
@@ -370,7 +390,9 @@ function parseTerms(raw: string): ParsedTerm[] | null {
 }
 
 function parseFormulaDraft(raw: string) {
-  const terms = parseTerms(raw);
+  const command = parseRollCommand(raw);
+  rollRepeat.value = command.repeat;
+  const terms = parseTerms(command.formula);
   if (!terms) {
     return;
   }
@@ -564,13 +586,17 @@ async function submitRoll() {
   if (!props.roomId || roomState.value.isRolling) return;
   const nextFormula = manualFormula.value.trim();
   if (!nextFormula) return;
-  await diceStore.roll(props.roomId, {
-    actor_type: actorType.value,
-    actor_token_id: actorType.value === "token" ? actorTokenId.value : null,
-    label: label.value.trim(),
-    formula: nextFormula,
-    visibility: visibility.value,
-  });
+  const command = parseRollCommand(nextFormula);
+  if (!command.formula) return;
+  for (let i = 0; i < command.repeat; i++) {
+    await diceStore.roll(props.roomId, {
+      actor_type: actorType.value,
+      actor_token_id: actorType.value === "token" ? actorTokenId.value : null,
+      label: label.value.trim(),
+      formula: command.formula,
+      visibility: visibility.value,
+    });
+  }
   rememberFormula(nextFormula);
   manualFormula.value = "";
 }
@@ -589,6 +615,14 @@ function applyFormulaEditor() {
   if (next) manualFormula.value = next;
   resetFormulaHistoryCursor();
   formulaEditorOpen.value = false;
+}
+
+function setRollRepeat(value: number) {
+  rollRepeat.value = Math.max(1, Math.floor(Number(value) || 1));
+}
+
+function stepRollRepeat(delta: number) {
+  setRollRepeat(rollRepeat.value + delta);
 }
 
 function addTerm() {
@@ -796,6 +830,18 @@ function toggleVisibility() {
               <button type="button" class="rollModeBtn" :class="{ active: mode === 'check' }" @click="switchMode('check')">检定</button>
               <button type="button" class="rollModeBtn" :class="{ active: mode === 'value' }" @click="switchMode('value')">数值</button>
             </div>
+            <div class="repeatStepper" aria-label="掷骰次数">
+              <span class="repeatLabel">次数</span>
+              <button type="button" class="repeatBtn" :disabled="rollRepeat <= 1" @click="stepRollRepeat(-1)">−</button>
+              <input
+                class="repeatInput"
+                type="number"
+                min="1"
+                :value="rollRepeat"
+                @change="setRollRepeat(Number(($event.target as HTMLInputElement).value))"
+              />
+              <button type="button" class="repeatBtn" @click="stepRollRepeat(1)">+</button>
+            </div>
           </div>
 
           <div v-if="mode === 'check'" class="structuredEditor">
@@ -813,7 +859,7 @@ function toggleVisibility() {
                   {{ term.kind === "dice" ? "骰子" : "加值" }}
                 </button>
                 <template v-if="term.kind === 'dice'">
-                  <input v-model.number="term.count" class="numInput" type="number" min="1" max="100" />
+                  <input v-model.number="term.count" class="numInput" type="number" min="-100" max="100" />
                   <span>d</span>
                   <input v-model.number="term.faces" class="numInput" type="number" min="2" max="1000" />
                 </template>
@@ -835,7 +881,7 @@ function toggleVisibility() {
                   {{ term.kind === "dice" ? "骰子" : "加值" }}
                 </button>
                 <template v-if="term.kind === 'dice'">
-                  <input v-model.number="term.count" class="numInput" type="number" min="1" max="100" />
+                  <input v-model.number="term.count" class="numInput" type="number" min="-100" max="100" />
                   <span>d</span>
                   <input v-model.number="term.faces" class="numInput" type="number" min="2" max="1000" />
                 </template>
@@ -1685,8 +1731,11 @@ function toggleVisibility() {
 }
 
 .rollSettingsHeader {
-  display: grid;
-  gap: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
 }
 
 .rollModeRow {
@@ -1716,6 +1765,69 @@ function toggleVisibility() {
 .rollModeBtn.active {
   background: color-mix(in srgb, var(--c-primary) 18%, var(--c-surface));
   color: var(--c-text);
+}
+
+.repeatStepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--c-text-muted);
+  font-size: 12px;
+}
+
+.repeatLabel {
+  font-weight: 600;
+}
+
+.repeatBtn {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--c-surface) 94%, var(--c-bg));
+  color: var(--c-text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.repeatBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.repeatInput {
+  width: 42px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--c-text);
+  text-align: center;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  outline: none;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.repeatInput:focus {
+  border-color: var(--c-accent);
+  background: color-mix(in srgb, var(--c-surface) 96%, var(--c-bg));
+}
+
+.repeatInput::-webkit-outer-spin-button,
+.repeatInput::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
 .userActorChip,

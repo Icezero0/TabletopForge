@@ -16,6 +16,7 @@ const props = defineProps<{
   selectedTokenId?: number | null;
   currentUserId?: number | null;
   characterOwnerById: Map<number, number>;
+  characterDataHiddenById?: Map<number, boolean>;
   playerColorByUserId?: Map<number, string>;
   remoteSelections?: RemoteObjectSelection[];
   isClientPointFogged?: (clientX: number, clientY: number) => boolean;
@@ -115,6 +116,7 @@ function onTokenContextMenu(token: RoomToken, event: MouseEvent) {
       :inactive="!canPickToken(token)"
       :dimmed="isTokenDimmed(token)"
       :game-role="gameRole"
+      :character-data-hidden="characterDataHiddenById?.get(token.linked_character_id) === true"
       :player-color-by-user-id="playerColorByUserId"
       @pointerdown="onTokenPointerDown(token, $event)"
       @click="onTokenClick(token, $event)"

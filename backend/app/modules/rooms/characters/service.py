@@ -15,6 +15,7 @@ from app.modules.character.service import CharacterService
 from app.modules.rooms.characters.repository import RoomCharacterRepository
 from app.modules.rooms.tabletop.repository import RoomTabletopRepository
 from app.modules.rooms.characters.schemas import (
+    RoomCharacterDataVisibilityPatch,
     RoomCharacterCreate,
     RoomCharacterEntryResponse,
     RoomCharacterTokenConfigSummary,
@@ -101,6 +102,7 @@ class RoomCharacterService:
             token_configs=token_configs,
             state=state_summary,
             is_hidden=entry.is_hidden,
+            hide_data=entry.hide_data,
         )
 
     async def list_room_characters(
@@ -193,6 +195,52 @@ class RoomCharacterService:
             db,
             room_character_id=room_character_id,
             is_hidden=payload.is_hidden,
+        )
+        await db.commit()
+        updated = await self.repo.get_by_id_and_room(
+            db,
+            room_character_id=room_character_id,
+            room_id=room_id,
+        )
+        assert updated is not None
+        return self._entry_response(
+            updated,
+            updated.character.state,
+            game_role=game_role,
+            viewer_user_id=user.id,
+        )
+
+    async def set_data_visibility(
+        self,
+        db: AsyncSession,
+        *,
+        room_id: int,
+        room_character_id: int,
+        user: User,
+        payload: RoomCharacterDataVisibilityPatch,
+    ) -> RoomCharacterEntryResponse:
+        game_role = await self._require_member_game_role(db, room_id=room_id, user=user)
+        if game_role != GameRole.GM:
+            raise ForbiddenError(
+                "Only GMs can manage character data visibility",
+                reason=ErrorReason.ROOM_PERMISSION_DENIED,
+                details={"game_role": game_role},
+            )
+        existing = await self.repo.get_by_id_and_room(
+            db,
+            room_character_id=room_character_id,
+            room_id=room_id,
+        )
+        if existing is None:
+            raise NotFoundError(
+                "Room character not found",
+                reason=ErrorReason.CHARACTER_NOT_FOUND,
+                details={"room_character_id": room_character_id},
+            )
+        await self.repo.set_data_visibility(
+            db,
+            room_character_id=room_character_id,
+            hide_data=payload.hide_data,
         )
         await db.commit()
         updated = await self.repo.get_by_id_and_room(

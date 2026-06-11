@@ -169,6 +169,10 @@ export const useDiceStore = defineStore("dice", {
       this.ensureRoomState(roomId).draft = draft;
     },
 
+    clearDraft(roomId: number) {
+      this.ensureRoomState(roomId).draft = null;
+    },
+
     clearRoom(roomId: number) {
       delete this.rooms[roomId];
     },

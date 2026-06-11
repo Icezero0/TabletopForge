@@ -51,6 +51,7 @@ from app.modules.rooms.tabletop.schemas import (
 )
 from app.modules.rooms.tabletop.service import RoomTabletopService
 from app.modules.rooms.characters.schemas import (
+    RoomCharacterDataVisibilityPatch,
     RoomCharacterEntryResponse,
     RoomCharacterLinkRequest,
     RoomCharacterVisibilityPatch,
@@ -719,6 +720,29 @@ async def patch_room_character_visibility(
     publisher: RealtimePublisher = Depends(get_realtime_publisher),
 ) -> RoomCharacterEntryResponse:
     entry = await room_characters_service.set_visibility(
+        db,
+        room_id=room_id,
+        room_character_id=room_character_id,
+        user=current_user,
+        payload=payload,
+    )
+    await publisher.publish_room_characters(room_id=room_id)
+    return entry
+
+
+@router.patch(
+    "/{room_id}/characters/{room_character_id}/data-visibility",
+    response_model=RoomCharacterEntryResponse,
+)
+async def patch_room_character_data_visibility(
+    room_id: int,
+    room_character_id: int,
+    payload: RoomCharacterDataVisibilityPatch,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    publisher: RealtimePublisher = Depends(get_realtime_publisher),
+) -> RoomCharacterEntryResponse:
+    entry = await room_characters_service.set_data_visibility(
         db,
         room_id=room_id,
         room_character_id=room_character_id,

@@ -12,6 +12,7 @@ function characterToPopoverEntry(char: Character): SpawnPopoverEntry {
     token_image_asset_id: char.token_image_asset_id ?? char.portrait_asset_id,
     token_configs: [],
     is_hidden: false,
+    hide_data: false,
     state: {
       current_hp: null,
       max_hp: null,

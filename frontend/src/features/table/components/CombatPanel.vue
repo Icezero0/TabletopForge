@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { XMarkIcon } from "@heroicons/vue/24/outline";
 import type { GameRole, RoomCombatState, RoomMember, RoomToken } from "@/infra/api/rooms.api";
 import CombatTokenAvatar from "@/features/table/components/CombatTokenAvatar.vue";
@@ -27,6 +27,7 @@ const dialogOpen = ref(false);
 const dialogMode = ref<"start" | "edit">("start");
 const selectedTokenIds = ref<Set<number>>(new Set());
 const startingCombat = ref(false);
+const combatantMenu = ref<{ tokenId: number; x: number; y: number } | null>(null);
 
 const isGm = computed(() => props.gameRole === "GM");
 const activeCombat = computed(() =>
@@ -39,6 +40,33 @@ const tokenById = computed(() => {
   return map;
 });
 
+function renumberCombatants(combatants: RoomCombatState["combatants"]) {
+  return [...combatants]
+    .sort((a, b) => a.turn_order - b.turn_order)
+    .map((combatant, index) => ({ ...combatant, turn_order: index }));
+}
+
+function normalizeCombatState(state: RoomCombatState | null): RoomCombatState | null {
+  if (!state?.active) return null;
+  const ordered = [...state.combatants].sort((a, b) => a.turn_order - b.turn_order);
+  const currentTokenId = ordered[state.turn_index]?.token_id ?? null;
+  const filtered = ordered.filter((combatant) => tokenById.value.has(combatant.token_id));
+  if (!filtered.length) return null;
+  const combatants = filtered.map((combatant, index) => ({ ...combatant, turn_order: index }));
+  const preservedIndex = currentTokenId == null
+    ? -1
+    : combatants.findIndex((combatant) => combatant.token_id === currentTokenId);
+  return {
+    ...state,
+    turn_index: preservedIndex >= 0
+      ? preservedIndex
+      : Math.min(state.turn_index, combatants.length - 1),
+    combatants,
+  };
+}
+
+const displayCombat = computed(() => normalizeCombatState(activeCombat.value));
+
 const memberGameRoleByUserId = computed(() => {
   const map = new Map<number, GameRole>();
   for (const member of props.members) map.set(member.user_id, member.game_role);
@@ -46,11 +74,9 @@ const memberGameRoleByUserId = computed(() => {
 });
 
 const combatRows = computed(() => {
-  const state = activeCombat.value;
+  const state = displayCombat.value;
   if (!state) return [];
-  return [...state.combatants]
-    .sort((a, b) => a.turn_order - b.turn_order)
-    .map((combatant, index) => ({
+  return state.combatants.map((combatant, index) => ({
       combatant,
       token: tokenById.value.get(combatant.token_id) ?? null,
       active: index === state.turn_index,
@@ -62,23 +88,37 @@ const activeCombatRow = computed(() =>
   combatRows.value.find((row) => row.active) ?? null,
 );
 
+const combatantMenuRow = computed(() => {
+  const tokenId = combatantMenu.value?.tokenId;
+  if (tokenId == null) return null;
+  return combatRows.value.find((row) => row.combatant.token_id === tokenId) ?? null;
+});
+
+const combatantMenuStyle = computed(() => {
+  if (!combatantMenu.value) return {};
+  return {
+    left: `${combatantMenu.value.x}px`,
+    top: `${combatantMenu.value.y}px`,
+  };
+});
+
 const canEndCurrentTurn = computed(() => {
   const row = activeCombatRow.value;
   const token = row?.token;
   if (row?.waiting) return false;
-  if (!activeCombat.value || !token) return false;
+  if (!displayCombat.value || !token) return false;
   if (isGm.value) return true;
   if (props.currentUserId == null) return false;
   return token.linked_character_owner_id === props.currentUserId;
 });
 
 const activeCombatTokenIds = computed(() => new Set(
-  activeCombat.value?.combatants.map((combatant) => combatant.token_id) ?? [],
+  displayCombat.value?.combatants.map((combatant) => combatant.token_id) ?? [],
 ));
 
 const combatantByTokenId = computed(() => {
   const map = new Map<number, NonNullable<RoomCombatState["combatants"][number]>>();
-  for (const combatant of activeCombat.value?.combatants ?? []) {
+  for (const combatant of displayCombat.value?.combatants ?? []) {
     map.set(combatant.token_id, combatant);
   }
   return map;
@@ -104,7 +144,7 @@ function openStartDialog() {
 
 function openEditDialog() {
   dialogMode.value = "edit";
-  selectedTokenIds.value = new Set(activeCombat.value?.combatants.map((combatant) => combatant.token_id) ?? []);
+  selectedTokenIds.value = new Set(displayCombat.value?.combatants.map((combatant) => combatant.token_id) ?? []);
   dialogOpen.value = true;
 }
 
@@ -192,6 +232,125 @@ function sortCombatants<T extends { initiative: number; roll: number; token_id: 
     .map((combatant, index) => ({ ...combatant, turn_order: index }));
 }
 
+function emitCombatState(state: RoomCombatState | null) {
+  emit("update-combat", state);
+}
+
+function setCurrentTurn(tokenId: number) {
+  if (!isGm.value || props.saving) return;
+  const state = displayCombat.value;
+  if (!state) return;
+  const ordered = renumberCombatants(state.combatants);
+  const nextIndex = ordered.findIndex((combatant) => combatant.token_id === tokenId);
+  if (nextIndex < 0 || nextIndex === state.turn_index) return;
+  emitCombatState({
+    ...state,
+    turn_index: nextIndex,
+    combatants: ordered.map((combatant) =>
+      combatant.token_id === tokenId
+        ? { ...combatant, ready_round: Math.min(combatant.ready_round ?? state.round, state.round) }
+        : combatant,
+    ),
+  });
+}
+
+function setCombatantReadyRound(tokenId: number, readyRound: number) {
+  if (!isGm.value || props.saving) return;
+  const state = displayCombat.value;
+  if (!state) return;
+  const ordered = renumberCombatants(state.combatants);
+  if (!ordered.some((combatant) => combatant.token_id === tokenId)) return;
+  const currentTokenId = ordered[state.turn_index]?.token_id ?? null;
+  const nextCombatants = ordered.map((combatant) =>
+    combatant.token_id === tokenId
+      ? { ...combatant, ready_round: readyRound }
+      : combatant,
+  );
+  let nextRound = state.round;
+  let nextTurnIndex = state.turn_index;
+  if (currentTokenId === tokenId && readyRound > state.round) {
+    nextTurnIndex = -1;
+    for (let index = state.turn_index + 1; index < nextCombatants.length; index += 1) {
+      if ((nextCombatants[index]?.ready_round ?? 1) <= state.round) {
+        nextTurnIndex = index;
+        break;
+      }
+    }
+    if (nextTurnIndex < 0) {
+      nextRound = state.round + 1;
+      nextTurnIndex = nextCombatants.findIndex((combatant) => (combatant.ready_round ?? 1) <= nextRound);
+    }
+    if (nextTurnIndex < 0) nextTurnIndex = 0;
+  }
+  emitCombatState({
+    ...state,
+    round: nextRound,
+    turn_index: nextTurnIndex,
+    combatants: nextCombatants,
+  });
+}
+
+function closeCombatantMenu() {
+  combatantMenu.value = null;
+}
+
+function openCombatantMenu(tokenId: number, event: MouseEvent) {
+  if (!isGm.value || props.saving) return;
+  const menuWidth = 154;
+  const menuHeight = 116;
+  const margin = 8;
+  const x = Math.min(
+    Math.max(margin, event.clientX),
+    Math.max(margin, window.innerWidth - menuWidth - margin),
+  );
+  const shouldOpenUp = event.clientY + menuHeight + margin > window.innerHeight
+    && event.clientY > menuHeight + margin;
+  const y = shouldOpenUp
+    ? Math.max(margin, event.clientY - menuHeight)
+    : Math.min(
+      Math.max(margin, event.clientY),
+      Math.max(margin, window.innerHeight - menuHeight - margin),
+    );
+  combatantMenu.value = { tokenId, x, y };
+}
+
+function applyCombatantMenuAction(action: "current" | "thisRound" | "nextRound") {
+  const row = combatantMenuRow.value;
+  const state = displayCombat.value;
+  if (!row || !state) return;
+  if (action === "current") {
+    setCurrentTurn(row.combatant.token_id);
+  } else if (action === "thisRound") {
+    setCombatantReadyRound(row.combatant.token_id, state.round);
+  } else {
+    setCombatantReadyRound(row.combatant.token_id, state.round + 1);
+  }
+  closeCombatantMenu();
+}
+
+function setCombatantInitiative(tokenId: number, raw: string) {
+  if (!isGm.value || props.saving) return;
+  const state = displayCombat.value;
+  const value = Number(raw);
+  if (!state || !Number.isFinite(value)) return;
+  const currentTokenId = state.combatants[state.turn_index]?.token_id ?? null;
+  const nextCombatants = sortCombatants(
+    state.combatants.map((combatant) =>
+      combatant.token_id === tokenId
+        ? { ...combatant, initiative: Math.trunc(value) }
+        : { ...combatant },
+    ),
+  );
+  const nextTurnIndex = currentTokenId == null
+    ? Math.min(state.turn_index, Math.max(0, nextCombatants.length - 1))
+    : Math.max(0, nextCombatants.findIndex((combatant) => combatant.token_id === currentTokenId));
+  emitCombatState({
+    ...state,
+    turn_index: nextTurnIndex,
+    combatants: nextCombatants,
+  });
+}
+
 async function applyCombatDialog() {
   const selected = selectedTokens.value;
   if (!selected.length) return;
@@ -201,14 +360,14 @@ async function applyCombatDialog() {
     const rolled = [];
     for (const token of selected) {
       const existing = dialogMode.value === "edit" ? combatantByTokenId.value.get(token.id) : null;
-      const readyRound = dialogMode.value === "edit" && activeCombat.value
-        ? activeCombat.value.round + 1
+      const readyRound = dialogMode.value === "edit" && displayCombat.value
+        ? displayCombat.value.round + 1
         : 1;
       rolled.push(existing ? { ...existing } : await rollInitiativeForToken(token, readyRound));
     }
 
     const combatants = sortCombatants(rolled);
-    const state = activeCombat.value;
+    const state = displayCombat.value;
     const currentTokenId = activeCombatRow.value?.combatant.token_id ?? null;
     const preservedTurnIndex = currentTokenId == null
       ? 0
@@ -230,7 +389,7 @@ async function applyCombatDialog() {
       if (nextTurnIndex < 0) nextTurnIndex = 0;
     }
 
-    emit("update-combat", {
+    emitCombatState({
       active: true,
       round: nextRound,
       turn_index: nextTurnIndex,
@@ -245,11 +404,11 @@ async function applyCombatDialog() {
 }
 
 function endCombat() {
-  emit("update-combat", null);
+  emitCombatState(null);
 }
 
 function endCurrentTurn() {
-  const state = activeCombat.value;
+  const state = displayCombat.value;
   if (!state || !state.combatants.length || props.saving) return;
   const ordered = [...state.combatants].sort((a, b) => a.turn_order - b.turn_order);
   let nextRound = state.round;
@@ -265,13 +424,49 @@ function endCurrentTurn() {
     nextIndex = ordered.findIndex((combatant) => (combatant.ready_round ?? 1) <= nextRound);
   }
   if (nextIndex < 0) nextIndex = 0;
-  emit("update-combat", {
+  emitCombatState({
     ...state,
     round: nextRound,
     turn_index: nextIndex,
     combatants: state.combatants.map((combatant) => ({ ...combatant })),
   });
 }
+
+watch(
+  () => {
+    const state = displayCombat.value;
+    if (!state?.active) return "";
+    return state.combatants
+      .map((combatant) => `${combatant.token_id}:${tokenById.value.has(combatant.token_id) ? 1 : 0}`)
+      .join("|");
+  },
+  () => {
+    if (!isGm.value || props.saving) return;
+  const state = displayCombat.value;
+    if (!state?.active) return;
+    const normalized = normalizeCombatState(state);
+    if (normalized === state) return;
+    if (
+      normalized?.combatants.length === state.combatants.length &&
+      normalized?.turn_index === state.turn_index
+    ) return;
+    emitCombatState(normalized);
+  },
+);
+
+function onDocumentKeydown(event: KeyboardEvent) {
+  if (event.key === "Escape") closeCombatantMenu();
+}
+
+onMounted(() => {
+  document.addEventListener("click", closeCombatantMenu);
+  document.addEventListener("keydown", onDocumentKeydown);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("click", closeCombatantMenu);
+  document.removeEventListener("keydown", onDocumentKeydown);
+});
 </script>
 
 <template>
@@ -289,9 +484,9 @@ function endCurrentTurn() {
       </button>
     </div>
 
-    <div v-else class="combatList">
+    <div v-else-if="displayCombat" class="combatList">
       <div class="combatMeta">
-        <span class="roundLabel">第 {{ activeCombat.round }} 轮</span>
+        <span class="roundLabel">第 {{ displayCombat.round }} 轮</span>
         <button
           type="button"
           class="primaryBtn turnEndBtn"
@@ -334,6 +529,7 @@ function endCurrentTurn() {
           tabindex="0"
           @click="emit('select-token', row.combatant.token_id)"
           @dblclick="emit('focus-token', row.combatant.token_id)"
+          @contextmenu.prevent.stop="openCombatantMenu(row.combatant.token_id, $event)"
           @keydown.enter.prevent="emit('select-token', row.combatant.token_id)"
           @keydown.space.prevent="emit('select-token', row.combatant.token_id)"
         >
@@ -344,11 +540,62 @@ function endCurrentTurn() {
             :asset-id="row.token?.asset_id ?? null"
           />
           <span class="tokenName">{{ row.token?.name || '未知指示物' }}</span>
-          <span class="initiativeValue">{{ row.combatant.initiative }}</span>
+          <input
+            v-if="isGm"
+            class="initiativeInput"
+            type="number"
+            :value="row.combatant.initiative"
+            title="修改先攻"
+            @click.stop
+            @dblclick.stop
+            @change="setCombatantInitiative(row.combatant.token_id, ($event.target as HTMLInputElement).value)"
+          />
+          <span v-else class="initiativeValue">{{ row.combatant.initiative }}</span>
           <span v-if="row.waiting" class="waitingBadge">下轮</span>
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div
+        v-if="combatantMenu && combatantMenuRow"
+        class="combatContextMenu"
+        :style="combatantMenuStyle"
+        role="menu"
+        @click.stop
+        @contextmenu.prevent.stop
+      >
+        <button
+          type="button"
+          class="combatContextItem"
+          role="menuitem"
+          :disabled="saving || combatantMenuRow.active"
+          @click="applyCombatantMenuAction('current')"
+        >
+          设置为当前回合
+        </button>
+        <button
+          type="button"
+          class="combatContextItem"
+          :class="{ active: !combatantMenuRow.waiting }"
+          role="menuitem"
+          :disabled="saving || !combatantMenuRow.waiting"
+          @click="applyCombatantMenuAction('thisRound')"
+        >
+          设置为本轮行动
+        </button>
+        <button
+          type="button"
+          class="combatContextItem"
+          :class="{ active: combatantMenuRow.waiting }"
+          role="menuitem"
+          :disabled="saving || combatantMenuRow.waiting"
+          @click="applyCombatantMenuAction('nextRound')"
+        >
+          设置为下轮行动
+        </button>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <div v-if="dialogOpen" class="modalOverlay">
@@ -614,6 +861,33 @@ function endCurrentTurn() {
   font-weight: 700;
 }
 
+.initiativeInput {
+  width: 48px;
+  height: 24px;
+  border: 1px solid color-mix(in srgb, var(--c-border) 82%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--c-surface) 90%, var(--c-bg));
+  color: var(--c-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  outline: none;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.initiativeInput:focus {
+  border-color: color-mix(in srgb, var(--c-primary) 58%, var(--c-border));
+}
+
+.initiativeInput::-webkit-outer-spin-button,
+.initiativeInput::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
 .waitingBadge {
   position: absolute;
   top: 5px;
@@ -626,6 +900,48 @@ function endCurrentTurn() {
   font-size: 10px;
   font-weight: 700;
   line-height: 1.4;
+}
+
+.combatContextMenu {
+  position: fixed;
+  z-index: 1000;
+  display: grid;
+  gap: 3px;
+  width: 154px;
+  padding: 5px;
+  border: 1px solid color-mix(in srgb, var(--c-border) 82%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--c-surface) 96%, var(--c-bg));
+  box-shadow: 0 18px 52px rgb(0 0 0 / 0.34);
+}
+
+.combatContextItem {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 32px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--c-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.combatContextItem:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--c-primary) 12%, transparent);
+}
+
+.combatContextItem.active {
+  font-weight: 700;
+}
+
+.combatContextItem:disabled {
+  cursor: default;
+  opacity: 0.55;
 }
 
 .primaryBtn,

@@ -108,6 +108,27 @@ class RoomCharacterRepository:
         await db.refresh(entry)
         return entry
 
+    async def set_data_visibility(
+        self,
+        db: AsyncSession,
+        *,
+        room_character_id: int,
+        hide_data: bool,
+    ) -> RoomCharacter:
+        result = await db.execute(
+            select(RoomCharacter)
+            .where(RoomCharacter.id == room_character_id)
+            .options(
+                selectinload(RoomCharacter.character).selectinload(Character.state),
+                selectinload(RoomCharacter.character).selectinload(Character.token_configs)
+            )
+        )
+        entry = result.scalar_one()
+        entry.hide_data = hide_data
+        await db.flush()
+        await db.refresh(entry)
+        return entry
+
     async def get_room_ids_by_character(
         self,
         db: AsyncSession,

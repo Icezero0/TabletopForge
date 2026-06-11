@@ -72,6 +72,7 @@ const visibleEntries = computed(() =>
   min-width: 240px;
   max-width: 320px;
   padding: 8px;
+  overflow: hidden;
 }
 
 .muted {
@@ -92,6 +93,6 @@ const visibleEntries = computed(() =>
   display: grid;
   gap: 8px;
   max-height: min(40vh, 360px);
-  overflow: auto;
+  overflow: visible;
 }
 </style>

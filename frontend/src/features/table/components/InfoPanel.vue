@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n";
 import type { GameRole } from "@/features/room/types";
 import type { ActiveInspection } from "@/features/room/composables/useRoomInspection";
 import { getCharacter, type Character, type TokenPanelInitial } from "@/infra/api/character.api";
+import { patchRoomCharacterDataVisibility, type RoomCharacterEntry } from "@/infra/api/roomCharacters.api";
 import {
   ABILITY_KEYS, ABILITY_LABEL_KEYS, DND5E_SKILLS, DND5E_ALIGNMENT_OPTIONS,
   abilityMod, fmtMod,
@@ -21,10 +22,12 @@ const props = defineProps<{
   roomId: number;
   gameRole: GameRole | "unknown";
   currentUserId?: number | null;
+  roomCharacters?: RoomCharacterEntry[];
 }>();
 
 const emit = defineEmits<{
   close: [];
+  roomCharacterUpdated: [entry: RoomCharacterEntry];
 }>();
 
 const { t, te } = useI18n();
@@ -86,6 +89,19 @@ const tokenPanel = computed<TokenPanelInitial | null>(() => {
   return panel as TokenPanelInitial;
 });
 
+const selectedRoomCharacter = computed(() => {
+  const characterId = props.inspection?.kind === "character" ? props.inspection.characterId : null;
+  if (characterId == null) return null;
+  return props.roomCharacters?.find((entry) => entry.character_id === characterId) ?? null;
+});
+
+const characterHideData = computed(() => selectedRoomCharacter.value?.hide_data === true);
+
+const tokenHideDataMode = computed(() => {
+  const mode = tokenPanel.value?.hide_data_mode;
+  return mode === "hidden" || mode === "visible" || mode === "inherit" ? mode : "inherit";
+});
+
 const canEditState = computed(() => {
   if (!character.value || props.inspection?.tokenId == null) return false;
   if (props.gameRole === "GM") return true;
@@ -95,9 +111,27 @@ const canEditState = computed(() => {
   return false;
 });
 
-const canToggleHiddenData = computed(() => props.gameRole === "GM" && props.inspection?.tokenId != null);
-const tokenHideData = computed(() => tokenPanel.value?.hide_data === true || tokenPanel.value?.hide_hp === true);
+const canToggleTokenHiddenData = computed(() => props.gameRole === "GM" && props.inspection?.tokenId != null);
+const canToggleCharacterHiddenData = computed(() =>
+  props.gameRole === "GM" &&
+  props.inspection?.tokenId == null &&
+  selectedRoomCharacter.value != null,
+);
+const canToggleHiddenData = computed(() => canToggleTokenHiddenData.value || canToggleCharacterHiddenData.value);
+const tokenHideData = computed(() => {
+  if (tokenHideDataMode.value === "hidden") return true;
+  if (tokenHideDataMode.value === "visible") return false;
+  return tokenPanel.value?.hide_data === true || tokenPanel.value?.hide_hp === true || characterHideData.value;
+});
+const currentHideDataChecked = computed(() =>
+  props.inspection?.tokenId != null ? tokenHideData.value : characterHideData.value,
+);
 const isDataHiddenForViewer = computed(() => props.gameRole !== "GM" && tokenHideData.value);
+const isCharacterDataHiddenForViewer = computed(() =>
+  props.gameRole !== "GM" &&
+  props.inspection?.tokenId == null &&
+  characterHideData.value,
+);
 const canEditVisibleState = computed(() => canEditState.value && !isDataHiddenForViewer.value);
 
 const canOpenCharacterSheet = computed(() => character.value != null);
@@ -605,13 +639,38 @@ function cycleTokenSkillProf(key: string) {
 async function toggleHiddenData() {
   if (!canToggleHiddenData.value) return;
   const tokenId = props.inspection?.tokenId;
-  if (tokenId == null) return;
+  if (tokenId == null) {
+    const entry = selectedRoomCharacter.value;
+    if (!entry) return;
+    saving.value = true;
+    saveError.value = "";
+    saveSuccess.value = false;
+    try {
+      const updated = await patchRoomCharacterDataVisibility(
+        props.roomId,
+        entry.room_character_id,
+        !characterHideData.value,
+      );
+      emit("roomCharacterUpdated", updated);
+      saveSuccess.value = true;
+    } catch (e) {
+      saveError.value = getBackendErrorMessage(e) || t("table.inspector.saveFailed");
+    } finally {
+      saving.value = false;
+    }
+    return;
+  }
   saving.value = true;
   saveError.value = "";
   saveSuccess.value = false;
   try {
+    const nextHidden = !tokenHideData.value;
     const updated = await patchRoomToken(props.roomId, tokenId, {
-      panel: { hide_data: !tokenHideData.value, hide_hp: false },
+      panel: {
+        hide_data: nextHidden,
+        hide_data_mode: nextHidden ? "hidden" : "visible",
+        hide_hp: false,
+      },
     });
     tabletopStore.applyTokenUpdated(props.roomId, updated);
     saveSuccess.value = true;
@@ -734,7 +793,7 @@ function openCharacterSheet() {
           <span>{{ t("table.inspector.hideData") }}</span>
           <input
             type="checkbox"
-            :checked="tokenHideData"
+            :checked="currentHideDataChecked"
             :disabled="saving"
             @change="toggleHiddenData"
           />
@@ -1095,7 +1154,7 @@ function openCharacterSheet() {
         </div>
 
         <!-- Tab pane -->
-        <div class="tabPane">
+        <div class="tabPane" :class="{ dataHidden: isCharacterDataHiddenForViewer }">
 
           <!-- ── Identity ── -->
           <template v-if="activeTab === 'identity'">
@@ -1516,6 +1575,15 @@ function openCharacterSheet() {
 .dataHidden .tokenCompactValue,
 .dataHidden .tokenCompactInput,
 .dataHidden .tokenProfDot,
+.dataHidden .infoVal,
+.dataHidden .abScore,
+.dataHidden .abMod,
+.dataHidden .derivedVal,
+.dataHidden .saveVal,
+.dataHidden .skillVal,
+.dataHidden .featureName,
+.dataHidden .featureSource,
+.dataHidden .featureNotes,
 .dataHidden .spellStatVal,
 .dataHidden .spellStatInput,
 .dataHidden .slotBadge,

@@ -215,6 +215,14 @@ watch(toolMode, (mode) => {
   }
 });
 
+const characterDataHiddenById = computed(() => {
+  const map = new Map<number, boolean>();
+  for (const entry of roomCharacters.value) {
+    map.set(entry.character_id, entry.hide_data === true);
+  }
+  return map;
+});
+
 watch(measureSubTool, clearMeasure);
 
 function handleMeasurePointerMove(x: number, y: number, event: PointerEvent) {
@@ -2368,6 +2376,7 @@ watch(
             :player-color-by-user-id="playerColorByUserId"
             :measure-state="measureState"
             :character-owner-by-id="characterOwnerById"
+            :character-data-hidden-by-id="characterDataHiddenById"
             @select-map="handleSelectMap"
             @map-context-menu="handleMapContextMenu"
             @select-token="handleSelectToken"
@@ -2683,6 +2692,8 @@ watch(
                 :room-id="roomId"
                 :game-role="currentUserGameRole"
                 :current-user-id="currentUserId"
+                :room-characters="roomCharacters"
+                @room-character-updated="upsertRoomCharacter"
                 @close="handleCloseInspection"
               />
             </Transition>

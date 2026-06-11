@@ -28,6 +28,7 @@ class RoomCharacterEntryResponse(BaseModel):
     token_configs: list[RoomCharacterTokenConfigSummary] = Field(default_factory=list)
     state: CharacterStateSummary
     is_hidden: bool = False
+    hide_data: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -38,6 +39,10 @@ class RoomCharacterLinkRequest(BaseModel):
 
 class RoomCharacterVisibilityPatch(BaseModel):
     is_hidden: bool
+
+
+class RoomCharacterDataVisibilityPatch(BaseModel):
+    hide_data: bool
 
 
 class RoomCharacterCreate(BaseModel):

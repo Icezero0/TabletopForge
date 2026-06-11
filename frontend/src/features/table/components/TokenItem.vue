@@ -18,6 +18,7 @@ const props = defineProps<{
   activeCombatTurn?: boolean;
   remoteSelectionColor?: string | null;
   gameRole?: import("@/features/room/types").GameRole | "unknown";
+  characterDataHidden?: boolean;
   playerColorByUserId?: Map<number, string>;
 }>();
 
@@ -58,9 +59,13 @@ function cumulativeDamageFromHp(current: unknown, max: unknown): number | null {
 
 const previewText = computed(() => {
   const panel = props.token.panel;
-  if (panel && panel.hide_data === true) {
+  const mode = typeof panel?.hide_data_mode === "string" ? panel.hide_data_mode : "inherit";
+  const hidden =
+    mode === "hidden" ||
+    (mode !== "visible" && (panel?.hide_data === true || props.characterDataHidden === true));
+  if (hidden) {
     const panelDamage =
-      cumulativeDamageFromHp(panel.hp_current, panel.hp_max) ??
+      cumulativeDamageFromHp(panel?.hp_current, panel?.hp_max) ??
       cumulativeDamageFromHp(props.token.state_summary?.current_hp, props.token.state_summary?.max_hp);
     return formatTokenPreview({ damage_taken: panelDamage ?? props.token.state_summary?.damage_taken ?? 0 }, {
       damageLabel: t("room.characters.cumulativeDamage"),

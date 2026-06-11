@@ -276,6 +276,7 @@ class RoomSceneService:
                     "id": item.id,
                     "character_id": item.character_id,
                     "is_hidden": item.is_hidden,
+                    "hide_data": item.hide_data,
                     "added_by_user_id": item.added_by_user_id,
                 }
                 for item in characters
@@ -350,6 +351,7 @@ class RoomSceneService:
                     room_id=room_id,
                     character_id=item["character_id"],
                     is_hidden=item.get("is_hidden", False),
+                    hide_data=item.get("hide_data", False),
                     added_by_user_id=item["added_by_user_id"],
                 )
             )

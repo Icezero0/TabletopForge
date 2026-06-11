@@ -54,6 +54,7 @@ const props = withDefaults(
     fogBrushRadius?: number;
     currentUserId?: number | null;
     characterOwnerById?: Map<number, number>;
+    characterDataHiddenById?: Map<number, boolean>;
     playerColorByUserId?: Map<number, string>;
     roomId?: number | null;
     activeSceneId?: number | null;
@@ -88,6 +89,7 @@ const props = withDefaults(
     fogBrushRadius: 54,
     currentUserId: null,
     characterOwnerById: () => new Map<number, number>(),
+    characterDataHiddenById: () => new Map<number, boolean>(),
   },
 );
 
@@ -411,6 +413,7 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
         :selected-token-id="selectedTokenId"
         :current-user-id="currentUserId"
         :character-owner-by-id="characterOwnerById"
+        :character-data-hidden-by-id="characterDataHiddenById"
         :player-color-by-user-id="playerColorByUserId"
         :remote-selections="remoteObjectSelections.filter((claim) => claim.type === 'token')"
         :is-client-point-fogged="isClientPointFogged"

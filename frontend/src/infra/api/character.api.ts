@@ -7,6 +7,7 @@ export type TokenPanelInitial = {
   hp_max?: number | null;
   hide_data?: boolean;
   hide_hp?: boolean;
+  hide_data_mode?: "inherit" | "hidden" | "visible";
   initiative?: number | null;
   speed?: number | null;
   pp?: number | null;

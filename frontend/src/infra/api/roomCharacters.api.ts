@@ -24,6 +24,7 @@ export type RoomCharacterEntry = {
   token_configs: RoomCharacterTokenConfig[];
   state: CharacterStateSummary;
   is_hidden: boolean;
+  hide_data: boolean;
 };
 
 export type SpawnPopoverEntry = RoomCharacterEntry & {
@@ -81,6 +82,18 @@ export async function patchRoomCharacterVisibility(
   const { data } = await http.patch<RoomCharacterEntry>(
     `/rooms/${roomId}/characters/${roomCharacterId}/visibility`,
     { is_hidden: isHidden },
+  );
+  return data;
+}
+
+export async function patchRoomCharacterDataVisibility(
+  roomId: number,
+  roomCharacterId: number,
+  hideData: boolean,
+) {
+  const { data } = await http.patch<RoomCharacterEntry>(
+    `/rooms/${roomId}/characters/${roomCharacterId}/data-visibility`,
+    { hide_data: hideData },
   );
   return data;
 }

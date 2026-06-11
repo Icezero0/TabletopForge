@@ -2,6 +2,7 @@ import { ref, type Ref } from "vue";
 import {
   deleteRoomCharacter,
   getRoomCharacters,
+  patchRoomCharacterDataVisibility,
   patchRoomCharacterVisibility,
   postRoomCharacter,
   type CharacterStateSummary,
@@ -83,6 +84,14 @@ export function useRoomCharacters(roomId: Ref<number | null>) {
     return updated;
   }
 
+  async function setDataVisibility(roomCharacterId: number, hideData: boolean) {
+    const id = roomId.value;
+    if (!id) throw new Error("Missing room id");
+    const updated = await patchRoomCharacterDataVisibility(id, roomCharacterId, hideData);
+    upsertEntry(updated);
+    return updated;
+  }
+
   function applyVisibilityUpdate(entry: RoomCharacterEntry) {
     upsertEntry(entry);
   }
@@ -97,6 +106,7 @@ export function useRoomCharacters(roomId: Ref<number | null>) {
     updateEntryState,
     removeEntry,
     setVisibility,
+    setDataVisibility,
     applyVisibilityUpdate,
     refresh: fetchCharacters,
   };

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 TERM_RE = re.compile(r"([+-]?)(?:(\d*)d(\d*)(?:k([hl])(\d+))?|(\d+))", re.IGNORECASE)
 SUPPORTED_FORMULA_RE = re.compile(r"[0-9d+\-khl]+")
 CHINESE_KEEP_RE = re.compile(r"(\d*)d(优势|劣势)(\d*)")
+ROLL_REPEAT_RE = re.compile(r"^(?:r)?(?:(\d+)#)?(.+)$", re.IGNORECASE)
 
 
 class DiceFormulaError(ValueError):
@@ -36,6 +37,12 @@ def _replace_chinese_keep(match: re.Match[str]) -> str:
 
 def normalize_formula(formula: str) -> str:
     normalized = re.sub(r"\s+", "", formula).lower()
+    repeat_match = ROLL_REPEAT_RE.fullmatch(normalized)
+    if repeat_match:
+        repeat_raw, body = repeat_match.group(1, 2)
+        if repeat_raw is not None and int(repeat_raw) < 1:
+            raise DiceFormulaError("Dice formula is out of range")
+        normalized = body
     return CHINESE_KEEP_RE.sub(_replace_chinese_keep, normalized)
 
 
