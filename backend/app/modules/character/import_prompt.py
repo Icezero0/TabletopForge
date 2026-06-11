@@ -69,8 +69,9 @@ def _output_format_section() -> str:
 | `attributes` | object | 数值、豁免、技能与熟练（见 5.4） |
 | `features` | object | 种族/职业特性（见 5.5） |
 | `spells` | object \\| null | 施法信息；非施法者或无信息时 `null` |
-| `equipment` | object | 物品与货币（见 5.6） |
-| `extras` | object | 其他备注（见 5.7） |
+| `resources` | array | 角色可恢复/消耗资源（见 5.7） |
+| `equipment` | object | 物品与货币（见 5.8） |
+| `extras` | object | 其他备注（见 5.9） |
 | `state` | null | 导入预览固定为 `null`（实时状态由对战层维护，勿填写） |
 
 ### 5.2 `identity` — 角色信息 Tab
@@ -154,22 +155,38 @@ def _output_format_section() -> str:
 | `spell_save_dc` | object | `{{"value": int, "breakdown": string}}` 法术豁免 DC |
 | `spell_attack_bonus` | object | `{{"value": int, "breakdown": string}}` 法术攻击加值 |
 | `spellbook` | object | 按环位存放法术名；键 `"0"`–`"9"`，`"0"` 为戏法，值为 `string[]` |
-| `spell_slots_max` | object | 各环位每日法术位上限；键 `"1"`–`"9"`，值为 int |
 
-### 5.7 `equipment` — 背包 Tab
+### 5.7 `resources` — 资源 Tab
+
+`resources` 是数组。每项：
+
+| 字段 | 类型 | 含义 |
+|------|------|------|
+| `name` | string | 资源名称，如「生命骰d8」「1环法术位」「引导神力」 |
+| `max` | int | 资源数量上限；未知则不要添加该资源 |
+| `recovery` | string | 恢复方式，如「长休」「短休」 |
+| `notes` | string | 备注；没有则 `""` |
+
+规则：
+- 若文本明确给出资源次数/上限（例如「荒野形态 2/短休」「引导神力 1/短休」），加入 `resources`。
+- 若能由职业等级确定的通用资源，也可以加入：生命骰、法术位、邪术师法术位、德鲁伊荒野形态、牧师/圣武士引导神力等。
+- 不要编造子职业专属资源；若资源依赖子职业选择且文本未明确说明，则不要添加。
+- 法术位上限属于资源 Tab，不要写入 `spells`。
+
+### 5.8 `equipment` — 背包 Tab
 
 | 字段 | 类型 | 含义 |
 |------|------|------|
 | `items` | array | 物品列表，每项 `{{"name": string, "quantity": int, "notes": string}}` |
 | `currency` | object | `{{"cp":0,"sp":0,"ep":0,"gp":0,"pp":0}}` 各币种数量 |
 
-### 5.8 `extras`
+### 5.9 `extras`
 
 | 字段 | 类型 | 含义 |
 |------|------|------|
 | `notes` | string | 不适合归入其他分类的自由备注 |
 
-### 5.9 JSON 骨架示例（字段必须齐全，值按文本填写）
+### 5.10 JSON 骨架示例（字段必须齐全，值按文本填写）
 
 {{
   "name": "角色名",
@@ -227,6 +244,7 @@ def _output_format_section() -> str:
     "custom_fields": {{}}
   }},
   "spells": null,
+  "resources": [],
   "equipment": {{
     "items": [],
     "currency": {{"cp": 0, "sp": 0, "ep": 0, "gp": 0, "pp": 0}}
@@ -245,7 +263,7 @@ def build_import_prompt(raw_text: str) -> str:
 
 你是 TabletopForge 的角色卡结构化提取助手。用户会提供一段**非结构化**的 D&D 5e 角色信息（导出卡、论坛帖、聊天记录、PDF 复制等）。
 
-你的任务是：阅读全文，提取能确定的字段，输出**一份完整 JSON**，供前端 6 个编辑 Tab（身份 / 属性 / 特性 / 法术 / 背包 / 其他）预填表单。用户会在界面中校对后再保存。
+你的任务是：阅读全文，提取能确定的字段，输出**一份完整 JSON**，供前端 7 个编辑 Tab（身份 / 属性 / 特性 / 法术 / 资源 / 背包 / 其他）预填表单。用户会在界面中校对后再保存。
 
 **不要**编造文本中不存在的事实；**不要**输出 markdown 或自然语言说明；**只输出 JSON**。
 
@@ -303,7 +321,7 @@ def build_import_prompt(raw_text: str) -> str:
 按以下顺序执行（内部推理，不要在输出中写步骤说明）：
 
 1. **通读**：浏览全文，识别角色名、职业/等级、种族、六维、HP/AC、技能、特性、法术、装备。
-2. **分段映射**：将信息归入 `identity` / `flavor` / `attributes` / `features` / `spells` / `equipment` / `extras`。
+2. **分段映射**：将信息归入 `identity` / `flavor` / `attributes` / `features` / `spells` / `resources` / `equipment` / `extras`。
 3. **规范化**：职业转枚举；阵营转英文枚举；数值转合法范围；派生项套 `{{value, breakdown}}`。
 4. **补缺**：未提及的字段填入空值或默认值，保证 JSON 结构与输出格式一致。
 5. **校验**：检查必填键、枚举合法性、顶层 `name` 非空；最后只输出 JSON。

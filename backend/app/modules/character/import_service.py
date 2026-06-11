@@ -20,6 +20,7 @@ from app.modules.character.import_defaults import (
     default_features,
     default_flavor,
     default_identity,
+    default_resources,
     default_spells,
 )
 from app.modules.character.import_prompt import (
@@ -247,6 +248,9 @@ def parse_and_normalize(
 
     flavor = _deep_merge(default_flavor(), data.get("flavor") or {})
     features = _deep_merge(default_features(), data.get("features") or {})
+    resources = data.get("resources")
+    if not isinstance(resources, list):
+        resources = default_resources()
     equipment = _deep_merge(default_equipment(), data.get("equipment") or {})
     extras = _deep_merge(default_extras(), data.get("extras") or {})
 
@@ -269,6 +273,7 @@ def parse_and_normalize(
         "attributes": attributes,
         "features": features,
         "spells": spells,
+        "resources": resources,
         "equipment": equipment,
         "extras": extras,
         "state": data.get("state"),

@@ -21,6 +21,7 @@ class CharacterRepository:
         attributes: dict | None = None,
         features: dict | None = None,
         spells: dict | None = None,
+        resources: list | None = None,
         equipment: dict | None = None,
         extras: dict | None = None,
     ) -> Character:
@@ -36,6 +37,7 @@ class CharacterRepository:
             attributes=attributes or {},
             features=features or {},
             spells=spells,
+            resources=resources or [],
             equipment=equipment or {},
             extras=extras or {},
         )

@@ -42,6 +42,7 @@ class Character(Base):
     attributes: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
     features: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
     spells: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    resources: Mapped[list] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
     equipment: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
     extras: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
 

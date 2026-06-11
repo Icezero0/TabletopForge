@@ -4,7 +4,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
 import {
   defaultIdentity, defaultFlavor, defaultAttributes,
-  defaultFeatures, defaultSpells, defaultEquipment,
+  defaultFeatures, defaultSpells, defaultResources, defaultEquipment,
 } from "@/features/character/constants";
 import {
   getCharacter, createCharacter, patchCharacter,
@@ -19,6 +19,7 @@ import CharacterIdentityTab from "@/features/character/components/tabs/Character
 import CharacterAttributesTab from "@/features/character/components/tabs/CharacterAttributesTab.vue";
 import CharacterFeaturesTab from "@/features/character/components/tabs/CharacterFeaturesTab.vue";
 import CharacterSpellsTab from "@/features/character/components/tabs/CharacterSpellsTab.vue";
+import CharacterResourcesTab from "@/features/character/components/tabs/CharacterResourcesTab.vue";
 import CharacterEquipmentTab from "@/features/character/components/tabs/CharacterEquipmentTab.vue";
 import CharacterExtrasTab from "@/features/character/components/tabs/CharacterExtrasTab.vue";
 import CharacterTokenTab from "@/features/character/components/tabs/CharacterTokenTab.vue";
@@ -60,6 +61,7 @@ const TABS = [
   { key: "attributes", label: () => t("character.tabs.attributes") },
   { key: "features",   label: () => t("character.tabs.features") },
   { key: "spells",     label: () => t("character.tabs.spells") },
+  { key: "resources",  label: () => t("character.tabs.resources") },
   { key: "equipment",  label: () => t("character.tabs.equipment") },
   { key: "extras",     label: () => t("character.tabs.extras") },
   { key: "token",      label: () => t("character.tabs.token") },
@@ -75,6 +77,7 @@ const formFlavor = ref<Record<string, unknown>>(defaultFlavor() as unknown as Re
 const formAttributes = ref<Record<string, unknown>>(defaultAttributes() as unknown as Record<string, unknown>);
 const formFeatures = ref<Record<string, unknown>>(defaultFeatures() as unknown as Record<string, unknown>);
 const formSpells = ref<Record<string, unknown>>(defaultSpells() as unknown as Record<string, unknown>);
+const formResources = ref<{ name: string; max: number; recovery: string; notes: string }[]>(defaultResources());
 const formEquipment = ref<Record<string, unknown>>(defaultEquipment() as unknown as Record<string, unknown>);
 const formExtras = ref<Record<string, unknown>>({});
 const formTokenConfigs = ref<TokenConfigUpsert[]>([]);
@@ -97,6 +100,7 @@ const currentSnapshot = computed(() => JSON.stringify({
   attributes: formAttributes.value,
   features: formFeatures.value,
   spells: formSpells.value,
+  resources: formResources.value,
   equipment: formEquipment.value,
   extras: formExtras.value,
   tokenConfigs: formTokenConfigs.value,
@@ -121,6 +125,7 @@ async function loadCharacter(id: number) {
     formAttributes.value = char.attributes as Record<string, unknown>;
     formFeatures.value = char.features as Record<string, unknown>;
     formSpells.value = (char.spells as Record<string, unknown> | null) ?? (defaultSpells() as unknown as Record<string, unknown>);
+    formResources.value = char.resources ?? defaultResources();
     formEquipment.value = char.equipment as Record<string, unknown>;
     formExtras.value = char.extras as Record<string, unknown>;
     formTokenConfigs.value = (char.token_configs ?? []).map(tc => ({
@@ -167,6 +172,7 @@ async function save() {
       attributes: formAttributes.value,
       features: formFeatures.value,
       spells: formSpells.value,
+      resources: formResources.value,
       equipment: formEquipment.value,
       extras: formExtras.value,
       token_configs: formTokenConfigs.value,
@@ -290,6 +296,14 @@ function applyImportDraft(draft: CharacterImportPreview) {
       defaultSpells() as unknown as Record<string, unknown>,
     );
   }
+  formResources.value = Array.isArray(draft.resources)
+    ? draft.resources.map((item) => ({
+        name: String((item as Record<string, unknown>)?.name ?? ""),
+        max: Math.max(0, Number((item as Record<string, unknown>)?.max ?? 0)),
+        recovery: String((item as Record<string, unknown>)?.recovery ?? ""),
+        notes: String((item as Record<string, unknown>)?.notes ?? ""),
+      }))
+    : defaultResources();
   formEquipment.value = mergeImportBlock(
     defaultEquipment() as unknown as Record<string, unknown>,
     draft.equipment,
@@ -395,6 +409,13 @@ onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload)
           :attributes-block="formAttributes"
         />
 
+        <CharacterResourcesTab
+          v-show="activeTab === 'resources'"
+          v-model="formResources"
+          :identity-block="formIdentity"
+          :attributes-block="formAttributes"
+        />
+
         <CharacterEquipmentTab
           v-show="activeTab === 'equipment'"
           v-model="formEquipment"
@@ -411,6 +432,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload)
           :identity-block="formIdentity"
           :attributes-block="formAttributes"
           :spells-block="formSpells"
+          :resources-block="formResources"
           :equipment-block="formEquipment"
           :character-name="charName"
           :portrait-asset-id="formPortraitAssetId"

@@ -3,7 +3,11 @@ import { ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { PlusIcon } from "@heroicons/vue/24/outline";
 import { createLibraryResource } from "@/infra/api/library.api";
-import { ABILITY_KEYS, DND5E_CLASSES, DND5E_SKILLS, defaultTokenConfig, type AbilityKey } from "@/features/character/constants";
+import { ABILITY_KEYS, DND5E_SKILLS, defaultTokenConfig, type AbilityKey } from "@/features/character/constants";
+import {
+  buildCommonResourcesFromCharacter,
+  normalizeCharacterResource,
+} from "@/features/character/utils/resources";
 import type { TokenConfigUpsert, TokenPanelInitial } from "@/infra/api/character.api";
 import BaseButton from "@/ui/base/BaseButton.vue";
 import AppIcon from "@/ui/base/AppIcon.vue";
@@ -12,30 +16,15 @@ import TokenPanelEditorDialog from "@/features/character/components/TokenPanelEd
 import AvatarCropDialog from "@/ui/domain/avatar/AvatarCropDialog.vue";
 
 type Item = { name: string; quantity: number; notes: string };
-type TokenResource = { name: string; max: number; recovery: string };
+type TokenResource = { name: string; max: number; recovery: string; notes: string };
 type SkillProf = "none" | "proficient" | "expert" | "expertise";
-
-const HIT_DIE_BY_CLASS: Record<string, number> = {
-  artificer: 8,
-  barbarian: 12,
-  bard: 8,
-  cleric: 8,
-  druid: 8,
-  fighter: 10,
-  monk: 8,
-  paladin: 10,
-  ranger: 10,
-  rogue: 8,
-  sorcerer: 6,
-  warlock: 8,
-  wizard: 6,
-};
 
 const props = defineProps<{
   modelValue: TokenConfigUpsert[];
   identityBlock: Record<string, unknown>;
   attributesBlock: Record<string, unknown>;
   spellsBlock: Record<string, unknown> | null;
+  resourcesBlock: TokenResource[];
   equipmentBlock: Record<string, unknown>;
   characterName: string;
   portraitAssetId: number | null;
@@ -50,46 +39,13 @@ function push(configs: TokenConfigUpsert[]) {
   emit("update:modelValue", configs);
 }
 
-function hitDieForClass(rawName: unknown): number | null {
-  const name = String(rawName ?? "").trim().toLowerCase();
-  if (!name) return null;
-  for (const key of DND5E_CLASSES) {
-    if (name === key || name === t(`character.classes.${key}`).toLowerCase()) {
-      return HIT_DIE_BY_CLASS[key] ?? null;
-    }
-  }
-  return null;
-}
-
 function buildResourcesFromCharacter(): TokenResource[] {
-  const resources: TokenResource[] = [];
-  const hitDiceByDie = new Map<number, number>();
-  const classes = (props.identityBlock.classes ?? []) as { name?: string; level?: number }[];
-  for (const cls of classes) {
-    const die = hitDieForClass(cls.name);
-    if (!die) continue;
-    const level = Math.max(1, Number(cls.level) || 1);
-    hitDiceByDie.set(die, (hitDiceByDie.get(die) ?? 0) + level);
-  }
-  for (const [die, max] of [...hitDiceByDie.entries()].sort((a, b) => a[0] - b[0])) {
-    resources.push({
-      name: t("character.token.hitDiceResource", { die }),
-      max,
-      recovery: t("character.token.recoveryLongRest"),
-    });
-  }
-
-  const slots = ((props.spellsBlock ?? {}).spell_slots_max ?? {}) as Record<string, number>;
-  for (let level = 1; level <= 9; level += 1) {
-    const max = Number(slots[String(level)] ?? 0);
-    if (max <= 0) continue;
-    resources.push({
-      name: t("character.token.spellSlotResource", { level }),
-      max,
-      recovery: t("character.token.recoveryLongRest"),
-    });
-  }
-  return resources;
+  const sheetResources = props.resourcesBlock
+    .map((item) => normalizeCharacterResource(item))
+    .filter((item): item is TokenResource => item != null);
+  return sheetResources.length
+    ? sheetResources
+    : buildCommonResourcesFromCharacter(props.identityBlock, props.attributesBlock, t);
 }
 
 // ── Build primary token from character sheet ───────────────────────────────
@@ -338,6 +294,7 @@ function closeEditor() {
       :identity-block="identityBlock"
       :attributes-block="attributesBlock"
       :spells-block="spellsBlock"
+      :resources-block="resourcesBlock"
       :equipment-block="equipmentBlock"
       @save="onPanelSaved"
       @close="closeEditor"

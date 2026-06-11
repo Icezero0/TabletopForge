@@ -246,6 +246,7 @@ class RoomCharacterService:
             attributes=payload.attributes,
             features=payload.features,
             spells=payload.spells,
+            resources=payload.resources,
             equipment=payload.equipment,
             extras=payload.extras,
         )
@@ -395,6 +396,7 @@ class RoomCharacterService:
         attributes_json: str | None = None,
         features_json: str | None = None,
         spells_json: str | None = None,
+        resources_json: str | None = None,
         equipment_json: str | None = None,
         extras_json: str | None = None,
         state_json: str | None = None,
@@ -423,9 +425,27 @@ class RoomCharacterService:
                 )
             return parsed
 
+        def parse_json_list(label: str, raw: str | None) -> list[dict[str, Any]] | None:
+            if raw is None or raw == "":
+                return None
+            try:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise BadRequestError(
+                    f"Invalid {label} JSON",
+                    reason=ErrorReason.REQUEST_VALIDATION_FAILED,
+                ) from exc
+            if not isinstance(parsed, list):
+                raise BadRequestError(
+                    f"Invalid {label} JSON",
+                    reason=ErrorReason.REQUEST_VALIDATION_FAILED,
+                )
+            return [item for item in parsed if isinstance(item, dict)]
+
         spells_raw = parse_json("spells", spells_json)
         state_raw = parse_json("state", state_json)
         state = CharacterStateCreate.model_validate(state_raw) if state_raw else None
+        resources_raw = parse_json_list("resources", resources_json)
 
         return RoomCharacterCreate(
             name=name,
@@ -438,6 +458,7 @@ class RoomCharacterService:
             attributes=parse_json("attributes", attributes_json) or {},
             features=parse_json("features", features_json) or {},
             spells=spells_raw,
+            resources=resources_raw or [],
             equipment=parse_json("equipment", equipment_json) or {},
             extras=parse_json("extras", extras_json) or {},
             state=state,

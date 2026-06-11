@@ -51,6 +51,7 @@ class RoomCharacterCreate(BaseModel):
     attributes: dict[str, Any] = Field(default_factory=dict)
     features: dict[str, Any] = Field(default_factory=dict)
     spells: dict[str, Any] | None = None
+    resources: list[dict[str, Any]] = Field(default_factory=list)
     equipment: dict[str, Any] = Field(default_factory=dict)
     extras: dict[str, Any] = Field(default_factory=dict)
     state: CharacterStateCreate | None = None

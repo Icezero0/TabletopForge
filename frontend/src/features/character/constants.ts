@@ -144,6 +144,10 @@ export function defaultEquipment() {
   };
 }
 
+export function defaultResources() {
+  return [] as { name: string; max: number; recovery: string; notes: string }[];
+}
+
 export function defaultTokenPanelInitial(isPrimary: boolean) {
   return {
     ability_scores: { strength: 10, dexterity: 10, constitution: 10, intelligence: 10, wisdom: 10, charisma: 10 },
@@ -168,7 +172,7 @@ export function defaultTokenPanelInitial(isPrimary: boolean) {
       "0": [], "1": [], "2": [], "3": [], "4": [], "5": [],
       "6": [], "7": [], "8": [], "9": [],
     } as Record<string, string[]>,
-    resources: [] as { name: string; max: number; recovery: string }[],
+    resources: [] as { name: string; max: number; recovery: string; notes: string }[],
     inherit_items_from_character: isPrimary,
   };
 }

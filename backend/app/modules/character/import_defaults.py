@@ -117,5 +117,9 @@ def default_equipment() -> dict:
     }
 
 
+def default_resources() -> list:
+    return []
+
+
 def default_extras() -> dict:
     return {"notes": ""}

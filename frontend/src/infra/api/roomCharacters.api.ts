@@ -49,6 +49,7 @@ export type RoomCharacterCreatePayload = {
   attributes?: Record<string, unknown>;
   features?: Record<string, unknown>;
   spells?: Record<string, unknown> | null;
+  resources?: { name: string; max: number; recovery: string; notes?: string }[];
   equipment?: Record<string, unknown>;
   extras?: Record<string, unknown>;
   state?: RoomCharacterStateInput;
@@ -109,6 +110,9 @@ export async function postRoomCharacter(roomId: number, payload: RoomCharacterCr
   }
   if (payload.spells != null) {
     form.append("spells_json", JSON.stringify(payload.spells));
+  }
+  if (payload.resources && payload.resources.length > 0) {
+    form.append("resources_json", JSON.stringify(payload.resources));
   }
   if (payload.equipment && Object.keys(payload.equipment).length > 0) {
     form.append("equipment_json", JSON.stringify(payload.equipment));

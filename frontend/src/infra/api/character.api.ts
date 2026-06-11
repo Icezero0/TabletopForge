@@ -22,9 +22,11 @@ export type TokenPanelInitial = {
   spell_save_dc?: { value: number; breakdown?: string };
   spell_attack_bonus?: { value: number; breakdown?: string };
   spellbook?: Record<string, string[]>;
-  resources?: { name: string; max: number; current?: number; recovery: string }[];
+  resources?: { name: string; max: number; current?: number; recovery: string; notes?: string }[];
   inherit_items_from_character?: boolean;
 };
+
+export type CharacterResource = { name: string; max: number; recovery: string; notes: string };
 
 export type TokenConfig = {
   id: number;
@@ -60,6 +62,7 @@ export type Character = {
   attributes: Record<string, unknown>;
   features: Record<string, unknown>;
   spells: Record<string, unknown> | null;
+  resources: CharacterResource[];
   equipment: Record<string, unknown>;
   extras: Record<string, unknown>;
   token_configs: TokenConfig[];
@@ -96,6 +99,7 @@ export type CharacterPayload = {
   attributes?: Record<string, unknown>;
   features?: Record<string, unknown>;
   spells?: Record<string, unknown> | null;
+  resources?: CharacterResource[];
   equipment?: Record<string, unknown>;
   extras?: Record<string, unknown>;
   token_configs?: TokenConfigUpsert[];

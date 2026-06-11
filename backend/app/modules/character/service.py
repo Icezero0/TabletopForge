@@ -106,6 +106,7 @@ class CharacterService:
         attributes: dict | None = None,
         features: dict | None = None,
         spells: dict | None = None,
+        resources: list | None = None,
         equipment: dict | None = None,
         extras: dict | None = None,
     ) -> Character:
@@ -122,6 +123,7 @@ class CharacterService:
             attributes=attributes,
             features=features,
             spells=spells,
+            resources=resources,
             equipment=equipment,
             extras=extras,
         )
@@ -172,6 +174,7 @@ class CharacterService:
         attributes: dict | None = None,
         features: dict | None = None,
         spells: dict | None = None,
+        resources: list | None = None,
         equipment: dict | None = None,
         extras: dict | None = None,
         token_configs: list[TokenConfigUpsert] | None = None,
@@ -190,6 +193,7 @@ class CharacterService:
             attributes=attributes,
             features=features,
             spells=spells,
+            resources=resources,
             equipment=equipment,
             extras=extras,
         )

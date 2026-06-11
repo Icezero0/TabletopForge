@@ -11,10 +11,14 @@ import {
   TrashIcon,
 } from "@heroicons/vue/24/outline";
 import {
-  ABILITY_KEYS, ABILITY_LABEL_KEYS, DND5E_CLASSES, DND5E_SKILLS, SPELLCASTING_ABILITY_OPTIONS,
+  ABILITY_KEYS, ABILITY_LABEL_KEYS, DND5E_SKILLS, SPELLCASTING_ABILITY_OPTIONS,
   abilityMod, fmtMod,
   type AbilityKey,
 } from "@/features/character/constants";
+import {
+  buildCommonResourcesFromCharacter,
+  normalizeCharacterResource,
+} from "@/features/character/utils/resources";
 import type { TokenConfigUpsert, TokenPanelInitial } from "@/infra/api/character.api";
 import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthenticatedAssetUrl";
 import BaseButton from "@/ui/base/BaseButton.vue";
@@ -26,30 +30,15 @@ import SkillSaveCompactList, { type CompactRow } from "@/features/character/comp
 import EquipmentItemsList from "@/features/character/components/EquipmentItemsList.vue";
 
 type Item = { name: string; quantity: number; notes: string };
-type TokenResource = { name: string; max: number; recovery: string };
+type TokenResource = { name: string; max: number; recovery: string; notes: string };
 type SkillProf = "none" | "proficient" | "expert" | "expertise";
-
-const HIT_DIE_BY_CLASS: Record<string, number> = {
-  artificer: 8,
-  barbarian: 12,
-  bard: 8,
-  cleric: 8,
-  druid: 8,
-  fighter: 10,
-  monk: 8,
-  paladin: 10,
-  ranger: 10,
-  rogue: 8,
-  sorcerer: 6,
-  warlock: 8,
-  wizard: 6,
-};
 
 const props = defineProps<{
   config: TokenConfigUpsert;
   identityBlock: Record<string, unknown>;
   attributesBlock: Record<string, unknown>;
   spellsBlock: Record<string, unknown> | null;
+  resourcesBlock: TokenResource[];
   equipmentBlock: Record<string, unknown>;
 }>();
 const emit = defineEmits<{
@@ -195,7 +184,7 @@ function updateResource(index: number, patch: Partial<TokenResource>) {
 
 function addResource() {
   editingResourceIndex.value = draftResources.value.length;
-  editingResourceDraft.value = { name: "", max: 0, recovery: "" };
+  editingResourceDraft.value = { name: "", max: 0, recovery: "", notes: "" };
 }
 
 function removeResource(index: number) {
@@ -223,6 +212,7 @@ function normalizeResource(resource: TokenResource): TokenResource {
     name: resource.name.trim(),
     max: Math.max(0, resource.max),
     recovery: resource.recovery.trim(),
+    notes: String(resource.notes ?? "").trim(),
   };
 }
 
@@ -252,46 +242,13 @@ function cancelResourceEdit() {
   editingResourceDraft.value = null;
 }
 
-function hitDieForClass(rawName: unknown): number | null {
-  const name = String(rawName ?? "").trim().toLowerCase();
-  if (!name) return null;
-  for (const key of DND5E_CLASSES) {
-    if (name === key || name === t(`character.classes.${key}`).toLowerCase()) {
-      return HIT_DIE_BY_CLASS[key] ?? null;
-    }
-  }
-  return null;
-}
-
 function buildResourcesFromCharacter(): TokenResource[] {
-  const resources: TokenResource[] = [];
-  const hitDiceByDie = new Map<number, number>();
-  const classes = (props.identityBlock.classes ?? []) as { name?: string; level?: number }[];
-  for (const cls of classes) {
-    const die = hitDieForClass(cls.name);
-    if (!die) continue;
-    const level = Math.max(1, Number(cls.level) || 1);
-    hitDiceByDie.set(die, (hitDiceByDie.get(die) ?? 0) + level);
-  }
-  for (const [die, max] of [...hitDiceByDie.entries()].sort((a, b) => a[0] - b[0])) {
-    resources.push({
-      name: t("character.token.hitDiceResource", { die }),
-      max,
-      recovery: t("character.token.recoveryLongRest"),
-    });
-  }
-
-  const slots = ((props.spellsBlock ?? {}).spell_slots_max ?? {}) as Record<string, number>;
-  for (let level = 1; level <= 9; level += 1) {
-    const max = Number(slots[String(level)] ?? 0);
-    if (max <= 0) continue;
-    resources.push({
-      name: t("character.token.spellSlotResource", { level }),
-      max,
-      recovery: t("character.token.recoveryLongRest"),
-    });
-  }
-  return resources;
+  const sheetResources = props.resourcesBlock
+    .map((item) => normalizeCharacterResource(item))
+    .filter((item): item is TokenResource => item != null);
+  return sheetResources.length
+    ? sheetResources
+    : buildCommonResourcesFromCharacter(props.identityBlock, props.attributesBlock, t);
 }
 
 // ── Rows for SkillSaveCompactList ──────────────────────────────────────────
@@ -735,6 +692,16 @@ const activeTab = ref<PanelTab>("overview");
                     @input="updateResourceDraft({ name: ($event.target as HTMLInputElement).value })"
                   />
                 </label>
+                <label class="resource-notes">
+                  <span class="resource-label">{{ t("character.token.resourceNotes") }}</span>
+                  <input
+                    class="resource-input"
+                    type="text"
+                    :value="editingResourceDraft.notes ?? ''"
+                    :placeholder="t('character.token.resourceNotesPlaceholder')"
+                    @input="updateResourceDraft({ notes: ($event.target as HTMLInputElement).value })"
+                  />
+                </label>
                 <label class="resource-number">
                   <span class="resource-label">{{ t("character.token.resourceMax") }}</span>
                   <input
@@ -777,6 +744,7 @@ const activeTab = ref<PanelTab>("overview");
               <template v-else>
                 <div class="resource-display">
                   <span class="resource-display-name">{{ resource.name || t("character.token.unnamedResource") }}</span>
+                  <span v-if="resource.notes" class="resource-display-notes">{{ resource.notes }}</span>
                 </div>
                 <div class="resource-display-limit">
                   <span class="resource-limit-label">{{ t("character.token.resourceMax") }}</span>
@@ -1040,15 +1008,15 @@ const activeTab = ref<PanelTab>("overview");
 }
 
 .resource-row.editing {
-  grid-template-columns: minmax(180px, 1fr) 96px minmax(140px, 0.8fr) auto;
+  grid-template-columns: minmax(150px, 0.9fr) minmax(180px, 1.1fr) 86px minmax(120px, 0.7fr) auto;
   gap: 10px;
   align-items: center;
 }
 
 .resource-display {
   min-width: 0;
-  display: flex;
-  align-items: center;
+  display: grid;
+  gap: 2px;
   color: var(--c-text);
 }
 
@@ -1059,6 +1027,16 @@ const activeTab = ref<PanelTab>("overview");
   white-space: nowrap;
   font-weight: 600;
   font-size: 14px;
+}
+
+.resource-display-notes {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--c-text-muted);
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .resource-display-recovery {
@@ -1102,7 +1080,8 @@ const activeTab = ref<PanelTab>("overview");
 
 .resource-name,
 .resource-number,
-.resource-recovery {
+.resource-recovery,
+.resource-notes {
   display: grid;
   gap: 4px;
   min-width: 0;

@@ -79,6 +79,7 @@ class CharacterResponse(BaseModel):
     attributes: dict[str, Any]
     features: dict[str, Any]
     spells: dict[str, Any] | None
+    resources: list[dict[str, Any]] = Field(default_factory=list)
     equipment: dict[str, Any]
     extras: dict[str, Any]
     token_configs: list[TokenConfigResponse] = Field(default_factory=list)
@@ -109,6 +110,7 @@ class CharacterImportPreviewResponse(BaseModel):
     attributes: dict[str, Any] = Field(default_factory=dict)
     features: dict[str, Any] = Field(default_factory=dict)
     spells: dict[str, Any] | None = None
+    resources: list[dict[str, Any]] = Field(default_factory=list)
     equipment: dict[str, Any] = Field(default_factory=dict)
     extras: dict[str, Any] = Field(default_factory=dict)
     state: CharacterStateCreate | None = None
@@ -125,6 +127,7 @@ class CharacterCreate(BaseModel):
     attributes: dict[str, Any] = Field(default_factory=dict)
     features: dict[str, Any] = Field(default_factory=dict)
     spells: dict[str, Any] | None = None
+    resources: list[dict[str, Any]] = Field(default_factory=list)
     equipment: dict[str, Any] = Field(default_factory=dict)
     extras: dict[str, Any] = Field(default_factory=dict)
     token_configs: list[TokenConfigUpsert] = Field(default_factory=list)
@@ -144,6 +147,7 @@ class CharacterPatch(BaseModel):
     attributes: dict[str, Any] | None = None
     features: dict[str, Any] | None = None
     spells: dict[str, Any] | None = None
+    resources: list[dict[str, Any]] | None = None
     equipment: dict[str, Any] | None = None
     extras: dict[str, Any] | None = None
     token_configs: list[TokenConfigUpsert] | None = None
