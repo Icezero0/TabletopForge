@@ -209,6 +209,11 @@ watch(
   font-weight: 600;
   cursor: pointer;
   text-align: left;
+  border-radius: 13px 13px 0 0;
+}
+
+.floatingPanel.collapsed > .panelHeader {
+  border-radius: 13px;
 }
 
 .panelTitle {
@@ -228,6 +233,7 @@ watch(
 .panelBody {
   min-height: 0;
   overflow: auto;
+  border-radius: 0 0 13px 13px;
 }
 
 .floatingPanel.governance .panelBody {
