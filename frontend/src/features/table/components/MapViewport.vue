@@ -108,10 +108,14 @@ const emit = defineEmits<{
     tokenId: number,
     payload: { x?: number; y?: number; width?: number; height?: number },
   ];
+  beginTokenInteraction: [tokenId: number];
+  endTokenInteraction: [tokenId: number];
   patchDrawing: [
     drawingId: number,
     payload: { geometry?: Record<string, unknown>; style?: Record<string, unknown> },
   ];
+  beginDrawingInteraction: [drawingId: number];
+  endDrawingInteraction: [drawingId: number];
   mapNaturalSize: [payload: { mapId: number; w: number; h: number }];
   drawPointerDown: [x: number, y: number, event: PointerEvent];
   drawPointerMove: [x: number, y: number, event: PointerEvent];
@@ -503,8 +507,11 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
         :current-user-id="currentUserId"
         :character-owner-by-id="characterOwnerById"
         :viewport-scale="viewportScale"
+        :remote-selections="remoteObjectSelections.filter((claim) => claim.type === 'token')"
         @preview-token="(id, p) => emit('previewToken', id, p)"
         @commit-token="(id, p) => emit('commitToken', id, p)"
+        @begin-token-interaction="emit('beginTokenInteraction', $event)"
+        @end-token-interaction="emit('endTokenInteraction', $event)"
         @token-context-menu="onTokenSelectionContextMenu"
       />
       <DrawingSelectionOverlay
@@ -513,7 +520,10 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
         :tool-mode="toolMode"
         :game-role="gameRole"
         :viewport-scale="viewportScale"
+        :remote-selections="remoteObjectSelections.filter((claim) => claim.type === 'drawing')"
         @patch-drawing="(id, p) => emit('patchDrawing', id, p)"
+        @begin-drawing-interaction="emit('beginDrawingInteraction', $event)"
+        @end-drawing-interaction="emit('endDrawingInteraction', $event)"
       />
       <DrawTextBoxEditor
         v-if="textPlacement"

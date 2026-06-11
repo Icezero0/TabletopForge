@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { Swords } from "lucide-vue-next";
 import type { RoomToken } from "@/infra/api/rooms.api";
+import { resolveMediaUrl } from "@/infra/media";
 import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthenticatedAssetUrl";
 import { TOKEN_BAND_BASE, sceneBandZ } from "@/features/table/constants";
 import { formatTokenPreview, tokenInitial, tokenSizePx } from "@/features/table/utils/tokenDisplay";
@@ -17,6 +18,8 @@ const props = defineProps<{
   inCombat?: boolean;
   activeCombatTurn?: boolean;
   remoteSelectionColor?: string | null;
+  remoteSelectionLabel?: string;
+  remoteSelectionAvatarUrl?: string | null;
   gameRole?: import("@/features/room/types").GameRole | "unknown";
   characterDataHidden?: boolean;
   playerColorByUserId?: Map<number, string>;
@@ -83,6 +86,12 @@ const ownerColor = computed(() => {
   if (ownerId == null || !props.playerColorByUserId) return undefined;
   return props.playerColorByUserId.get(ownerId) ?? undefined;
 });
+
+const remoteAvatarSrc = computed(() => resolveMediaUrl(props.remoteSelectionAvatarUrl));
+
+const remoteInitial = computed(() =>
+  (props.remoteSelectionLabel || "?").trim().slice(0, 1).toUpperCase(),
+);
 </script>
 
 <template>
@@ -99,12 +108,12 @@ const ownerColor = computed(() => {
   >
     <div
       class="tokenItem"
-      :class="{ hasImage: !!imageUrl, remoteSelected: !!remoteSelectionColor }"
+      :class="{ hasImage: !!imageUrl, remoteSelected: !!remoteSelectionLabel }"
       :style="{
         width: `${displaySize}px`,
         height: `${displaySize}px`,
         '--owner-color': ownerColor,
-        '--remote-selection-color': remoteSelectionColor ?? undefined,
+        '--remote-selection-color': remoteSelectionColor ?? 'var(--c-primary)',
       }"
     >
       <img v-if="imageUrl" class="tokenImage" :src="imageUrl" alt="" draggable="false" />
@@ -118,6 +127,20 @@ const ownerColor = computed(() => {
       aria-label="交战中"
     >
       <Swords aria-hidden="true" />
+    </div>
+    <div
+      v-if="remoteSelectionLabel"
+      class="remoteSelectionLabel"
+      :class="{ withCombatBadge: inCombat }"
+      :style="{
+        '--remote-selection-color': remoteSelectionColor ?? 'var(--c-primary)',
+      }"
+    >
+      <span class="remoteAvatar">
+        <img v-if="remoteAvatarSrc" :src="remoteAvatarSrc" alt="" draggable="false" />
+        <span v-else>{{ remoteInitial }}</span>
+      </span>
+      <span class="remoteName">{{ remoteSelectionLabel }}</span>
     </div>
     <div v-if="previewText" class="previewBadge">{{ previewText }}</div>
   </div>
@@ -202,6 +225,60 @@ const ownerColor = computed(() => {
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--c-primary) 20%, transparent),
     0 4px 12px color-mix(in srgb, var(--c-primary) 30%, transparent);
+}
+
+.remoteSelectionLabel {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 168px;
+  min-width: 0;
+  padding: 2px 6px 2px 3px;
+  border: 1px solid var(--remote-selection-color, var(--c-primary));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--remote-selection-color, var(--c-primary)) 18%, var(--c-surface));
+  color: var(--c-text);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.26);
+  transform: translate(-50%, -5px);
+  pointer-events: none;
+}
+
+.remoteSelectionLabel.withCombatBadge {
+  transform: translate(-50%, -29px);
+}
+
+.remoteAvatar {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--remote-selection-color, var(--c-primary));
+  color: white;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.remoteAvatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.remoteName {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tokenImage {

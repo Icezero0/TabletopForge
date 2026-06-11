@@ -15,6 +15,8 @@ export type ClaimableObjectSelection = Exclude<TabletopSelection, { type: "map";
 export type RemoteObjectSelection = ClaimableObjectSelection & {
   userId: number;
   color?: string | null;
+  displayName?: string;
+  avatarUrl?: string | null;
   expiresAt?: number;
 };
 

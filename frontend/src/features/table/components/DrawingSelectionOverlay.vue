@@ -2,7 +2,7 @@
 import { computed, ref } from "vue";
 import type { RoomDrawing } from "@/infra/api/rooms.api";
 import type { GameRole } from "@/features/room/types";
-import type { TableToolMode } from "@/features/table/types";
+import type { RemoteObjectSelection, TableToolMode } from "@/features/table/types";
 import type { TabletopSelection } from "@/features/table/types";
 import {
   cloneDrawingGeometry,
@@ -22,6 +22,7 @@ const props = defineProps<{
   toolMode: TableToolMode;
   gameRole: GameRole | "unknown";
   viewportScale?: number;
+  remoteSelections?: RemoteObjectSelection[];
 }>();
 
 const emit = defineEmits<{
@@ -29,6 +30,8 @@ const emit = defineEmits<{
     drawingId: number,
     payload: { geometry?: Record<string, unknown>; style?: Record<string, unknown> },
   ];
+  beginDrawingInteraction: [drawingId: number];
+  endDrawingInteraction: [drawingId: number];
 }>();
 
 const corners: { id: Corner; class: string; cursor: string }[] = [
@@ -50,7 +53,15 @@ const canShowOverlay = computed(
     selectedDrawing.value != null,
 );
 
-const canResize = computed(() => canShowOverlay.value);
+const remoteClaimedSelected = computed(() => {
+  const drawing = selectedDrawing.value;
+  if (!drawing) return false;
+  return props.remoteSelections?.some((claim) => claim.type === "drawing" && claim.id === drawing.id) ?? false;
+});
+
+const canEdit = computed(() => canShowOverlay.value && !remoteClaimedSelected.value);
+
+const canResize = computed(() => canEdit.value);
 
 const box = computed(() => {
   const drawing = selectedDrawing.value;
@@ -73,6 +84,7 @@ let dragTargetId: number | null = null;
 let dragStartX = 0;
 let dragStartY = 0;
 let dragOriginGeometry: Record<string, unknown> | null = null;
+let dragInteractionStarted = false;
 
 let resizePointerId: number | null = null;
 let resizeCorner: Corner | null = null;
@@ -80,6 +92,7 @@ let resizeOriginBounds: DrawingBounds | null = null;
 let resizeOrigin: DrawingResizeOrigin | null = null;
 let resizeStartClientX = 0;
 let resizeStartClientY = 0;
+let resizeInteractionStarted = false;
 
 const frameRef = ref<HTMLElement | null>(null);
 
@@ -90,23 +103,30 @@ function beginDrag(event: PointerEvent, drawing: RoomDrawing, captureEl: HTMLEle
   dragStartX = event.clientX;
   dragStartY = event.clientY;
   dragOriginGeometry = cloneDrawingGeometry(drawing);
+  dragInteractionStarted = false;
   captureEl.setPointerCapture(event.pointerId);
 }
 
 function onDragDown(event: PointerEvent) {
+  if (event.button !== 0) return;
   const drawing = selectedDrawing.value;
-  if (!canShowOverlay.value || !drawing) return;
+  if (!canEdit.value || !drawing) return;
   beginDrag(event, drawing, event.currentTarget as HTMLElement);
 }
 
 function onDragMove(event: PointerEvent) {
   if (dragPointerId !== event.pointerId || !dragOriginGeometry || dragTargetId == null) return;
+  if (!dragInteractionStarted && Math.hypot(event.clientX - dragStartX, event.clientY - dragStartY) < 2) return;
   const drawing = props.drawings.find((d) => d.id === dragTargetId);
   if (!drawing) return;
   const vs = props.viewportScale ?? 1;
   const dx = (event.clientX - dragStartX) / vs;
   const dy = (event.clientY - dragStartY) / vs;
   const base = { ...drawing, geometry: dragOriginGeometry };
+  if (!dragInteractionStarted) {
+    dragInteractionStarted = true;
+    emit("beginDrawingInteraction", drawing.id);
+  }
   emit("patchDrawing", drawing.id, {
     geometry: translateDrawingGeometry(base, dx, dy),
   });
@@ -114,9 +134,11 @@ function onDragMove(event: PointerEvent) {
 
 function onDragUp(event: PointerEvent) {
   if (dragPointerId !== event.pointerId) return;
+  if (dragTargetId != null && dragInteractionStarted) emit("endDrawingInteraction", dragTargetId);
   dragPointerId = null;
   dragTargetId = null;
   dragOriginGeometry = null;
+  dragInteractionStarted = false;
   (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
 }
 
@@ -167,6 +189,7 @@ function boundsFromCorner(corner: Corner, origin: DrawingBounds, x: number, y: n
 }
 
 function onResizeDown(corner: Corner, event: PointerEvent) {
+  if (event.button !== 0) return;
   const drawing = selectedDrawing.value;
   const b = box.value;
   if (!canResize.value || !drawing || !b) return;
@@ -183,6 +206,7 @@ function onResizeDown(corner: Corner, event: PointerEvent) {
   };
   resizeStartClientX = event.clientX;
   resizeStartClientY = event.clientY;
+  resizeInteractionStarted = false;
   (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
 }
 
@@ -191,6 +215,7 @@ function onResizeMove(event: PointerEvent) {
   const corner = resizeCorner;
   const origin = resizeOriginBounds;
   if (!drawing || !corner || !origin || resizePointerId !== event.pointerId) return;
+  if (!resizeInteractionStarted && Math.hypot(event.clientX - resizeStartClientX, event.clientY - resizeStartClientY) < 2) return;
   const vs = props.viewportScale ?? 1;
   const cornerPt = cornerScenePoint(corner, origin);
   const sceneX = cornerPt.x + (event.clientX - resizeStartClientX) / vs;
@@ -202,23 +227,32 @@ function onResizeMove(event: PointerEvent) {
     next,
     resizeOrigin ?? undefined,
   );
+  if (!resizeInteractionStarted) {
+    resizeInteractionStarted = true;
+    emit("beginDrawingInteraction", drawing.id);
+  }
   emit("patchDrawing", drawing.id, { geometry, style });
 }
 
 function onResizeUp(event: PointerEvent) {
   if (resizePointerId !== event.pointerId) return;
+  const drawingId = selectedDrawing.value?.id;
+  if (drawingId != null && resizeInteractionStarted) emit("endDrawingInteraction", drawingId);
   resizePointerId = null;
   resizeCorner = null;
   resizeOriginBounds = null;
   resizeOrigin = null;
+  resizeInteractionStarted = false;
   (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
 }
 
 function startDrag(event: PointerEvent, drawing?: RoomDrawing) {
+  if (event.button !== 0) return;
   const target = drawing ?? selectedDrawing.value;
   if (!target) return;
   if (props.toolMode !== "select" && props.toolMode !== "hand") return;
   if (props.gameRole !== "GM" && props.gameRole !== "PL") return;
+  if (remoteClaimedSelected.value) return;
   if (!frameRef.value) return;
   beginDrag(event, target, frameRef.value);
 }
@@ -235,6 +269,7 @@ defineExpose({ startDrag });
     <div
       ref="frameRef"
       class="selectionFrame"
+      :class="{ locked: remoteClaimedSelected }"
       @pointerdown="onDragDown"
       @pointermove="onDragMove"
       @pointerup="onDragUp"
@@ -273,6 +308,10 @@ defineExpose({ startDrag });
   box-sizing: border-box;
   pointer-events: auto;
   cursor: move;
+}
+
+.selectionFrame.locked {
+  cursor: default;
 }
 
 .resizeHandle {

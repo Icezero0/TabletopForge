@@ -68,7 +68,6 @@ const canPick = computed(
 
 function canPickToken(token: RoomToken): boolean {
   if (!canPick.value) return false;
-  if (remoteSelectionFor(token.id)) return false;
   return (
     canInspectToken(token) ||
     canManageToken(token, props.gameRole, props.currentUserId, props.characterOwnerById)
@@ -113,6 +112,8 @@ function onTokenContextMenu(token: RoomToken, event: MouseEvent) {
       :in-combat="combatTokenIds.has(token.id)"
       :active-combat-turn="activeCombatTokenId === token.id"
       :remote-selection-color="remoteSelectionFor(token.id)?.color"
+      :remote-selection-label="remoteSelectionFor(token.id)?.displayName"
+      :remote-selection-avatar-url="remoteSelectionFor(token.id)?.avatarUrl"
       :inactive="!canPickToken(token)"
       :dimmed="isTokenDimmed(token)"
       :game-role="gameRole"

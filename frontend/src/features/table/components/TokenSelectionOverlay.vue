@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import type { RoomToken } from "@/infra/api/rooms.api";
 import type { GameRole } from "@/features/room/types";
-import type { TableToolMode } from "@/features/table/types";
+import type { RemoteObjectSelection, TableToolMode } from "@/features/table/types";
 import type { TabletopSelection } from "@/features/table/types";
 import { tokenSizePx, canManageToken } from "@/features/table/utils/tokenDisplay";
 
@@ -18,6 +18,7 @@ const props = defineProps<{
   currentUserId?: number | null;
   characterOwnerById: Map<number, number>;
   viewportScale?: number;
+  remoteSelections?: RemoteObjectSelection[];
 }>();
 
 const emit = defineEmits<{
@@ -29,6 +30,8 @@ const emit = defineEmits<{
     tokenId: number,
     payload: { x?: number; y?: number; width?: number; height?: number },
   ];
+  beginTokenInteraction: [tokenId: number];
+  endTokenInteraction: [tokenId: number];
   tokenContextMenu: [event: MouseEvent];
 }>();
 
@@ -60,8 +63,14 @@ const canShowOverlay = computed(
     canManageSelected(selectedToken.value),
 );
 
+const remoteClaimedSelected = computed(() => {
+  const token = selectedToken.value;
+  if (!token) return false;
+  return props.remoteSelections?.some((claim) => claim.type === "token" && claim.id === token.id) ?? false;
+});
+
 const canTransform = computed(
-  () => canShowOverlay.value && selectedToken.value != null && !selectedToken.value.locked,
+  () => canShowOverlay.value && selectedToken.value != null && !selectedToken.value.locked && !remoteClaimedSelected.value,
 );
 
 const box = computed(() => {
@@ -88,6 +97,7 @@ let dragStartY = 0;
 let dragOriginX = 0;
 let dragOriginY = 0;
 let lastDragPayload: { x?: number; y?: number } | null = null;
+let dragInteractionStarted = false;
 
 let resizePointerId: number | null = null;
 let resizeCorner: Corner | null = null;
@@ -100,6 +110,7 @@ let resizeStartClientY = 0;
 let resizeStartCornerX = 0;
 let resizeStartCornerY = 0;
 let lastResizePayload: { x?: number; y?: number; width?: number; height?: number } | null = null;
+let resizeInteractionStarted = false;
 
 function pxToFt(px: number) {
   if (props.gridCellPx <= 0) return px;
@@ -115,10 +126,12 @@ function beginDrag(event: PointerEvent, token: RoomToken, captureEl: HTMLElement
   dragOriginX = token.x;
   dragOriginY = token.y;
   lastDragPayload = null;
+  dragInteractionStarted = false;
   captureEl.setPointerCapture(event.pointerId);
 }
 
 function onDragDown(event: PointerEvent) {
+  if (event.button !== 0) return;
   const token = selectedToken.value;
   if (!canTransform.value || !token) return;
   beginDrag(event, token, event.currentTarget as HTMLElement);
@@ -126,10 +139,15 @@ function onDragDown(event: PointerEvent) {
 
 function onDragMove(event: PointerEvent) {
   if (dragPointerId !== event.pointerId || dragTargetId == null) return;
+  if (!dragInteractionStarted && Math.hypot(event.clientX - dragStartX, event.clientY - dragStartY) < 2) return;
   const vs = props.viewportScale ?? 1;
   const dx = (event.clientX - dragStartX) / vs;
   const dy = (event.clientY - dragStartY) / vs;
   lastDragPayload = { x: dragOriginX + dx, y: dragOriginY + dy };
+  if (!dragInteractionStarted) {
+    dragInteractionStarted = true;
+    emit("beginTokenInteraction", dragTargetId);
+  }
   emit("previewToken", dragTargetId, lastDragPayload);
 }
 
@@ -137,10 +155,13 @@ function onDragUp(event: PointerEvent) {
   if (dragPointerId !== event.pointerId) return;
   if (dragTargetId != null && lastDragPayload) {
     emit("commitToken", dragTargetId, lastDragPayload);
+  } else if (dragTargetId != null && dragInteractionStarted) {
+    emit("endTokenInteraction", dragTargetId);
   }
   dragPointerId = null;
   dragTargetId = null;
   lastDragPayload = null;
+  dragInteractionStarted = false;
   (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
 }
 
@@ -199,6 +220,7 @@ function patchSizeForCorner(token: RoomToken, corner: Corner, nextSizeFt: number
 }
 
 function onResizeDown(corner: Corner, event: PointerEvent) {
+  if (event.button !== 0) return;
   const token = selectedToken.value;
   const b = box.value;
   if (!canTransform.value || !token || !b) return;
@@ -215,6 +237,7 @@ function onResizeDown(corner: Corner, event: PointerEvent) {
   resizeOriginDist = Math.hypot(cp.x - anchor.x, cp.y - anchor.y) || 1;
   resizeStartClientX = event.clientX;
   resizeStartClientY = event.clientY;
+  resizeInteractionStarted = false;
   (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
 }
 
@@ -223,6 +246,7 @@ function onResizeMove(event: PointerEvent) {
   const corner = resizeCorner;
   const b = box.value;
   if (!token || !corner || !b || resizePointerId !== event.pointerId) return;
+  if (!resizeInteractionStarted && Math.hypot(event.clientX - resizeStartClientX, event.clientY - resizeStartClientY) < 2) return;
 
   const vs = props.viewportScale ?? 1;
   const dx = (event.clientX - resizeStartClientX) / vs;
@@ -233,6 +257,10 @@ function onResizeMove(event: PointerEvent) {
   const ratio = newDist / resizeOriginDist;
   const nextPx = tokenSizePx(resizeOriginSizeFt, props.gridCellFt, props.gridCellPx) * ratio;
   const nextSizeFt = Math.max(props.gridCellFt * 0.25, pxToFt(nextPx));
+  if (!resizeInteractionStarted) {
+    resizeInteractionStarted = true;
+    emit("beginTokenInteraction", token.id);
+  }
   patchSizeForCorner(token, corner, nextSizeFt, b);
 }
 
@@ -241,10 +269,13 @@ function onResizeUp(event: PointerEvent) {
   const token = selectedToken.value;
   if (token && lastResizePayload) {
     emit("commitToken", token.id, lastResizePayload);
+  } else if (token && resizeInteractionStarted) {
+    emit("endTokenInteraction", token.id);
   }
   resizePointerId = null;
   resizeCorner = null;
   lastResizePayload = null;
+  resizeInteractionStarted = false;
   (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
 }
 function onContextMenu(event: MouseEvent) {

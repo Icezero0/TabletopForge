@@ -418,7 +418,7 @@ const { textEdit, beginEdit: beginTextEdit, cancelEdit: cancelTextEdit, confirmE
 const editingDrawingId = computed(() => textEdit.value?.drawingId ?? null);
 
 watch(textPlacement, (place) => {
-  if (place) cancelTextEdit();
+  if (place) handleCancelTextEdit();
 });
 
 watch(textEdit, (edit) => {
@@ -512,10 +512,6 @@ function claimKey(selectionLike: ClaimableObjectSelection) {
   return `${selectionLike.type}:${selectionLike.id}`;
 }
 
-function isClaimableSelection(value: typeof selection.value): value is ClaimableObjectSelection {
-  return value?.type === "token" || value?.type === "drawing";
-}
-
 function remoteClaimFor(selectionLike: ClaimableObjectSelection) {
   const claim = remoteObjectSelectionByKey.value[claimKey(selectionLike)];
   if (!claim || claim.userId === currentUserId.value) return null;
@@ -562,6 +558,24 @@ function claimLocalObjectSelection(next: ClaimableObjectSelection) {
   sendLocalObjectSelectionClaim(next);
 }
 
+function hasLocalObjectClaim(target: ClaimableObjectSelection) {
+  return (
+    lastClaimedSelection?.type === target.type &&
+    lastClaimedSelection.id === target.id
+  );
+}
+
+function ensureLocalObjectClaim(target: ClaimableObjectSelection) {
+  if (hasLocalObjectClaim(target)) return true;
+  if (isObjectClaimedByOther(target)) return false;
+  claimLocalObjectSelection(target);
+  return true;
+}
+
+function releaseObjectInteraction(target: ClaimableObjectSelection) {
+  if (hasLocalObjectClaim(target)) releaseLocalObjectSelection();
+}
+
 function handleObjectSelection(payload: ObjectSelectionPayload) {
   if (payload.user_id === currentUserId.value) return;
   const objectType = payload.object_type;
@@ -582,14 +596,6 @@ function handleObjectSelection(payload: ObjectSelectionPayload) {
     },
   };
 }
-
-watch(selection, (next) => {
-  if (isClaimableSelection(next)) {
-    claimLocalObjectSelection(next);
-    return;
-  }
-  releaseLocalObjectSelection();
-});
 
 onUnmounted(() => {
   releaseLocalObjectSelection();
@@ -642,10 +648,7 @@ function handleMapContextMenu(mapId: number, event: MouseEvent) {
 function handleSelectDrawing(drawingId: number) {
   if (toolMode.value !== "select" && toolMode.value !== "hand") return;
   if (!canDraw.value) return;
-  const next = { type: "drawing", id: drawingId } as const;
-  if (isObjectClaimedByOther(next)) return;
   selectDrawing(drawingId);
-  claimLocalObjectSelection(next);
   clearInspection();
   selectedCharacterListId.value = null;
 }
@@ -653,10 +656,7 @@ function handleSelectDrawing(drawingId: number) {
 function handleDrawingContextMenu(drawingId: number, event: MouseEvent) {
   if (toolMode.value === "draw" || toolMode.value === "measure") return;
   if (!canDraw.value) return;
-  const next = { type: "drawing", id: drawingId } as const;
-  if (isObjectClaimedByOther(next)) return;
   selectDrawing(drawingId);
-  claimLocalObjectSelection(next);
   clearInspection();
   selectedCharacterListId.value = null;
   contextMenuX.value = event.clientX;
@@ -686,10 +686,7 @@ function selectTokenForInspection(tokenId: number, options: { respectToolMode?: 
   if (options.respectToolMode !== false && toolMode.value !== "select" && toolMode.value !== "hand") return;
   const token = tabletopTokens.value.find((t) => t.id === tokenId);
   if (!token || !tokenCanInteract(token)) return;
-  const next = { type: "token", id: tokenId } as const;
-  if (isObjectClaimedByOther(next)) return;
   selectToken(tokenId);
-  claimLocalObjectSelection(next);
   selectedCharacterListId.value = null;
   if (token.linked_character_id != null && canInspectToken(token)) {
     inspectCharacter({
@@ -724,10 +721,7 @@ function handleTokenContextMenu(tokenId: number, event: MouseEvent) {
   if (toolMode.value === "draw" || toolMode.value === "measure") return;
   const token = tabletopTokens.value.find((t) => t.id === tokenId);
   if (!token || !tokenCanInteract(token)) return;
-  const next = { type: "token", id: tokenId } as const;
-  if (isObjectClaimedByOther(next)) return;
   selectToken(tokenId);
-  claimLocalObjectSelection(next);
   selectedCharacterListId.value = null;
   contextMenuX.value = event.clientX;
   contextMenuY.value = event.clientY;
@@ -868,10 +862,25 @@ async function handleSpawnAllTokens(characterId: number) {
 function handleEditTextDrawing(drawingId: number) {
   if (toolMode.value !== "select" && toolMode.value !== "hand") return;
   if (!canDraw.value) return;
+  const drawing = tabletopDrawings.value.find((item) => item.id === drawingId);
+  if (!drawing || drawing.kind !== "text") return;
+  if (!ensureLocalObjectClaim({ type: "drawing", id: drawingId })) return;
   cancelText();
   beginTextEdit(drawingId);
   selectDrawing(drawingId);
   closeContextMenu();
+}
+
+function handleConfirmTextEdit(payload: { text: string; width: number; height: number }) {
+  const drawingId = editingDrawingId.value;
+  confirmTextEdit(payload);
+  if (drawingId != null) releaseObjectInteraction({ type: "drawing", id: drawingId });
+}
+
+function handleCancelTextEdit() {
+  const drawingId = editingDrawingId.value;
+  cancelTextEdit();
+  if (drawingId != null) releaseObjectInteraction({ type: "drawing", id: drawingId });
 }
 
 function handleTextPlacementResize(width: number) {
@@ -931,7 +940,28 @@ function handlePatchDrawing(
   drawingId: number,
   payload: { geometry?: Record<string, unknown>; style?: Record<string, unknown> },
 ) {
+  if (!ensureLocalObjectClaim({ type: "drawing", id: drawingId })) return;
   scheduleDrawingPatch(drawingId, payload);
+}
+
+function handleBeginTokenInteraction(tokenId: number) {
+  ensureLocalObjectClaim({ type: "token", id: tokenId });
+}
+
+function handleEndTokenInteraction(tokenId: number) {
+  releaseObjectInteraction({ type: "token", id: tokenId });
+}
+
+function handleBeginDrawingInteraction(drawingId: number) {
+  ensureLocalObjectClaim({ type: "drawing", id: drawingId });
+}
+
+function handleEndDrawingInteraction(drawingId: number) {
+  const target = { type: "drawing", id: drawingId } as const;
+  if (!hasLocalObjectClaim(target)) return;
+  void flushDrawingPatch().finally(() => {
+    releaseObjectInteraction(target);
+  });
 }
 
 function handleMapNaturalSize(payload: { mapId: number; w: number; h: number }) {
@@ -1506,6 +1536,7 @@ function handlePreviewToken(
   tokenId: number,
   payload: { x?: number; y?: number; width?: number; height?: number },
 ) {
+  if (!ensureLocalObjectClaim({ type: "token", id: tokenId })) return;
   tokenTransformPreview.preview({ tokenId, payload });
 }
 
@@ -1514,7 +1545,10 @@ function handleCommitToken(
   payload: { x?: number; y?: number; width?: number; height?: number },
 ) {
   tokenTransformPreview.cancel();
-  void commitTokenTransform(tokenId, payload);
+  if (!ensureLocalObjectClaim({ type: "token", id: tokenId })) return;
+  void commitTokenTransform(tokenId, payload).finally(() => {
+    releaseObjectInteraction({ type: "token", id: tokenId });
+  });
 }
 
 async function handleContextDeleteToken(tokenId: number) {
@@ -1956,10 +1990,15 @@ const remoteObjectSelections = computed<RemoteObjectSelection[]>(() =>
     .filter((claim) => claim.userId !== currentUserId.value)
     .filter((claim) => claim.expiresAt == null || claim.expiresAt > objectSelectionNow.value)
     .filter((claim) => !realtime.hasPresenceSnapshot.value || presentUserIds.value.has(claim.userId))
-    .map((claim) => ({
-      ...claim,
-      color: claim.color ?? playerColorByUserId.value.get(claim.userId) ?? null,
-    })),
+    .map((claim) => {
+      const user = entitiesStore.getUser(claim.userId);
+      return {
+        ...claim,
+        color: claim.color ?? playerColorByUserId.value.get(claim.userId) ?? null,
+        displayName: user?.username?.trim() || user?.email?.trim() || `User #${claim.userId}`,
+        avatarUrl: user?.avatar_url ?? null,
+      };
+    }),
 );
 const roomMemberItems = computed(() => entityRoomMembers.value.map((member) => {
   const user = entitiesStore.getUser(member.user_id);
@@ -2387,11 +2426,15 @@ watch(
             @patch-map="handlePatchMap"
             @preview-token="handlePreviewToken"
             @commit-token="handleCommitToken"
+            @begin-token-interaction="handleBeginTokenInteraction"
+            @end-token-interaction="handleEndTokenInteraction"
             @patch-drawing="handlePatchDrawing"
+            @begin-drawing-interaction="handleBeginDrawingInteraction"
+            @end-drawing-interaction="handleEndDrawingInteraction"
             @confirm-text="confirmText"
             @cancel-text="cancelText"
-            @confirm-text-edit="confirmTextEdit"
-            @cancel-text-edit="cancelTextEdit"
+            @confirm-text-edit="handleConfirmTextEdit"
+            @cancel-text-edit="handleCancelTextEdit"
             @edit-text="handleEditTextDrawing"
             @map-natural-size="handleMapNaturalSize"
             @draw-pointer-down="drawPointerDown"
