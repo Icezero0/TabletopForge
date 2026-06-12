@@ -97,7 +97,7 @@ const remoteInitial = computed(() =>
 <template>
   <div
     class="tokenWrap"
-    :class="{ inactive, selected, dimmed }"
+    :class="{ inactive, selected, dimmed, remoteSelected: !!remoteSelectionLabel }"
     :style="{
       transform: `translate(${token.x}px, ${token.y}px) rotate(${token.rotation}deg)`,
       zIndex: sceneBandZ(token.z_index, TOKEN_BAND_BASE),
@@ -154,7 +154,8 @@ const remoteInitial = computed(() =>
   user-select: none;
 }
 
-.tokenWrap:not(.selected) {
+.tokenWrap:not(.selected),
+.tokenWrap.remoteSelected {
   transition: transform 80ms linear;
 }
 

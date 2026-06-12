@@ -536,17 +536,36 @@ function parseOptionalInt(raw: string | number | null | undefined): number | nul
   return Number.isFinite(value) ? value : null;
 }
 
+function parseCurrentHpInput(raw: string | number | null | undefined): number | null {
+  if (raw == null || typeof raw === "number") return parseOptionalInt(raw);
+  const trimmed = String(raw).trim();
+  if (!trimmed) return null;
+
+  const deltaMatch = /^([+-])\s*(\d+)$/.exec(trimmed);
+  if (deltaMatch) {
+    const base =
+      panelNumber(tokenPanel.value?.hp_current) ??
+      panelNumber(tokenStateSummary.value?.current_hp) ??
+      0;
+    const delta = Number(deltaMatch[2]);
+    return deltaMatch[1] === "-" ? base - delta : base + delta;
+  }
+
+  return parseOptionalInt(trimmed);
+}
+
 async function saveState() {
   if (!canEditVisibleState.value) return;
   const tokenId = props.inspection?.tokenId;
   if (tokenId == null) return;
+  const nextCurrentHp = parseCurrentHpInput(editCurrentHp.value);
   saving.value = true;
   saveError.value = "";
   saveSuccess.value = false;
   try {
     const updated = await patchRoomToken(props.roomId, tokenId, {
       panel: {
-        hp_current: parseOptionalInt(editCurrentHp.value),
+        hp_current: nextCurrentHp,
         hp_max:     parseOptionalInt(editMaxHp.value),
         ac:         parseOptionalInt(editAc.value),
         initiative: parseOptionalInt(editInitiative.value),
@@ -556,6 +575,7 @@ async function saveState() {
       },
     });
     tabletopStore.applyTokenUpdated(props.roomId, updated);
+    editCurrentHp.value = nextCurrentHp != null ? String(nextCurrentHp) : "";
     saveSuccess.value = true;
   } catch (e) {
     saveError.value = getBackendErrorMessage(e) || t("table.inspector.saveFailed");
@@ -869,7 +889,8 @@ function openCharacterSheet() {
                       v-model="editCurrentHp"
                       class="tokenStatInput no-spin"
                       :aria-label="t('table.inspector.currentHp')"
-                      type="number"
+                      type="text"
+                      inputmode="numeric"
                       placeholder="—"
                       @change="saveState"
                     />

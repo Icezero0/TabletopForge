@@ -304,35 +304,34 @@ class RoomCharacterService:
             attributes=payload.attributes,
             explicit=payload.state,
         )
-        if token_image_asset_id is not None:
-            panel: dict = {}
-            if payload.state is not None:
-                if payload.state.max_hp is not None:
-                    panel["hp_max"] = payload.state.max_hp
-                    panel["hp_current"] = payload.state.max_hp
-                if payload.state.armor_class is not None:
-                    panel["ac"] = payload.state.armor_class
-            primary_config = TokenConfigUpsert(
-                is_primary=True,
-                name=payload.name.strip(),
-                asset_id=token_image_asset_id,
-                panel_initial=panel,
-                sort_order=0,
-            )
-            configs = await self.character_service._ensure_token_lib_resources(
-                db,
-                owner_id=user.id,
-                character_name=payload.name.strip(),
-                portrait_asset_id=payload.portrait_asset_id,
-                configs=[primary_config],
-            )
-            _, added_lib_ids, _ = await self.character_service.token_config_repo.upsert_all(
-                db,
-                character_id=character.id,
-                configs=configs,
-            )
-            for rid in added_lib_ids:
-                await self.character_service.library_service.increment_usage(db, resource_id=rid)
+        panel: dict = {}
+        if payload.state is not None:
+            if payload.state.max_hp is not None:
+                panel["hp_max"] = payload.state.max_hp
+                panel["hp_current"] = payload.state.max_hp
+            if payload.state.armor_class is not None:
+                panel["ac"] = payload.state.armor_class
+        primary_config = TokenConfigUpsert(
+            is_primary=True,
+            name=payload.name.strip(),
+            asset_id=token_image_asset_id,
+            panel_initial=panel,
+            sort_order=0,
+        )
+        configs = await self.character_service._ensure_token_lib_resources(
+            db,
+            owner_id=user.id,
+            character_name=payload.name.strip(),
+            portrait_asset_id=payload.portrait_asset_id,
+            configs=[primary_config],
+        )
+        _, added_lib_ids, _ = await self.character_service.token_config_repo.upsert_all(
+            db,
+            character_id=character.id,
+            configs=configs,
+        )
+        for rid in added_lib_ids:
+            await self.character_service.library_service.increment_usage(db, resource_id=rid)
         await self.repo.create(
             db,
             room_id=room_id,

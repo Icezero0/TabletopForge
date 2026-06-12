@@ -258,6 +258,11 @@ watch(
   padding: 0 6px 6px;
 }
 
+.floatingPanel.character_list .panelBody {
+  min-height: 0;
+  overflow: auto;
+}
+
 .floatingPanel.combat .panelBody {
   padding: 0 6px 6px;
 }

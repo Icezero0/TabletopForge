@@ -60,6 +60,48 @@ async def test_pl_can_create_multiple_characters_in_room(
     assert names == {"主 PC", "酒馆老板"}
 
 
+async def test_quick_room_character_without_image_gets_primary_token_config_and_can_spawn(
+    api_client,
+    factories,
+    auth_headers,
+) -> None:
+    owner = await factories.create_user()
+    pl = await factories.create_user()
+    room = await factories.create_room(owner=owner)
+    await factories.add_member(room=room, user=pl, game_role=GameRole.PL)
+    await factories.commit()
+
+    create_response = await api_client.post(
+        f"/api/v1/rooms/{room.id}/characters",
+        headers=auth_headers(pl),
+        data={
+            "name": "无头像角色",
+            "state_json": '{"max_hp": 18, "current_hp": 18, "armor_class": 13}',
+        },
+    )
+
+    assert create_response.status_code == 201
+    body = create_response.json()
+    configs = body["token_configs"]
+    assert len(configs) == 1
+    assert configs[0]["is_primary"] is True
+    assert configs[0]["name"] == "无头像角色"
+    assert configs[0]["asset_id"] is None
+
+    spawn_response = await api_client.post(
+        f"/api/v1/rooms/{room.id}/characters/{body['character_id']}/spawn-token",
+        headers=auth_headers(pl),
+        json={"x": 12, "y": 34},
+    )
+    assert spawn_response.status_code == 201
+    token = spawn_response.json()
+    assert token["name"] == "无头像角色"
+    assert token["asset_id"] is None
+    assert token["panel"]["hp_current"] == 18
+    assert token["panel"]["hp_max"] == 18
+    assert token["panel"]["ac"] == 13
+
+
 async def test_ob_can_list_but_not_create_room_character(
     api_client,
     factories,

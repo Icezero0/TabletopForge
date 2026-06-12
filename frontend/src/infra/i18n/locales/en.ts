@@ -829,6 +829,7 @@ export default {
       deleteMap: "Delete map",
       deleteDrawing: "Delete drawing",
       editTextDrawing: "Edit text",
+      layer: "Layer",
       layerUp: "Layer +",
       layerDown: "Layer -",
       layerTop: "Bring to front",

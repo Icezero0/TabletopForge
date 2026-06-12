@@ -829,6 +829,7 @@ export default {
       deleteMap: "删除地图",
       deleteDrawing: "删除绘制",
       editTextDrawing: "编辑文本",
+      layer: "图层",
       layerUp: "图层 +",
       layerDown: "图层 -",
       layerTop: "置于顶层",

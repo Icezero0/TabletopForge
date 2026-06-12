@@ -290,6 +290,7 @@ function onContextMenu(event: MouseEvent) {
   <div
     v-show="canShowOverlay && box"
     class="tokenSelectionOverlay"
+    :class="{ remoteClaimed: remoteClaimedSelected }"
     :style="boxStyle"
   >
     <div
@@ -323,6 +324,10 @@ function onContextMenu(event: MouseEvent) {
   top: 0;
   z-index: 215;
   pointer-events: none;
+}
+
+.tokenSelectionOverlay.remoteClaimed {
+  transition: transform 80ms linear;
 }
 
 .selectionFrame {

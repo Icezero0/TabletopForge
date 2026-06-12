@@ -103,6 +103,7 @@ const layerDisabled = computed(() => props.maps.length <= 1);
 const tokenLayerDisabled = computed(() => props.tokens.length <= 1);
 const drawingLayerDisabled = computed(() => props.drawings.length <= 1);
 const diceSubmenuOpen = ref(false);
+const tokenLayerSubmenuOpen = ref(false);
 const diceBranchOpen = ref<"abilityChecks" | "savingThrows" | "skills" | "presets" | null>(null);
 const dicePresets = ref<DicePreset[]>([]);
 const viewportHeight = ref(typeof window !== "undefined" ? window.innerHeight : 0);
@@ -336,6 +337,16 @@ function submenuDirectionClass(key: string) {
 function toggleDiceSubmenu(event: MouseEvent) {
   updateSubmenuDirection("dice", event);
   diceSubmenuOpen.value = !diceSubmenuOpen.value;
+  if (diceSubmenuOpen.value) tokenLayerSubmenuOpen.value = false;
+}
+
+function toggleTokenLayerSubmenu(event: MouseEvent) {
+  updateSubmenuDirection("tokenLayer", event);
+  tokenLayerSubmenuOpen.value = !tokenLayerSubmenuOpen.value;
+  if (tokenLayerSubmenuOpen.value) {
+    diceSubmenuOpen.value = false;
+    diceBranchOpen.value = null;
+  }
 }
 
 function toggleDiceBranch(branch: "abilityChecks" | "savingThrows" | "skills" | "presets", event: MouseEvent) {
@@ -346,6 +357,7 @@ function toggleDiceBranch(branch: "abilityChecks" | "savingThrows" | "skills" | 
 function onAction(fn: () => void) {
   fn();
   diceSubmenuOpen.value = false;
+  tokenLayerSubmenuOpen.value = false;
   diceBranchOpen.value = null;
   emit("close");
 }
@@ -355,6 +367,7 @@ watch(
   (open) => {
     if (open) loadDicePresets();
     if (!open) diceSubmenuOpen.value = false;
+    if (!open) tokenLayerSubmenuOpen.value = false;
     if (!open) diceBranchOpen.value = null;
     if (!open) submenuDirections.value = {};
   },
@@ -364,6 +377,7 @@ watch(
   () => props.selection,
   () => {
     diceSubmenuOpen.value = false;
+    tokenLayerSubmenuOpen.value = false;
     diceBranchOpen.value = null;
     submenuDirections.value = {};
   },
@@ -618,42 +632,52 @@ onBeforeUnmount(() => {
             {{ t("table.menu.deleteToken") }}
           </button>
           <div class="menuDivider" />
-          <button
-            type="button"
-            class="menuItem"
-            :disabled="tokenLayerDisabled"
-            :title="tokenLayerDisabled ? t('table.menu.layerSingleToken') : undefined"
-            @click="onAction(() => emit('tokenLayer', 'up'))"
+          <div
+            class="submenuHost"
+            :class="submenuDirectionClass('tokenLayer')"
           >
-            {{ t("table.menu.layerUp") }}
-          </button>
-          <button
-            type="button"
-            class="menuItem"
-            :disabled="tokenLayerDisabled"
-            :title="tokenLayerDisabled ? t('table.menu.layerSingleToken') : undefined"
-            @click="onAction(() => emit('tokenLayer', 'down'))"
-          >
-            {{ t("table.menu.layerDown") }}
-          </button>
-          <button
-            type="button"
-            class="menuItem"
-            :disabled="tokenLayerDisabled"
-            :title="tokenLayerDisabled ? t('table.menu.layerSingleToken') : undefined"
-            @click="onAction(() => emit('tokenLayer', 'top'))"
-          >
-            {{ t("table.menu.layerTop") }}
-          </button>
-          <button
-            type="button"
-            class="menuItem"
-            :disabled="tokenLayerDisabled"
-            :title="tokenLayerDisabled ? t('table.menu.layerSingleToken') : undefined"
-            @click="onAction(() => emit('tokenLayer', 'bottom'))"
-          >
-            {{ t("table.menu.layerBottom") }}
-          </button>
+            <button
+              type="button"
+              class="menuItem submenuTrigger"
+              :class="{ active: tokenLayerSubmenuOpen }"
+              :disabled="tokenLayerDisabled"
+              :title="tokenLayerDisabled ? t('table.menu.layerSingleToken') : undefined"
+              @click.stop="toggleTokenLayerSubmenu"
+            >
+              <span>{{ t("table.menu.layer") }}</span>
+              <span class="submenuArrow">›</span>
+            </button>
+            <div v-if="tokenLayerSubmenuOpen" class="submenu" @click.stop>
+              <button
+                type="button"
+                class="menuItem"
+                @click="onAction(() => emit('tokenLayer', 'up'))"
+              >
+                {{ t("table.menu.layerUp") }}
+              </button>
+              <button
+                type="button"
+                class="menuItem"
+                @click="onAction(() => emit('tokenLayer', 'down'))"
+              >
+                {{ t("table.menu.layerDown") }}
+              </button>
+              <button
+                type="button"
+                class="menuItem"
+                @click="onAction(() => emit('tokenLayer', 'top'))"
+              >
+                {{ t("table.menu.layerTop") }}
+              </button>
+              <button
+                type="button"
+                class="menuItem"
+                @click="onAction(() => emit('tokenLayer', 'bottom'))"
+              >
+                {{ t("table.menu.layerBottom") }}
+              </button>
+            </div>
+          </div>
         </template>
       </template>
       <template v-else-if="!selection">
