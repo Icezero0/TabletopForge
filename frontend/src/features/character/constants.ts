@@ -111,6 +111,7 @@ export function defaultAttributes() {
 export function defaultFeatures() {
   return {
     racial_traits: [] as { name: string; notes: string }[],
+    feats: [] as { name: string; notes: string }[],
     class_features: [] as { name: string; source: string; notes: string }[],
     proficiencies: { weapons: [] as string[], armor: [] as string[], tools: [] as string[] },
     custom_fields: {} as Record<string, string>,
@@ -162,6 +163,9 @@ export function defaultTokenPanelInitial(isPrimary: boolean) {
     saving_throw_profs: {} as Record<string, boolean>,
     skills: {} as Record<string, number | null>,
     skill_profs: {} as Record<string, string>,
+    racial_traits: [] as { name: string; notes: string }[],
+    feats: [] as { name: string; notes: string }[],
+    class_features: [] as { name: string; source: string; notes: string }[],
     items: [] as { name: string; quantity: number; notes: string }[],
     weapons: [] as unknown[],
     armor: [] as unknown[],

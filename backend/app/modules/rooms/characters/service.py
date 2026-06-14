@@ -311,6 +311,10 @@ class RoomCharacterService:
                 panel["hp_current"] = payload.state.max_hp
             if payload.state.armor_class is not None:
                 panel["ac"] = payload.state.armor_class
+        if payload.features:
+            panel["racial_traits"] = list(payload.features.get("racial_traits") or [])
+            panel["feats"] = list(payload.features.get("feats") or [])
+            panel["class_features"] = list(payload.features.get("class_features") or [])
         primary_config = TokenConfigUpsert(
             is_primary=True,
             name=payload.name.strip(),

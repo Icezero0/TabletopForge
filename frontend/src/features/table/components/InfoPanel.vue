@@ -53,7 +53,7 @@ const savingResourceIndex = ref<number | null>(null);
 // ── Tab state ─────────────────────────────────────────────────────────────
 type TabId = "identity" | "attributes" | "features" | "spells";
 const activeTab = ref<TabId>("identity");
-type TokenTabId = "overview" | "skillsSaves" | "spells" | "resources" | "inventory";
+type TokenTabId = "overview" | "skillsSaves" | "features" | "spells" | "resources" | "inventory";
 const activeTokenTab = ref<TokenTabId>("overview");
 const expandedSpellLevels = ref(new Set<string>());
 
@@ -66,6 +66,7 @@ const TABS: { id: TabId; labelKey: string }[] = [
 const TOKEN_TABS: { id: TokenTabId; labelKey: string }[] = [
   { id: "overview",    labelKey: "character.token.panelTab.overview"     },
   { id: "skillsSaves", labelKey: "character.token.panelTab.skillsSaves"  },
+  { id: "features",    labelKey: "character.token.panelTab.features"     },
   { id: "spells",      labelKey: "character.token.panelTab.spells"       },
   { id: "resources",   labelKey: "character.token.panelTab.resources"    },
   { id: "inventory",   labelKey: "character.token.panelTab.inventory"    },
@@ -390,12 +391,25 @@ const racialTraits = computed(() =>
 const classFeatures = computed(() =>
   ((character.value?.features?.class_features ?? []) as { name: string; source: string; notes: string }[])
 );
+const feats = computed(() =>
+  ((character.value?.features?.feats ?? []) as { name: string; notes: string }[])
+);
 const customFieldEntries = computed(() => {
   const cf = (character.value?.features?.custom_fields ?? {}) as Record<string, string>;
   return Object.entries(cf)
     .filter(([, v]) => v != null && String(v).trim() !== "")
     .map(([k, v]) => ({ k, v: String(v) }));
 });
+
+const tokenRacialTraits = computed(() =>
+  ((tokenPanel.value?.racial_traits ?? []) as { name: string; notes: string }[])
+);
+const tokenFeats = computed(() =>
+  ((tokenPanel.value?.feats ?? []) as { name: string; notes: string }[])
+);
+const tokenClassFeatures = computed(() =>
+  ((tokenPanel.value?.class_features ?? []) as { name: string; source: string; notes: string }[])
+);
 
 // Spells tab
 const spellsData = computed(() =>
@@ -1063,6 +1077,42 @@ function openCharacterSheet() {
             <p v-if="saveError" class="saveHint error">{{ saveError }}</p>
           </template>
 
+          <template v-else-if="activeTokenTab === 'features'">
+            <div v-if="tokenRacialTraits.length" class="featureBlock">
+              <div class="attrBlockTitle">{{ t("character.features.racialTraits") }}</div>
+              <div v-for="(trait, i) in tokenRacialTraits" :key="i" class="featureItem">
+                <div class="featureName">{{ trait.name }}</div>
+                <div v-if="trait.notes" class="featureNotes">{{ trait.notes }}</div>
+              </div>
+            </div>
+
+            <div v-if="tokenClassFeatures.length" class="featureBlock">
+              <div class="attrBlockTitle">{{ t("character.features.classFeatures") }}</div>
+              <div v-for="(feat, i) in tokenClassFeatures" :key="i" class="featureItem">
+                <div class="featureHead">
+                  <span class="featureName">{{ feat.name }}</span>
+                  <span v-if="feat.source" class="featureSource">
+                    {{ te(`character.classes.${feat.source}`) ? t(`character.classes.${feat.source}`) : feat.source }}
+                  </span>
+                </div>
+                <div v-if="feat.notes" class="featureNotes">{{ feat.notes }}</div>
+              </div>
+            </div>
+
+            <div v-if="tokenFeats.length" class="featureBlock">
+              <div class="attrBlockTitle">{{ t("character.features.feats") }}</div>
+              <div v-for="(feat, i) in tokenFeats" :key="i" class="featureItem">
+                <div class="featureName">{{ feat.name }}</div>
+                <div v-if="feat.notes" class="featureNotes">{{ feat.notes }}</div>
+              </div>
+            </div>
+
+            <div
+              v-if="!tokenRacialTraits.length && !tokenFeats.length && !tokenClassFeatures.length"
+              class="emptyHint"
+            >—</div>
+          </template>
+
           <template v-else-if="activeTokenTab === 'spells'">
             <template v-if="tokenSpellcastingAbilityLabel || tokenSpellSaveDC != null || tokenSpellAttackBonus != null || tokenSpellLevelRows.length">
               <div
@@ -1274,6 +1324,14 @@ function openCharacterSheet() {
               </div>
             </div>
 
+            <div v-if="feats.length" class="featureBlock">
+              <div class="attrBlockTitle">{{ t("character.features.feats") }}</div>
+              <div v-for="(feat, i) in feats" :key="i" class="featureItem">
+                <div class="featureName">{{ feat.name }}</div>
+                <div v-if="feat.notes" class="featureNotes">{{ feat.notes }}</div>
+              </div>
+            </div>
+
             <div v-if="customFieldEntries.length" class="featureBlock">
               <div class="attrBlockTitle">{{ t("table.inspector.customFields") }}</div>
               <div v-for="entry in customFieldEntries" :key="entry.k" class="kvRow">
@@ -1283,7 +1341,7 @@ function openCharacterSheet() {
             </div>
 
             <div
-              v-if="!racialTraits.length && !classFeatures.length && !customFieldEntries.length"
+              v-if="!racialTraits.length && !feats.length && !classFeatures.length && !customFieldEntries.length"
               class="emptyHint"
             >—</div>
           </template>

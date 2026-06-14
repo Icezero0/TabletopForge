@@ -45,6 +45,7 @@ function isNew(drafts: Map<number, { isNew: boolean }>, i: number) {
 
 // ── Edit state ────────────────────────────────────────────────────────────────
 const editingTraits = ref(new Set<number>());
+const editingFeats = ref(new Set<number>());
 const editingFeatures = ref(new Set<number>());
 const editingPairs = ref(new Set<number>());
 
@@ -109,6 +110,70 @@ function cancelTrait(i: number) {
     update("racial_traits", localTraits.value);
     editingTraits.value = new Set([...editingTraits.value].filter(idx => idx !== i));
     const d = new Map(traitDrafts.value); d.delete(i); traitDrafts.value = d;
+  }
+}
+
+// ── Feats ─────────────────────────────────────────────────────────────────────
+type Feat = { name: string; notes: string };
+type FeatDraft = { data: Feat; isNew: boolean };
+
+const localFeats = ref<Feat[]>([...(props.modelValue.feats as Feat[] ?? [])]);
+const featDrafts = ref(new Map<number, FeatDraft>());
+
+watch(
+  () => props.modelValue.feats,
+  (newVal) => {
+    const fromParent = (newVal as Feat[]) ?? [];
+    if (JSON.stringify(fromParent) !== JSON.stringify(localFeats.value)) {
+      localFeats.value = [...fromParent];
+      editingFeats.value = new Set();
+      featDrafts.value = new Map();
+    }
+  },
+  { deep: true },
+);
+
+function updateFeat(i: number, field: string, v: string) {
+  localFeats.value = localFeats.value.map((feat, idx) => idx === i ? { ...feat, [field]: v } : feat);
+  if (!isNew(featDrafts.value, i)) update("feats", localFeats.value);
+}
+function addFeat() {
+  const idx = localFeats.value.length;
+  localFeats.value = [...localFeats.value, { name: "", notes: "" }];
+  featDrafts.value = new Map([...featDrafts.value, [idx, { data: { name: "", notes: "" }, isNew: true }]]);
+  editingFeats.value = new Set([...editingFeats.value, idx]);
+}
+function removeFeat(i: number) {
+  const wasNew = isNew(featDrafts.value, i);
+  localFeats.value = localFeats.value.filter((_, idx) => idx !== i);
+  editingFeats.value = shiftEditSet(editingFeats.value, i);
+  featDrafts.value = shiftDraftMap(featDrafts.value, i);
+  if (!wasNew) update("feats", localFeats.value);
+}
+function startEditFeat(i: number) {
+  const current = localFeats.value[i];
+  if (!current) return;
+  featDrafts.value = new Map([...featDrafts.value, [i, { data: { ...current }, isNew: false }]]);
+  editingFeats.value = new Set([...editingFeats.value, i]);
+}
+function confirmFeat(i: number) {
+  if (!localFeats.value[i]?.name.trim()) return;
+  update("feats", localFeats.value);
+  editingFeats.value = new Set([...editingFeats.value].filter(idx => idx !== i));
+  const d = new Map(featDrafts.value); d.delete(i); featDrafts.value = d;
+}
+function cancelFeat(i: number) {
+  const draft = featDrafts.value.get(i);
+  if (!draft) return;
+  if (draft.isNew) {
+    localFeats.value = localFeats.value.filter((_, idx) => idx !== i);
+    editingFeats.value = shiftEditSet(editingFeats.value, i);
+    featDrafts.value = shiftDraftMap(featDrafts.value, i);
+  } else {
+    localFeats.value = localFeats.value.map((feat, idx) => idx === i ? { ...draft.data } : feat);
+    update("feats", localFeats.value);
+    editingFeats.value = new Set([...editingFeats.value].filter(idx => idx !== i));
+    const d = new Map(featDrafts.value); d.delete(i); featDrafts.value = d;
   }
 }
 
@@ -332,6 +397,44 @@ function cancelCustomField(i: number) {
             </div>
             <button class="action-btn confirm-btn" :disabled="!feat.name.trim() || !feat.source" @click="confirmFeature(i)"><AppIcon :icon="CheckIcon" :size="14" /></button>
             <button class="action-btn cancel-btn" @click="cancelFeature(i)"><AppIcon :icon="XMarkIcon" :size="14" /></button>
+          </template>
+        </div>
+      </BaseListItem>
+    </div>
+
+    <!-- Feats -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-title">{{ t("character.features.feats") }}</span>
+        <BaseButton variant="default" @click="addFeat">
+          <span class="btn-icon-text"><AppIcon :icon="PlusIcon" :size="14" />{{ t("character.features.addFeat") }}</span>
+        </BaseButton>
+      </div>
+      <div v-if="!localFeats.length" class="empty-hint">—</div>
+      <BaseListItem v-for="(feat, i) in localFeats" :key="i" dense>
+        <div class="feature-row">
+          <template v-if="!editingFeats.has(i)">
+            <div class="display-content">
+              <span class="display-name">{{ feat.name || "—" }}</span>
+              <span v-if="feat.notes" class="display-notes">{{ feat.notes }}</span>
+            </div>
+            <button class="action-btn" @click="startEditFeat(i)"><AppIcon :icon="PencilIcon" :size="14" /></button>
+            <button class="del-btn" @click="removeFeat(i)"><AppIcon :icon="TrashIcon" :size="14" /></button>
+          </template>
+          <template v-else>
+            <div class="feature-edit">
+              <BaseInput :model-value="feat.name" :placeholder="t('character.features.featName')" @update:model-value="updateFeat(i, 'name', $event)" />
+              <div class="notes-grow-wrap" :data-replicated-value="feat.notes">
+                <textarea
+                  :placeholder="t('character.features.featNotes')"
+                  :value="feat.notes"
+                  rows="1"
+                  @input="(e) => { syncReplicatedValue(e); updateFeat(i, 'notes', (e.target as HTMLTextAreaElement).value); }"
+                />
+              </div>
+            </div>
+            <button class="action-btn confirm-btn" :disabled="!feat.name.trim()" @click="confirmFeat(i)"><AppIcon :icon="CheckIcon" :size="14" /></button>
+            <button class="action-btn cancel-btn" @click="cancelFeat(i)"><AppIcon :icon="XMarkIcon" :size="14" /></button>
           </template>
         </div>
       </BaseListItem>

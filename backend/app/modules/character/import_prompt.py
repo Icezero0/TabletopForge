@@ -143,6 +143,7 @@ def _output_format_section() -> str:
 | 字段 | 类型 | 含义 |
 |------|------|------|
 | `racial_traits` | array | 种族特性，每项 `{{"name": string, "notes": string}}` |
+| `feats` | array | 专长，每项 `{{"name": string, "notes": string}}` |
 | `class_features` | array | 职业特性，每项 `{{"name": string, "source": string, "notes": string}}`；`source` 为职业枚举 |
 | `proficiencies` | object | `{{"weapons": string[], "armor": string[], "tools": string[]}}`，可与 attributes 熟练互补 |
 | `custom_fields` | object | 自定义键值对，如 `{{"灵感": "1"}}`；无则 `{{}}` |
@@ -239,6 +240,7 @@ def _output_format_section() -> str:
   }},
   "features": {{
     "racial_traits": [],
+    "feats": [],
     "class_features": [],
     "proficiencies": {{"weapons": [], "armor": [], "tools": []}},
     "custom_fields": {{}}

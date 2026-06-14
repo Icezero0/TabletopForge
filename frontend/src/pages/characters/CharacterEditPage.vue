@@ -431,6 +431,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload)
           v-model="formTokenConfigs"
           :identity-block="formIdentity"
           :attributes-block="formAttributes"
+          :features-block="formFeatures"
           :spells-block="formSpells"
           :resources-block="formResources"
           :equipment-block="formEquipment"

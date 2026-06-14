@@ -31,12 +31,15 @@ import EquipmentItemsList from "@/features/character/components/EquipmentItemsLi
 
 type Item = { name: string; quantity: number; notes: string };
 type TokenResource = { name: string; max: number; recovery: string; notes: string };
+type SimpleFeature = { name: string; notes: string };
+type ClassFeature = { name: string; source: string; notes: string };
 type SkillProf = "none" | "proficient" | "expert" | "expertise";
 
 const props = defineProps<{
   config: TokenConfigUpsert;
   identityBlock: Record<string, unknown>;
   attributesBlock: Record<string, unknown>;
+  featuresBlock: Record<string, unknown>;
   spellsBlock: Record<string, unknown> | null;
   resourcesBlock: TokenResource[];
   equipmentBlock: Record<string, unknown>;
@@ -284,6 +287,10 @@ const skillRows = computed<CompactRow[]>(() =>
   }),
 );
 
+const tokenRacialTraits = computed(() => (draft.value.racial_traits ?? []) as SimpleFeature[]);
+const tokenFeats = computed(() => (draft.value.feats ?? []) as SimpleFeature[]);
+const tokenClassFeatures = computed(() => (draft.value.class_features ?? []) as ClassFeature[]);
+
 function handleSaveUpdate(key: string, value: string) {
   saveStrings.value = { ...saveStrings.value, [key]: value };
 }
@@ -333,6 +340,7 @@ function syncFromCharacter() {
   const skills = (attrs.skill_values ?? {}) as Record<string, string>;
   const skillAutos = (attrs.skill_value_autos ?? {}) as Record<string, boolean>;
   const skillProfs = (attrs.skill_profs ?? {}) as Record<string, SkillProf>;
+  const features = props.featuresBlock;
 
   const parseNum = (v: unknown) => {
     const raw = String(v ?? "").trim();
@@ -380,6 +388,9 @@ function syncFromCharacter() {
     saving_throw_profs: { ...saveProfs },
     skills: newSkills,
     skill_profs: { ...skillProfs },
+    racial_traits: [...((features.racial_traits ?? []) as SimpleFeature[])],
+    feats: [...((features.feats ?? []) as SimpleFeature[])],
+    class_features: [...((features.class_features ?? []) as ClassFeature[])],
     items: equipItems,
     spellcasting_ability: (spells.spellcasting_ability as string | undefined) ?? "intelligence",
     spell_save_dc: {
@@ -421,7 +432,7 @@ function save() {
 }
 
 // ── Tabs ───────────────────────────────────────────────────────────────────
-const tabs = ["overview", "skillsSaves", "spells", "resources", "inventory"] as const;
+const tabs = ["overview", "skillsSaves", "features", "spells", "resources", "inventory"] as const;
 type PanelTab = (typeof tabs)[number];
 const activeTab = ref<PanelTab>("overview");
 </script>
@@ -595,6 +606,47 @@ const activeTab = ref<PanelTab>("overview");
               />
             </div>
           </div>
+        </div>
+
+        <!-- Features -->
+        <div v-show="activeTab === 'features'" class="panel-body">
+          <div v-if="tokenRacialTraits.length" class="field-group">
+            <div class="field-group-title">{{ t("character.features.racialTraits") }}</div>
+            <div class="feature-list">
+              <div v-for="(trait, i) in tokenRacialTraits" :key="i" class="feature-card">
+                <div class="feature-name">{{ trait.name || "—" }}</div>
+                <div v-if="trait.notes" class="feature-notes">{{ trait.notes }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="tokenClassFeatures.length" class="field-group">
+            <div class="field-group-title">{{ t("character.features.classFeatures") }}</div>
+            <div class="feature-list">
+              <div v-for="(feat, i) in tokenClassFeatures" :key="i" class="feature-card">
+                <div class="feature-card-head">
+                  <span class="feature-name">{{ feat.name || "—" }}</span>
+                  <span v-if="feat.source" class="feature-source">{{ t(`character.classes.${feat.source}`, feat.source) }}</span>
+                </div>
+                <div v-if="feat.notes" class="feature-notes">{{ feat.notes }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="tokenFeats.length" class="field-group">
+            <div class="field-group-title">{{ t("character.features.feats") }}</div>
+            <div class="feature-list">
+              <div v-for="(feat, i) in tokenFeats" :key="i" class="feature-card">
+                <div class="feature-name">{{ feat.name || "—" }}</div>
+                <div v-if="feat.notes" class="feature-notes">{{ feat.notes }}</div>
+              </div>
+            </div>
+          </div>
+
+          <div
+            v-if="!tokenRacialTraits.length && !tokenFeats.length && !tokenClassFeatures.length"
+            class="empty-resource"
+          >—</div>
         </div>
 
         <!-- Inventory -->
@@ -893,6 +945,53 @@ const activeTab = ref<PanelTab>("overview");
   display: grid;
   gap: 22px;
   min-width: 0;
+}
+
+/* Features */
+.feature-list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.feature-card {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-1);
+  background: var(--c-surface-raised);
+}
+
+.feature-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.feature-name {
+  min-width: 0;
+  color: var(--c-text);
+  font-size: 13px;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.feature-source {
+  color: var(--c-text-muted);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.feature-notes {
+  color: var(--c-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* Spells */

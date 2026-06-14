@@ -73,6 +73,7 @@ def default_attributes() -> dict:
 def default_features() -> dict:
     return {
         "racial_traits": [],
+        "feats": [],
         "class_features": [],
         "proficiencies": {"weapons": [], "armor": [], "tools": []},
         "custom_fields": {},

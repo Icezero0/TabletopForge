@@ -16,6 +16,9 @@ export type TokenPanelInitial = {
   saving_throw_profs?: Record<string, boolean>;
   skills?: Record<string, number | null>;
   skill_profs?: Record<string, string>;
+  racial_traits?: { name: string; notes: string }[];
+  feats?: { name: string; notes: string }[];
+  class_features?: { name: string; source: string; notes: string }[];
   items?: { name: string; quantity: number; notes: string }[];
   weapons?: unknown[];
   armor?: unknown[];

@@ -326,11 +326,15 @@ export default {
     },
     features: {
       racialTraits: "Racial Traits",
+      feats: "Feats",
       classFeatures: "Class Features",
       addRacialTrait: "Add Racial Trait",
+      addFeat: "Add Feat",
       addClassFeature: "Add Class Feature",
       traitName: "Name",
       traitNotes: "Description",
+      featName: "Name",
+      featNotes: "Description",
       featureName: "Name",
       featureSource: "Source Class",
       featureNotes: "Description",
@@ -430,6 +434,7 @@ export default {
       panelTab: {
         overview: "Overview",
         skillsSaves: "Skills & Saves",
+        features: "Features",
         spells: "Spells",
         resources: "Resources",
         inventory: "Inventory",

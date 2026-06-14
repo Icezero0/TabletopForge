@@ -23,6 +23,7 @@ const props = defineProps<{
   modelValue: TokenConfigUpsert[];
   identityBlock: Record<string, unknown>;
   attributesBlock: Record<string, unknown>;
+  featuresBlock: Record<string, unknown>;
   spellsBlock: Record<string, unknown> | null;
   resourcesBlock: TokenResource[];
   equipmentBlock: Record<string, unknown>;
@@ -59,6 +60,7 @@ function buildPanelFromCharacter(): TokenPanelInitial {
   const skills = (attrs.skill_values ?? {}) as Record<string, string>;
   const skillAutos = (attrs.skill_value_autos ?? {}) as Record<string, boolean>;
   const skillProfs = (attrs.skill_profs ?? {}) as Record<string, SkillProf>;
+  const features = props.featuresBlock;
 
   const parseNum = (v: unknown): number | null => {
     const raw = String(v ?? "").trim();
@@ -105,6 +107,9 @@ function buildPanelFromCharacter(): TokenPanelInitial {
     saving_throw_profs: { ...saveProfs },
     skills: newSkills,
     skill_profs: { ...skillProfs },
+    racial_traits: [...((features.racial_traits ?? []) as { name: string; notes: string }[])],
+    feats: [...((features.feats ?? []) as { name: string; notes: string }[])],
+    class_features: [...((features.class_features ?? []) as { name: string; source: string; notes: string }[])],
     items: equipItems,
     weapons: [],
     armor: [],
@@ -293,6 +298,7 @@ function closeEditor() {
       :config="(editingConfig as TokenConfigUpsert)"
       :identity-block="identityBlock"
       :attributes-block="attributesBlock"
+      :features-block="featuresBlock"
       :spells-block="spellsBlock"
       :resources-block="resourcesBlock"
       :equipment-block="equipmentBlock"

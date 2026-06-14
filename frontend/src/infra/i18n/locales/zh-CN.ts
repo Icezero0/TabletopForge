@@ -326,11 +326,15 @@ export default {
     },
     features: {
       racialTraits: "种族特性",
+      feats: "专长",
       classFeatures: "职业特性",
       addRacialTrait: "添加种族特性",
+      addFeat: "添加专长",
       addClassFeature: "添加职业特性",
       traitName: "名称",
       traitNotes: "描述",
+      featName: "名称",
+      featNotes: "描述",
       featureName: "名称",
       featureSource: "来源职业",
       featureNotes: "描述",
@@ -430,6 +434,7 @@ export default {
       panelTab: {
         overview: "概览",
         skillsSaves: "技能与豁免",
+        features: "特性",
         spells: "法术",
         resources: "资源",
         inventory: "背包",
