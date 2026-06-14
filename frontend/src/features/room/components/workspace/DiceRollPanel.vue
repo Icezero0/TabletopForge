@@ -1,14 +1,31 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
-import { BookmarkIcon, EyeIcon, EyeSlashIcon, PencilSquareIcon, PlusIcon, TrashIcon } from "@heroicons/vue/24/outline";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  BookmarkIcon,
+  CheckIcon,
+  EyeIcon,
+  EyeSlashIcon,
+  FolderArrowDownIcon,
+  FolderIcon,
+  PencilIcon,
+  PencilSquareIcon,
+  PlusIcon,
+  TrashIcon,
+  XMarkIcon,
+} from "@heroicons/vue/24/outline";
+import { Dices } from "lucide-vue-next";
 import { useDiceStore, type DiceDraft } from "@/stores/dice.store";
+import { useDicePresetsStore } from "@/stores/dicePresets.store";
 import { useAuthStore } from "@/stores/auth.store";
 import { useEntitiesStore } from "@/stores/entities.store";
 import { useTabletopStore } from "@/stores/tabletop.store";
-import type { DiceRoll, DiceRollDetail, DiceVisibility } from "@/infra/api/dice.api";
+import type { DicePreset, DiceRoll, DiceRollDetail, DiceVisibility } from "@/infra/api/dice.api";
 import type { GameRole } from "@/features/room/types";
 import { canManageToken } from "@/features/table/utils/tokenDisplay";
 import DiceActorAvatar from "@/features/room/components/workspace/DiceActorAvatar.vue";
+import BaseEntitySelect from "@/ui/base/BaseEntitySelect.vue";
 import BaseInput from "@/ui/base/BaseInput.vue";
 
 const props = defineProps<{
@@ -29,21 +46,31 @@ type ExtraTerm = {
 };
 type ActorOption = {
   key: string;
+  value: string;
+  label: string;
   type: "user" | "token";
   id: number | null;
   name: string;
   avatarUrl?: string | null;
   assetId?: number | null;
 };
-type DicePreset = {
-  id: string;
+type EntitySelectSlotOption = {
+  value: string;
+  label: string;
+  [key: string]: unknown;
+};
+type PresetManagerDraft = {
+  id: number | null;
+  kind: "folder" | "preset";
   name: string;
   formula: string;
   label: string;
   visibility: DiceVisibility;
+  parentId: number | null;
 };
 
 const diceStore = useDiceStore();
+const dicePresetsStore = useDicePresetsStore();
 const auth = useAuthStore();
 const entitiesStore = useEntitiesStore();
 const tabletopStore = useTabletopStore();
@@ -61,8 +88,20 @@ const actorDisplayName = ref("");
 const panelActorPickerOpen = ref(false);
 const presetMenuOpen = ref(false);
 const presetNameDialogOpen = ref(false);
+const presetManagerOpen = ref(false);
 const presetNameDraft = ref("");
-const presets = ref<DicePreset[]>([]);
+const presetParentId = ref<number | null>(null);
+const movingPresetId = ref<number | null>(null);
+const presetManagerEditing = ref(false);
+const presetManagerDraft = ref<PresetManagerDraft>({
+  id: null,
+  kind: "preset",
+  name: "",
+  formula: "",
+  label: "",
+  visibility: "public",
+  parentId: null,
+});
 const timelineRef = ref<HTMLElement | null>(null);
 const preservingHistoryScroll = ref(false);
 const hasActivatedScroll = ref(false);
@@ -76,9 +115,28 @@ const roomState = computed(() => diceStore.getRoomState(props.roomId));
 const rolls = computed(() => roomState.value.items);
 const roomTokens = computed(() => tabletopStore.getTokens(props.roomId));
 const formulaHistoryStorageKey = computed(() => `tabletopforge:dice-formula-history:${props.roomId}`);
-const presetStorageKey = computed(() => `tabletopforge:dice-presets:${auth.me?.id ?? "guest"}`);
+const presets = computed(() => dicePresetsStore.flatPresets);
+const presetChildren = computed(() => dicePresetsStore.childrenByParent(presetParentId.value));
+const movingPreset = computed(() =>
+  movingPresetId.value == null
+    ? null
+    : dicePresetsStore.items.find((item) => item.id === movingPresetId.value) ?? null,
+);
+const presetPath = computed(() => {
+  const path: DicePreset[] = [];
+  let cursor = presetParentId.value;
+  while (cursor != null) {
+    const folder = dicePresetsStore.items.find((item) => item.id === cursor && item.kind === "folder");
+    if (!folder) break;
+    path.unshift(folder);
+    cursor = folder.parent_id;
+  }
+  return path;
+});
 const currentUserActor = computed<ActorOption>(() => ({
   key: auth.me?.id ? `user:${auth.me.id}` : "user:me",
+  value: auth.me?.id ? `user:${auth.me.id}` : "user:me",
+  label: auth.me?.username || auth.me?.email || "当前用户",
   type: "user",
   id: auth.me?.id ?? null,
   name: auth.me?.username || auth.me?.email || "当前用户",
@@ -96,6 +154,8 @@ const tokenActorOptions = computed<ActorOption[]>(() =>
     )
     .map((token) => ({
       key: `token:${token.id}`,
+      value: `token:${token.id}`,
+      label: token.name,
       type: "token",
       id: token.id,
       name: token.name,
@@ -111,6 +171,8 @@ const selectedActor = computed<ActorOption>(() => {
     return (
       tokenActorOptions.value.find((item) => item.id === actorTokenId.value) ?? {
         key: `token:${actorTokenId.value}`,
+        value: `token:${actorTokenId.value}`,
+        label: actorDisplayName.value || `指示物 #${actorTokenId.value}`,
         type: "token",
         id: actorTokenId.value,
         name: actorDisplayName.value || `指示物 #${actorTokenId.value}`,
@@ -119,6 +181,13 @@ const selectedActor = computed<ActorOption>(() => {
     );
   }
   return currentUserActor.value;
+});
+const selectedActorKey = computed({
+  get: () => selectedActor.value.key,
+  set: (value: string) => {
+    const option = allActorOptions.value.find((item) => item.key === value);
+    if (option) selectActor(option);
+  },
 });
 const structuredFormula = computed(() => {
   const terms = extraTerms.value.map((term, index) => termFormula(term, mode.value === "value" && index === 0)).filter(Boolean);
@@ -155,17 +224,13 @@ watch(rolls, () => {
 
 onMounted(() => {
   loadFormulaHistory();
-  loadPresets();
+  void loadPresets();
   void nextTick(scrollToBottom);
 });
 
 watch(() => props.roomId, () => {
   loadFormulaHistory();
   resetFormulaHistoryCursor();
-});
-
-watch(presetStorageKey, () => {
-  loadPresets();
 });
 
 watch(
@@ -234,33 +299,11 @@ function saveFormulaHistory() {
   }
 }
 
-function isPreset(value: unknown): value is DicePreset {
-  if (!value || typeof value !== "object") return false;
-  const preset = value as Partial<DicePreset>;
-  return (
-    typeof preset.id === "string" &&
-    typeof preset.name === "string" &&
-    typeof preset.formula === "string" &&
-    typeof preset.label === "string" &&
-    (preset.visibility === "public" || preset.visibility === "blind")
-  );
-}
-
-function loadPresets() {
+async function loadPresets(force = false) {
   try {
-    const raw = localStorage.getItem(presetStorageKey.value);
-    const parsed = raw ? JSON.parse(raw) : [];
-    presets.value = Array.isArray(parsed) ? parsed.filter(isPreset) : [];
+    await dicePresetsStore.load(force);
   } catch {
-    presets.value = [];
-  }
-}
-
-function savePresets() {
-  try {
-    localStorage.setItem(presetStorageKey.value, JSON.stringify(presets.value));
-  } catch {
-    // Presets are local convenience data; storage failures should not block rolling.
+    // The roll panel remains usable even if preset loading fails.
   }
 }
 
@@ -534,14 +577,21 @@ function selectActor(option: ActorOption) {
   selectTokenActor(option.id);
 }
 
-function togglePanelActorPicker() {
-  panelActorPickerOpen.value = !panelActorPickerOpen.value;
-  if (panelActorPickerOpen.value) presetMenuOpen.value = false;
+function handleActorPickerOpenChange(open: boolean) {
+  panelActorPickerOpen.value = open;
+  if (open) presetMenuOpen.value = false;
+}
+
+function asActorOption(option: EntitySelectSlotOption | null): ActorOption {
+  return (option as ActorOption | null) ?? currentUserActor.value;
 }
 
 function togglePresetMenu() {
   presetMenuOpen.value = !presetMenuOpen.value;
-  if (presetMenuOpen.value) panelActorPickerOpen.value = false;
+  if (presetMenuOpen.value) {
+    panelActorPickerOpen.value = false;
+    void loadPresets();
+  }
 }
 
 function openSavePresetDialog() {
@@ -552,20 +602,103 @@ function openSavePresetDialog() {
   presetNameDialogOpen.value = true;
 }
 
-function confirmSavePreset() {
+async function confirmSavePreset() {
   const formula = manualFormula.value.trim();
   const name = presetNameDraft.value.trim();
   if (!formula || !name) return;
-  const nextPreset: DicePreset = {
-    id: crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    name,
-    formula,
-    label: label.value.trim(),
-    visibility: visibility.value,
-  };
-  presets.value = [nextPreset, ...presets.value.filter((preset) => preset.name !== name)].slice(0, 50);
-  savePresets();
+  const sameName = presets.value.find((preset) => preset.name === name);
+  if (sameName) {
+    await dicePresetsStore.update(sameName.id, {
+      formula,
+      label: label.value.trim(),
+      visibility: visibility.value,
+    });
+  } else {
+    await dicePresetsStore.create({
+      kind: "preset",
+      name,
+      formula,
+      label: label.value.trim(),
+      visibility: visibility.value,
+      sort_order: nextPresetSortOrder(null),
+    });
+  }
   presetNameDialogOpen.value = false;
+}
+
+function nextPresetSortOrder(parentId: number | null) {
+  const siblings = dicePresetsStore.childrenByParent(parentId);
+  return siblings.reduce((max, item) => Math.max(max, item.sort_order), -1) + 1;
+}
+
+function openPresetManager() {
+  presetMenuOpen.value = false;
+  presetManagerOpen.value = true;
+  closePresetEditor();
+  void loadPresets();
+}
+
+function startPresetCreate(kind: "folder" | "preset") {
+  presetManagerEditing.value = true;
+  presetManagerDraft.value = {
+    id: null,
+    kind,
+    name: "",
+    formula: kind === "preset" ? manualFormula.value.trim() : "",
+    label: kind === "preset" ? label.value.trim() : "",
+    visibility: kind === "preset" ? visibility.value : "public",
+    parentId: presetParentId.value,
+  };
+}
+
+function startPresetEdit(preset: DicePreset) {
+  presetManagerEditing.value = true;
+  presetManagerDraft.value = {
+    id: preset.id,
+    kind: preset.kind,
+    name: preset.name,
+    formula: preset.formula,
+    label: preset.label,
+    visibility: preset.visibility,
+    parentId: preset.parent_id,
+  };
+}
+
+function closePresetEditor() {
+  presetManagerEditing.value = false;
+  presetManagerDraft.value = {
+    id: null,
+    kind: "preset",
+    name: "",
+    formula: "",
+    label: "",
+    visibility: "public",
+    parentId: presetParentId.value,
+  };
+}
+
+async function savePresetManagerDraft() {
+  const draft = presetManagerDraft.value;
+  const name = draft.name.trim();
+  if (!name) return;
+  if (draft.kind === "preset" && !draft.formula.trim()) return;
+  const payload = {
+    kind: draft.kind,
+    name,
+    parent_id: draft.parentId,
+    formula: draft.kind === "preset" ? draft.formula.trim() : "",
+    label: draft.kind === "preset" ? draft.label.trim() : "",
+    visibility: draft.kind === "preset" ? draft.visibility : "public",
+  };
+  if (draft.id == null) {
+    await dicePresetsStore.create({
+      ...payload,
+      sort_order: nextPresetSortOrder(draft.parentId),
+    });
+  } else {
+    await dicePresetsStore.update(draft.id, payload);
+  }
+  closePresetEditor();
 }
 
 function loadPreset(preset: DicePreset) {
@@ -577,9 +710,66 @@ function loadPreset(preset: DicePreset) {
   presetMenuOpen.value = false;
 }
 
-function deletePreset(presetId: string) {
-  presets.value = presets.value.filter((preset) => preset.id !== presetId);
-  savePresets();
+async function deletePreset(preset: DicePreset) {
+  await dicePresetsStore.remove(preset.id);
+  if (presetParentId.value === preset.id) presetParentId.value = null;
+  if (presetManagerDraft.value.id === preset.id) closePresetEditor();
+  if (movingPresetId.value === preset.id) movingPresetId.value = null;
+}
+
+async function movePreset(preset: DicePreset, direction: -1 | 1) {
+  await dicePresetsStore.move(preset.id, direction);
+}
+
+function startPresetMove(preset: DicePreset) {
+  movingPresetId.value = movingPresetId.value === preset.id ? null : preset.id;
+  if (movingPresetId.value != null && presetManagerDraft.value.id === preset.id) {
+    closePresetEditor();
+  }
+}
+
+function cancelPresetMove() {
+  movingPresetId.value = null;
+}
+
+function isPresetDescendant(itemId: number, possibleAncestorId: number) {
+  let cursor = dicePresetsStore.items.find((item) => item.id === itemId)?.parent_id ?? null;
+  while (cursor != null) {
+    if (cursor === possibleAncestorId) return true;
+    cursor = dicePresetsStore.items.find((item) => item.id === cursor)?.parent_id ?? null;
+  }
+  return false;
+}
+
+function canMovePresetTo(parentId: number | null) {
+  const moving = movingPreset.value;
+  if (!moving) return false;
+  if ((moving.parent_id ?? null) === parentId) return false;
+  if (parentId == null) return true;
+  if (moving.id === parentId) return false;
+  if (moving.kind === "folder" && isPresetDescendant(parentId, moving.id)) return false;
+  return dicePresetsStore.items.some((item) => item.id === parentId && item.kind === "folder");
+}
+
+async function movePresetTo(parentId: number | null) {
+  const moving = movingPreset.value;
+  if (!moving || !canMovePresetTo(parentId)) return;
+  await dicePresetsStore.update(moving.id, {
+    parent_id: parentId,
+    sort_order: nextPresetSortOrder(parentId),
+  });
+  movingPresetId.value = null;
+}
+
+function enterPresetFolder(folder: DicePreset) {
+  if (folder.kind !== "folder") return;
+  presetParentId.value = folder.id;
+  if (!movingPreset.value) closePresetEditor();
+}
+
+function goToPresetFolder(folderId: number | null) {
+  presetParentId.value = folderId;
+  if (!movingPreset.value) closePresetEditor();
 }
 
 async function submitRoll() {
@@ -692,74 +882,50 @@ function toggleVisibility() {
             <button type="button" class="presetMenuItem" role="menuitem" :disabled="!manualFormula.trim()" @click="openSavePresetDialog">
               保存预设
             </button>
+            <button type="button" class="presetMenuItem" role="menuitem" @click="openPresetManager">
+              编辑预设
+            </button>
             <div class="presetMenuDivider"></div>
             <div class="presetMenuTitle">加载预设</div>
-            <div
+            <button
               v-for="preset in presets"
               :key="preset.id"
-              class="presetLoadRow"
-            >
-              <button
-                type="button"
-                class="presetMenuItem presetLoadItem"
-                role="menuitem"
-                @click="loadPreset(preset)"
-              >
-                <span class="presetName">{{ preset.name }}</span>
-                <span class="presetFormula">{{ preset.formula }}</span>
-              </button>
-              <button
-                type="button"
-                class="presetDeleteBtn"
-                title="删除预设"
-                aria-label="删除预设"
-                @click.stop="deletePreset(preset.id)"
-              >
-                <TrashIcon class="presetDeleteIcon" />
-              </button>
-            </div>
-            <div v-if="presets.length === 0" class="presetEmpty">暂无预设</div>
-          </div>
-        </div>
-        <div class="panelActorSelect">
-          <button
-            type="button"
-            class="panelActorSelectBtn"
-            :class="{ open: panelActorPickerOpen }"
-            aria-haspopup="listbox"
-            :aria-expanded="panelActorPickerOpen"
-            @click="togglePanelActorPicker"
-          >
-            <DiceActorAvatar
-              :kind="selectedActor.type"
-              :name="selectedActor.name"
-              :avatar-url="selectedActor.avatarUrl"
-              :asset-id="selectedActor.assetId"
-            />
-            <span class="panelActorName">{{ selectedActor.name }}</span>
-            <span class="tokenPickerArrow" aria-hidden="true"></span>
-          </button>
-          <div v-if="panelActorPickerOpen" class="panelActorMenu" role="listbox">
-            <button
-              v-for="option in allActorOptions"
-              :key="option.key"
               type="button"
-              class="panelActorOption"
-              :class="{ selected: option.key === selectedActor.key }"
-              role="option"
-              :aria-selected="option.key === selectedActor.key"
-              @click="selectActor(option)"
+              class="presetMenuItem presetLoadItem"
+              role="menuitem"
+              @click="loadPreset(preset)"
             >
-              <DiceActorAvatar
-                :kind="option.type"
-                :name="option.name"
-                :avatar-url="option.avatarUrl"
-                :asset-id="option.assetId"
-              />
-              <span class="panelActorOptionName">{{ option.name }}</span>
+              <span class="presetName">{{ preset.name }}</span>
+              <span class="presetFormula">{{ preset.formula }}</span>
             </button>
+            <div v-if="presets.length === 0" class="presetEmpty">暂无掷骰预设</div>
           </div>
         </div>
+        <BaseEntitySelect
+          v-model="selectedActorKey"
+          :options="allActorOptions"
+          width="144px"
+          @open-change="handleActorPickerOpenChange"
+        >
+          <template #selected="{ option }">
+            <DiceActorAvatar
+              :kind="asActorOption(option).type"
+              :name="asActorOption(option).name"
+              :avatar-url="asActorOption(option).avatarUrl"
+              :asset-id="asActorOption(option).assetId"
+            />
+            <span class="panelActorName">{{ asActorOption(option).name }}</span>
+          </template>
+          <template #option="{ option }">
+              <DiceActorAvatar
+                :kind="asActorOption(option).type"
+                :name="asActorOption(option).name"
+                :avatar-url="asActorOption(option).avatarUrl"
+                :asset-id="asActorOption(option).assetId"
+              />
+              <span class="panelActorOptionName">{{ asActorOption(option).name }}</span>
+          </template>
+        </BaseEntitySelect>
         <input v-model="label" class="labelInput panelLabelInput" type="text" placeholder="标签" />
       </div>
       <div class="compactRollRow">
@@ -794,14 +960,14 @@ function toggleVisibility() {
         <form class="formulaModal presetNameModal" @submit.prevent="confirmSavePreset">
           <div class="modalHeader">
             <div>
-              <h3 class="modalTitle">保存预设</h3>
+              <h3 class="modalTitle">保存掷骰预设</h3>
             </div>
             <button type="button" class="modalClose" @click="presetNameDialogOpen = false">×</button>
           </div>
 
           <label class="presetNameField">
-            <span>预设名称</span>
-            <BaseInput v-model="presetNameDraft" placeholder="输入预设名称" />
+            <span>掷骰预设名称</span>
+            <BaseInput v-model="presetNameDraft" placeholder="输入掷骰预设名称" />
           </label>
 
           <div class="presetFormulaPreview">
@@ -814,6 +980,173 @@ function toggleVisibility() {
             <button type="submit" class="rollBtn" :disabled="!presetNameDraft.trim() || !manualFormula.trim()">保存</button>
           </div>
         </form>
+      </div>
+
+      <div v-if="presetManagerOpen" class="modalBackdrop">
+        <div class="formulaModal presetManagerModal">
+          <div class="modalHeader">
+            <div>
+              <h3 class="modalTitle">编辑掷骰预设</h3>
+            </div>
+            <button type="button" class="modalClose" @click="presetManagerOpen = false">×</button>
+          </div>
+
+          <div class="presetBreadcrumb">
+            <button
+              type="button"
+              class="breadcrumbBtn"
+              @click="goToPresetFolder(null)"
+            >
+              全部预设
+            </button>
+            <template v-for="folder in presetPath" :key="folder.id">
+              <span class="breadcrumbSep">/</span>
+              <button
+                type="button"
+                class="breadcrumbBtn"
+                @click="goToPresetFolder(folder.id)"
+              >
+                {{ folder.name }}
+              </button>
+            </template>
+          </div>
+
+          <div class="presetManagerGrid">
+            <section class="presetListPanel">
+              <div v-if="movingPreset" class="presetMoveNotice">
+                <span>正在移动「{{ movingPreset.name }}」</span>
+                <div class="presetMoveActions">
+                  <button
+                    type="button"
+                    class="presetMoveApply"
+                    :disabled="!canMovePresetTo(presetParentId)"
+                    @click="movePresetTo(presetParentId)"
+                  >
+                    移动到此处
+                  </button>
+                  <button type="button" class="presetMoveCancel" @click="cancelPresetMove">取消</button>
+                </div>
+              </div>
+              <div class="presetItemList">
+                <div
+                  v-for="item in presetChildren"
+                  :key="item.id"
+                  class="presetManagerItem"
+                  :class="{
+                    active: presetManagerEditing && presetManagerDraft.id === item.id,
+                    moving: movingPresetId === item.id,
+                    moveDisabled: Boolean(movingPreset && (item.kind !== 'folder' || item.id === movingPreset.id)),
+                  }"
+                >
+                  <button
+                    type="button"
+                    class="presetItemMain"
+                    :disabled="Boolean(movingPreset && (item.kind !== 'folder' || item.id === movingPreset.id))"
+                    @click="item.kind === 'folder' ? enterPresetFolder(item) : loadPreset(item)"
+                  >
+                    <FolderIcon v-if="item.kind === 'folder'" class="smallIcon" />
+                      <Dices v-else class="smallIcon" />
+                      <span class="presetItemText">
+                        <strong>{{ item.name }}</strong>
+                        <small>{{ item.kind === "folder" ? "分组" : item.formula }}</small>
+                      </span>
+                  </button>
+                  <button type="button" class="iconMiniBtn" title="上移" @click="movePreset(item, -1)">
+                    <ArrowUpIcon class="smallIcon" />
+                  </button>
+                  <button type="button" class="iconMiniBtn" title="下移" @click="movePreset(item, 1)">
+                    <ArrowDownIcon class="smallIcon" />
+                  </button>
+                  <button type="button" class="iconMiniBtn" title="移动" @click="startPresetMove(item)">
+                    <FolderArrowDownIcon class="smallIcon" />
+                  </button>
+                  <button type="button" class="iconMiniBtn" title="编辑" @click="startPresetEdit(item)">
+                    <PencilIcon class="smallIcon" />
+                  </button>
+                  <button type="button" class="iconMiniBtn danger" title="删除" @click="deletePreset(item)">
+                    <TrashIcon class="smallIcon" />
+                  </button>
+                </div>
+                <div v-if="presetChildren.length === 0" class="presetEmpty large">当前分组没有掷骰预设。</div>
+                <button
+                  type="button"
+                  class="presetAddItem"
+                  :disabled="Boolean(movingPreset)"
+                  @click="startPresetCreate('preset')"
+                >
+                  <PlusIcon class="smallIcon" />
+                  <span>添加</span>
+                </button>
+              </div>
+            </section>
+
+            <form class="presetEditPanel" @submit.prevent="savePresetManagerDraft">
+              <template v-if="presetManagerEditing">
+                <div class="rollModeRow">
+                  <button
+                    type="button"
+                    class="rollModeBtn"
+                    :class="{ active: presetManagerDraft.kind === 'preset' }"
+                    @click="startPresetCreate('preset')"
+                  >
+                    掷骰预设
+                  </button>
+                  <button
+                    type="button"
+                    class="rollModeBtn"
+                    :class="{ active: presetManagerDraft.kind === 'folder' }"
+                    @click="startPresetCreate('folder')"
+                  >
+                    分组
+                  </button>
+                </div>
+                <label class="presetNameField">
+                  <span>名称</span>
+                  <BaseInput v-model="presetManagerDraft.name" />
+                </label>
+                <template v-if="presetManagerDraft.kind === 'preset'">
+                  <label class="presetNameField">
+                    <span>公式</span>
+                    <BaseInput v-model="presetManagerDraft.formula" />
+                  </label>
+                  <label class="presetNameField">
+                    <span>标签</span>
+                    <BaseInput v-model="presetManagerDraft.label" />
+                  </label>
+                  <div class="visibilityEditRow">
+                    <button
+                      type="button"
+                      class="visibilityIconBtn"
+                      :class="{ blind: presetManagerDraft.visibility === 'blind' }"
+                      title="暗骰"
+                      aria-label="暗骰"
+                      @click="presetManagerDraft.visibility = presetManagerDraft.visibility === 'blind' ? 'public' : 'blind'"
+                    >
+                      <EyeSlashIcon v-if="presetManagerDraft.visibility === 'blind'" class="visibilityIcon" />
+                      <EyeIcon v-else class="visibilityIcon" />
+                    </button>
+                    <span>暗骰</span>
+                  </div>
+                </template>
+                <div class="modalFooter">
+                  <button type="button" class="ghostBtn" @click="closePresetEditor">
+                    <XMarkIcon class="smallIcon" />
+                    取消
+                  </button>
+                  <button
+                    type="submit"
+                    class="rollBtn"
+                    :disabled="dicePresetsStore.isSaving || !presetManagerDraft.name.trim() || (presetManagerDraft.kind === 'preset' && !presetManagerDraft.formula.trim())"
+                  >
+                    <CheckIcon class="smallIcon" />
+                    保存
+                  </button>
+                </div>
+              </template>
+              <div v-else class="presetEditorEmpty">编辑或添加掷骰预设。</div>
+            </form>
+          </div>
+        </div>
       </div>
 
       <div v-if="formulaEditorOpen" class="modalBackdrop">
@@ -1096,9 +1429,12 @@ function toggleVisibility() {
   z-index: 370;
   left: 0;
   bottom: calc(100% + 6px);
-  width: 198px;
+  width: max-content;
+  min-width: 112px;
+  max-width: 220px;
   max-height: 260px;
   overflow-y: auto;
+  overflow-x: hidden;
   display: grid;
   gap: 3px;
   padding: 5px;
@@ -1109,7 +1445,9 @@ function toggleVisibility() {
 }
 
 .presetMenuItem {
+  width: 100%;
   min-width: 0;
+  max-width: 210px;
   min-height: 30px;
   display: flex;
   align-items: center;
@@ -1146,7 +1484,7 @@ function toggleVisibility() {
 
 .presetLoadItem {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, max-content);
   align-items: start;
   gap: 2px;
 }
@@ -1178,6 +1516,7 @@ function toggleVisibility() {
 .presetName,
 .presetFormula {
   min-width: 0;
+  max-width: 190px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1206,35 +1545,6 @@ function toggleVisibility() {
   background: var(--c-border);
 }
 
-.panelActorSelect {
-  position: relative;
-  flex: 0 0 144px;
-  min-width: 0;
-}
-
-.panelActorSelectBtn {
-  width: 100%;
-  height: 28px;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 8px 3px 4px;
-  border: 1px solid var(--c-border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--c-surface) 92%, var(--c-bg));
-  color: var(--c-text);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.panelActorSelectBtn:hover,
-.panelActorSelectBtn.open {
-  border-color: color-mix(in srgb, var(--c-primary) 32%, var(--c-border));
-  background: color-mix(in srgb, var(--c-surface) 86%, var(--c-bg));
-}
-
 .panelActorName,
 .panelActorOptionName {
   min-width: 0;
@@ -1245,51 +1555,9 @@ function toggleVisibility() {
 }
 
 .panelActorName {
+  min-width: 0;
   flex: 1;
   text-align: left;
-}
-
-.panelActorMenu {
-  position: absolute;
-  z-index: 360;
-  left: 0;
-  right: 0;
-  bottom: calc(100% + 6px);
-  max-height: 220px;
-  overflow-y: auto;
-  display: grid;
-  gap: 3px;
-  padding: 5px;
-  border: 1px solid var(--c-border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--c-surface) 96%, var(--c-bg));
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.32);
-}
-
-.panelActorOption {
-  min-width: 0;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 7px 4px 4px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--c-text);
-  font: inherit;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.panelActorOption:hover {
-  background: color-mix(in srgb, var(--c-primary) 10%, var(--c-surface));
-  border-color: color-mix(in srgb, var(--c-primary) 24%, transparent);
-}
-
-.panelActorOption.selected {
-  background: color-mix(in srgb, var(--c-primary) 16%, var(--c-surface));
-  border-color: color-mix(in srgb, var(--c-primary) 34%, var(--c-border));
 }
 
 .panelLabelInput {
@@ -1605,6 +1873,315 @@ function toggleVisibility() {
 
 .presetNameModal {
   width: min(360px, 100%);
+}
+
+.presetManagerModal {
+  width: min(680px, 100%);
+}
+
+.presetBreadcrumb {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--c-surface) 92%, var(--c-bg));
+  overflow-x: auto;
+}
+
+.breadcrumbBtn {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--c-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.breadcrumbBtn:hover {
+  color: color-mix(in srgb, var(--c-primary) 72%, var(--c-text));
+}
+
+.breadcrumbSep {
+  color: var(--c-text-muted);
+  font-size: 12px;
+}
+
+.presetManagerGrid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(220px, 0.85fr);
+  gap: 12px;
+}
+
+.presetListPanel,
+.presetEditPanel {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--c-border) 86%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--c-surface) 92%, var(--c-bg));
+}
+
+.presetEditPanel {
+  height: 350px;
+  grid-template-rows: auto auto auto auto 1fr auto;
+}
+
+.presetEditPanel > .modalFooter {
+  grid-row: -1;
+  align-self: end;
+}
+
+.modalFooter .ghostBtn,
+.modalFooter .rollBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.presetItemList {
+  min-width: 0;
+  max-height: 360px;
+  overflow-y: auto;
+  display: grid;
+  gap: 5px;
+}
+
+.presetMoveNotice {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 8px;
+  border: 1px dashed color-mix(in srgb, var(--c-primary) 42%, var(--c-border));
+  border-radius: 7px;
+  color: var(--c-text);
+  background: color-mix(in srgb, var(--c-primary) 10%, var(--c-surface));
+  font-size: 12px;
+}
+
+.presetMoveNotice span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presetMoveActions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.presetMoveApply {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--c-primary) 38%, var(--c-border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--c-primary) 14%, var(--c-surface));
+  color: var(--c-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.presetMoveApply:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--c-primary) 22%, var(--c-surface));
+}
+
+.presetMoveApply:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.presetMoveCancel {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--c-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.presetMoveCancel:hover {
+  color: var(--c-text);
+}
+
+.presetManagerItem {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(5, 28px);
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--c-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--c-surface) 96%, var(--c-bg));
+}
+
+.presetManagerItem.active {
+  border-color: color-mix(in srgb, var(--c-primary) 42%, var(--c-border));
+}
+
+.presetManagerItem.moving {
+  border-color: color-mix(in srgb, var(--c-primary) 60%, var(--c-border));
+  background: color-mix(in srgb, var(--c-primary) 12%, var(--c-surface));
+}
+
+.presetManagerItem.moveTarget {
+  border-style: dashed;
+  border-color: color-mix(in srgb, var(--c-primary) 52%, var(--c-border));
+}
+
+.presetManagerItem.moveDisabled {
+  opacity: 0.52;
+}
+
+.presetItemMain {
+  min-width: 0;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--c-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.presetItemMain:hover {
+  background: color-mix(in srgb, var(--c-primary) 10%, var(--c-surface));
+}
+
+.presetItemMain:disabled {
+  cursor: not-allowed;
+}
+
+.presetItemText {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.presetItemText strong,
+.presetItemText small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presetItemText strong {
+  font-size: 12px;
+}
+
+.presetItemText small {
+  color: var(--c-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+
+.presetAddItem {
+  min-width: 0;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px dashed color-mix(in srgb, var(--c-border) 88%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--c-surface) 92%, var(--c-bg));
+  color: var(--c-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.presetAddItem:hover:not(:disabled) {
+  color: var(--c-text);
+  border-color: color-mix(in srgb, var(--c-primary) 34%, var(--c-border));
+  background: color-mix(in srgb, var(--c-primary) 8%, var(--c-surface));
+}
+
+.presetAddItem:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.presetEditorEmpty {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 24px 12px;
+  color: var(--c-text-muted);
+  text-align: center;
+  font-size: 12px;
+}
+
+.iconMiniBtn {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--c-text-muted);
+  cursor: pointer;
+}
+
+.iconMiniBtn:hover {
+  color: var(--c-text);
+  background: color-mix(in srgb, var(--c-primary) 10%, var(--c-surface));
+  border-color: color-mix(in srgb, var(--c-primary) 24%, transparent);
+}
+
+.iconMiniBtn.danger:hover {
+  color: var(--c-danger);
+  background: color-mix(in srgb, var(--c-danger) 10%, var(--c-surface));
+  border-color: color-mix(in srgb, var(--c-danger) 24%, transparent);
+}
+
+.smallIcon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+.visibilityEditRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--c-text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.presetEmpty.large {
+  padding: 24px 8px;
+  text-align: center;
 }
 
 .presetNameField {

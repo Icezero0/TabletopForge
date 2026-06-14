@@ -2,6 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import type { RoomDrawing, RoomMap, RoomToken } from "@/infra/api/rooms.api";
+import { useDicePresetsStore } from "@/stores/dicePresets.store";
+import type { DicePreset } from "@/infra/api/dice.api";
 import type { GameRole } from "@/features/room/types";
 import type { TabletopSelection } from "@/features/table/types";
 import { canInspectToken, canManageToken } from "@/features/table/utils/tokenDisplay";
@@ -13,14 +15,7 @@ import {
   type AbilityKey,
 } from "@/features/character/constants";
 import type { DiceDraft } from "@/stores/dice.store";
-
-type DicePreset = {
-  id: string;
-  name: string;
-  formula: string;
-  label: string;
-  visibility: DiceDraft["visibility"];
-};
+import DicePresetMenuTree from "@/features/table/components/DicePresetMenuTree.vue";
 
 const props = defineProps<{
   open: boolean;
@@ -52,6 +47,7 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const dicePresetsStore = useDicePresetsStore();
 
 const selectedMap = computed(() => {
   if (props.selection?.type !== "map") return null;
@@ -105,7 +101,6 @@ const drawingLayerDisabled = computed(() => props.drawings.length <= 1);
 const diceSubmenuOpen = ref(false);
 const tokenLayerSubmenuOpen = ref(false);
 const diceBranchOpen = ref<"abilityChecks" | "savingThrows" | "skills" | "presets" | null>(null);
-const dicePresets = ref<DicePreset[]>([]);
 const viewportHeight = ref(typeof window !== "undefined" ? window.innerHeight : 0);
 const submenuDirections = ref<Record<string, "upward" | "downward">>({});
 
@@ -132,25 +127,11 @@ function updateViewportHeight() {
   viewportHeight.value = window.innerHeight;
 }
 
-function isDicePreset(value: unknown): value is DicePreset {
-  if (!value || typeof value !== "object") return false;
-  const preset = value as Partial<DicePreset>;
-  return (
-    typeof preset.id === "string" &&
-    typeof preset.name === "string" &&
-    typeof preset.formula === "string" &&
-    typeof preset.label === "string" &&
-    (preset.visibility === "public" || preset.visibility === "blind")
-  );
-}
-
-function loadDicePresets() {
+async function loadDicePresets() {
   try {
-    const raw = localStorage.getItem(`tabletopforge:dice-presets:${props.currentUserId ?? "guest"}`);
-    const parsed = raw ? JSON.parse(raw) : [];
-    dicePresets.value = Array.isArray(parsed) ? parsed.filter(isDicePreset) : [];
+    await dicePresetsStore.load();
   } catch {
-    dicePresets.value = [];
+    // Context menu should remain usable without presets.
   }
 }
 
@@ -304,15 +285,7 @@ const tokenSkillScenes = computed(() => {
   });
 });
 
-const tokenPresetDiceScenes = computed(() => {
-  const token = selectedToken.value;
-  if (!token) return [];
-  return dicePresets.value.map((preset) => ({
-    label: preset.name,
-    formula: preset.formula,
-    draft: tokenDiceDraft(token, preset.label, preset.formula, preset.visibility),
-  }));
-});
+const hasTokenDicePresets = computed(() => dicePresetsStore.flatPresets.length > 0);
 
 function directionForHost(host: Element | null): "upward" | "downward" {
   if (!host) return verticalDirection.value;
@@ -354,6 +327,12 @@ function toggleDiceBranch(branch: "abilityChecks" | "savingThrows" | "skills" | 
   diceBranchOpen.value = diceBranchOpen.value === branch ? null : branch;
 }
 
+function openPresetDiceRoll(preset: DicePreset) {
+  const token = selectedToken.value;
+  if (!token) return;
+  onAction(() => emit("openDiceRoll", tokenDiceDraft(token, preset.label, preset.formula, preset.visibility)));
+}
+
 function onAction(fn: () => void) {
   fn();
   diceSubmenuOpen.value = false;
@@ -365,7 +344,7 @@ function onAction(fn: () => void) {
 watch(
   () => props.open,
   (open) => {
-    if (open) loadDicePresets();
+    if (open) void loadDicePresets();
     if (!open) diceSubmenuOpen.value = false;
     if (!open) tokenLayerSubmenuOpen.value = false;
     if (!open) diceBranchOpen.value = null;
@@ -385,7 +364,7 @@ watch(
 
 onMounted(() => {
   updateViewportHeight();
-  loadDicePresets();
+  void loadDicePresets();
   window.addEventListener("resize", updateViewportHeight);
 });
 
@@ -484,26 +463,22 @@ onBeforeUnmount(() => {
                 :class="{ active: diceBranchOpen === 'presets' }"
                 @click.stop="toggleDiceBranch('presets', $event)"
               >
-                <span>使用预设</span>
+                <span>使用掷骰预设</span>
                 <span class="submenuArrow">›</span>
               </button>
               <div
                 v-if="diceBranchOpen === 'presets'"
-                class="submenu nestedSubmenu compactSubmenu presetSubmenu"
+                class="submenu nestedSubmenu presetSubmenu"
                 @click.stop
               >
-                <button
-                  v-for="scene in tokenPresetDiceScenes"
-                  :key="scene.label"
-                  type="button"
-                  class="menuItem presetMenuItem"
-                  @click="onAction(() => emit('openDiceRoll', scene.draft))"
-                >
-                  <span class="presetName">{{ scene.label }}</span>
-                  <span class="presetFormula">{{ scene.formula }}</span>
-                </button>
-                <button v-if="tokenPresetDiceScenes.length === 0" type="button" class="menuItem" disabled>
-                  暂无预设
+                <DicePresetMenuTree
+                  v-if="hasTokenDicePresets"
+                  :items="dicePresetsStore.items"
+                  :direction="submenuDirectionClass('presets')"
+                  @select="openPresetDiceRoll"
+                />
+                <button v-else type="button" class="menuItem" disabled>
+                  暂无掷骰预设
                 </button>
               </div>
             </div>
@@ -849,7 +824,11 @@ onBeforeUnmount(() => {
 }
 
 .presetSubmenu {
-  min-width: 180px;
+  width: max-content;
+  min-width: 112px;
+  max-width: 220px;
+  overflow: visible;
+  z-index: 20;
 }
 
 .presetMenuItem {

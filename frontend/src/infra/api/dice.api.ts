@@ -47,9 +47,41 @@ export type DiceRollCreate = {
   visibility: DiceVisibility;
 };
 
+export type DicePresetKind = "folder" | "preset";
+
+export type DicePreset = {
+  id: number;
+  owner_id: number;
+  parent_id: number | null;
+  kind: DicePresetKind;
+  name: string;
+  formula: string;
+  label: string;
+  visibility: DiceVisibility;
+  sort_order: number;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+export type DicePresetCreate = {
+  parent_id?: number | null;
+  kind: DicePresetKind;
+  name: string;
+  formula?: string;
+  label?: string;
+  visibility?: DiceVisibility;
+  sort_order?: number;
+};
+
+export type DicePresetPatch = Partial<DicePresetCreate>;
+
 export type DiceRollListResponse = {
   items: DiceRoll[];
   next_before_id: number | null;
+};
+
+export type DicePresetListResponse = {
+  items: DicePreset[];
 };
 
 export async function getRoomDiceRolls(
@@ -63,4 +95,23 @@ export async function getRoomDiceRolls(
 export async function createRoomDiceRoll(roomId: number, payload: DiceRollCreate) {
   const { data } = await http.post<DiceRoll>(`/rooms/${roomId}/dice-rolls`, payload);
   return data;
+}
+
+export async function getDicePresets() {
+  const { data } = await http.get<DicePresetListResponse>("/dice-presets");
+  return data;
+}
+
+export async function createDicePreset(payload: DicePresetCreate) {
+  const { data } = await http.post<DicePreset>("/dice-presets", payload);
+  return data;
+}
+
+export async function patchDicePreset(presetId: number, payload: DicePresetPatch) {
+  const { data } = await http.patch<DicePreset>(`/dice-presets/${presetId}`, payload);
+  return data;
+}
+
+export async function deleteDicePreset(presetId: number) {
+  await http.delete(`/dice-presets/${presetId}`);
 }

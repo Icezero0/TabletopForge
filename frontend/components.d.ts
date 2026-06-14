@@ -20,6 +20,7 @@ declare module 'vue' {
     BaseCard: typeof import('./src/ui/base/BaseCard.vue')['default']
     BaseConfirmDialog: typeof import('./src/ui/base/BaseConfirmDialog.vue')['default']
     BaseDialog: typeof import('./src/ui/base/BaseDialog.vue')['default']
+    BaseEntitySelect: typeof import('./src/ui/base/BaseEntitySelect.vue')['default']
     BaseIconButton: typeof import('./src/ui/base/BaseIconButton.vue')['default']
     BaseInput: typeof import('./src/ui/base/BaseInput.vue')['default']
     BaseLayout: typeof import('./src/ui/layout/BaseLayout.vue')['default']

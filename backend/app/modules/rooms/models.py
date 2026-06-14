@@ -422,6 +422,42 @@ class RoomDiceRoll(Base):
     actor_token: Mapped[Optional["RoomToken"]] = relationship("RoomToken")
 
 
+class DicePreset(Base):
+    __tablename__ = "dice_presets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    owner_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    parent_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("dice_presets.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False, default="preset", server_default="preset")
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    formula: Mapped[str] = mapped_column(String(255), nullable=False, default="", server_default="")
+    label: Mapped[str] = mapped_column(String(255), nullable=False, default="", server_default="")
+    visibility: Mapped[str] = mapped_column(String(16), nullable=False, default="public", server_default="public")
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    created_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
+
+    owner: Mapped["User"] = relationship("User", foreign_keys=[owner_id])
+    parent: Mapped[Optional["DicePreset"]] = relationship("DicePreset", remote_side=[id])
+
+
 class RoomCharacter(Base):
     __tablename__ = "room_characters"
 
