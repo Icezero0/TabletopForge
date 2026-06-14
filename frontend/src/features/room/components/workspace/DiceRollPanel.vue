@@ -1876,7 +1876,7 @@ function toggleVisibility() {
 }
 
 .presetManagerModal {
-  width: min(680px, 100%);
+  width: min(760px, 100%);
 }
 
 .presetBreadcrumb {
@@ -1953,6 +1953,7 @@ function toggleVisibility() {
   min-width: 0;
   max-height: 360px;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   display: grid;
   gap: 5px;
 }
