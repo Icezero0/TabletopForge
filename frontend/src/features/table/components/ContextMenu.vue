@@ -224,7 +224,6 @@ const tokenPrimaryDiceScenes = computed(() => {
   const token = selectedToken.value;
   if (!token) return [];
   return [
-    { label: "攻击投掷", draft: tokenDiceDraft(token, "攻击投掷", "1d20") },
     {
       label: "法术攻击投掷",
       draft: tokenDiceDraft(
@@ -463,7 +462,7 @@ onBeforeUnmount(() => {
                 :class="{ active: diceBranchOpen === 'presets' }"
                 @click.stop="toggleDiceBranch('presets', $event)"
               >
-                <span>使用掷骰预设</span>
+                <span>使用预设</span>
                 <span class="submenuArrow">›</span>
               </button>
               <div
