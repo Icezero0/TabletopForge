@@ -296,6 +296,7 @@ export default {
       value: "Value",
       breakdown: "Formula / notes",
       derived: {
+        title: "Derived Stats",
         ac: "AC",
         max_hp: "Max HP",
         speed: "Movement Speed",
@@ -360,6 +361,8 @@ export default {
       spellbook: "Spellbook",
       level: "Level {level}",
       slotMax: "Max Slots",
+      slotCount: "{count} slots",
+      noSpells: "No spells yet",
       spellPlaceholder: "Type spell name and press Enter",
     },
     resources: {
@@ -433,7 +436,7 @@ export default {
       syncFromCharacter: "Sync from Sheet",
       panelTab: {
         overview: "Overview",
-        skillsSaves: "Skills & Saves",
+        skillsSaves: "Abilities",
         features: "Features",
         spells: "Spells",
         resources: "Resources",

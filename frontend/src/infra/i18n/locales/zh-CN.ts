@@ -296,6 +296,7 @@ export default {
       value: "数值",
       breakdown: "计算过程",
       derived: {
+        title: "衍生属性",
         ac: "AC",
         max_hp: "HP 上限",
         speed: "移动速度",
@@ -321,7 +322,7 @@ export default {
       persuasion: "说服",
       religion: "宗教",
       sleightOfHand: "巧手",
-      stealth: "潜行",
+      stealth: "隐匿",
       survival: "求生",
     },
     features: {
@@ -360,6 +361,8 @@ export default {
       spellbook: "法术书",
       level: "{level} 环",
       slotMax: "法术位上限",
+      slotCount: "{count} 槽",
+      noSpells: "暂无法术",
       spellPlaceholder: "输入法术名后按 Enter",
     },
     resources: {
@@ -433,7 +436,7 @@ export default {
       syncFromCharacter: "从角色卡同步",
       panelTab: {
         overview: "概览",
-        skillsSaves: "技能与豁免",
+        skillsSaves: "能力",
         features: "特性",
         spells: "法术",
         resources: "资源",
@@ -449,7 +452,7 @@ export default {
       initiative: "先攻加值",
       proficiencyBonus: "熟练加值",
       speed: "速度",
-      pp: "被动感知",
+      pp: "被动察觉",
       weapons: "武器",
       armor: "防具",
       comingSoon: "待完善",

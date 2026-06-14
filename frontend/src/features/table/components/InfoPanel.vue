@@ -329,18 +329,18 @@ const attrAbilityRows = computed(() =>
 );
 
 const DERIVED_STAT_CONFIG = [
-  { key: "ac",                 label: "AC"      },
-  { key: "max_hp",             label: "HP 上限"  },
-  { key: "speed",              label: "速度"     },
-  { key: "initiative",         label: "先攻加值" },
-  { key: "proficiency_bonus",  label: "熟练加值" },
-  { key: "passive_perception", label: "被动察觉" },
+  { key: "ac",                 labelKey: "character.attributes.derived.ac"                 },
+  { key: "max_hp",             labelKey: "character.attributes.derived.max_hp"             },
+  { key: "speed",              labelKey: "character.attributes.derived.speed"              },
+  { key: "initiative",         labelKey: "character.attributes.derived.initiative"         },
+  { key: "proficiency_bonus",  labelKey: "character.attributes.derived.proficiency_bonus"  },
+  { key: "passive_perception", labelKey: "character.attributes.derived.passive_perception" },
 ] as const;
 
 const derivedStatRows = computed(() => {
   const derived = (charAttrs.value.derived as Record<string, { value: number }>) ?? {};
   return DERIVED_STAT_CONFIG.map(cfg => ({
-    label: cfg.label,
+    label: t(cfg.labelKey),
     value: derived[cfg.key]?.value ?? 0,
   }));
 });
@@ -440,11 +440,11 @@ const spellLevelRows = computed(() => {
   const cantrips = (spellsData.value.cantrips        as string[])                ?? [];
   const rows: { lvl: string; label: string; spells: string[]; slotsMax: number }[] = [];
   const cantripList = [...new Set([...(book["0"] ?? []), ...cantrips])];
-  if (cantripList.length > 0) rows.push({ lvl: "0", label: "戏法", spells: cantripList, slotsMax: 0 });
+  if (cantripList.length > 0) rows.push({ lvl: "0", label: t("character.spells.cantrips"), spells: cantripList, slotsMax: 0 });
   for (const lvl of ["1","2","3","4","5","6","7","8","9"]) {
     const sp    = book[lvl] ?? [];
     const slots = slotsMax[lvl] ?? 0;
-    if (sp.length > 0 || slots > 0) rows.push({ lvl, label: `${lvl} 环`, spells: sp, slotsMax: slots });
+    if (sp.length > 0 || slots > 0) rows.push({ lvl, label: t("character.spells.level", { level: lvl }), spells: sp, slotsMax: slots });
   }
   return rows;
 });
@@ -467,7 +467,9 @@ const tokenSpellLevelRows = computed(() => {
     if (!spells.length) continue;
     rows.push({
       lvl,
-      label: lvl === "0" ? "0 环 (戏法)" : `${lvl} 环`,
+      label: lvl === "0"
+        ? `${t("character.spells.level", { level: "0" })} (${t("character.spells.cantrips")})`
+        : t("character.spells.level", { level: lvl }),
       spells,
     });
   }
@@ -1242,19 +1244,19 @@ function openCharacterSheet() {
 
             <div class="infoRows">
               <div v-if="charIdentity.race" class="infoRow">
-                <span class="infoLabel">种族</span>
+                <span class="infoLabel">{{ t("character.identity.race") }}</span>
                 <span class="infoVal">{{ charIdentity.race }}</span>
               </div>
               <div v-if="alignmentLabel" class="infoRow">
-                <span class="infoLabel">阵营</span>
+                <span class="infoLabel">{{ t("character.identity.alignment") }}</span>
                 <span class="infoVal">{{ alignmentLabel }}</span>
               </div>
               <div v-if="charIdentity.background" class="infoRow">
-                <span class="infoLabel">背景</span>
+                <span class="infoLabel">{{ t("character.identity.background") }}</span>
                 <span class="infoVal">{{ charIdentity.background }}</span>
               </div>
               <div v-if="classesLabel" class="infoRow">
-                <span class="infoLabel">职业</span>
+                <span class="infoLabel">{{ t("character.identity.classes") }}</span>
                 <span class="infoVal">{{ classesLabel }}</span>
               </div>
             </div>
@@ -1271,7 +1273,7 @@ function openCharacterSheet() {
             </div>
 
             <div class="attrBlock">
-              <div class="attrBlockTitle">衍生属性</div>
+              <div class="attrBlockTitle">{{ t("character.attributes.derived.title") }}</div>
               <div class="derivedGrid">
                 <div v-for="d in derivedStatRows" :key="d.label" class="derivedItem">
                   <span class="derivedLabel">{{ d.label }}</span>
@@ -1304,7 +1306,7 @@ function openCharacterSheet() {
           <!-- ── Features ── -->
           <template v-else-if="activeTab === 'features'">
             <div v-if="racialTraits.length" class="featureBlock">
-              <div class="attrBlockTitle">种族特性</div>
+              <div class="attrBlockTitle">{{ t("character.features.racialTraits") }}</div>
               <div v-for="(trait, i) in racialTraits" :key="i" class="featureItem">
                 <div class="featureName">{{ trait.name }}</div>
                 <div v-if="trait.notes" class="featureNotes">{{ trait.notes }}</div>
@@ -1312,7 +1314,7 @@ function openCharacterSheet() {
             </div>
 
             <div v-if="classFeatures.length" class="featureBlock">
-              <div class="attrBlockTitle">职业特性</div>
+              <div class="attrBlockTitle">{{ t("character.features.classFeatures") }}</div>
               <div v-for="(feat, i) in classFeatures" :key="i" class="featureItem">
                 <div class="featureHead">
                   <span class="featureName">{{ feat.name }}</span>
@@ -1354,15 +1356,15 @@ function openCharacterSheet() {
                 class="spellStats"
               >
                 <div v-if="spellcastingAbilityLabel" class="spellStat">
-                  <span class="spellStatLabel">施法属性</span>
+                  <span class="spellStatLabel">{{ t("character.spells.spellcastingAbility") }}</span>
                   <span class="spellStatVal">{{ spellcastingAbilityLabel }}</span>
                 </div>
                 <div v-if="spellSaveDC != null" class="spellStat">
-                  <span class="spellStatLabel">豁免DC</span>
+                  <span class="spellStatLabel">{{ t("character.spells.spellSaveDC") }}</span>
                   <span class="spellStatVal">{{ spellSaveDC }}</span>
                 </div>
                 <div v-if="spellAttackBonus != null" class="spellStat">
-                  <span class="spellStatLabel">法术攻击</span>
+                  <span class="spellStatLabel">{{ t("character.spells.spellAttackBonus") }}</span>
                   <span class="spellStatVal">{{ fmtMod(spellAttackBonus) }}</span>
                 </div>
               </div>
@@ -1371,7 +1373,7 @@ function openCharacterSheet() {
                 <div v-for="row in spellLevelRows" :key="row.lvl" class="spellLevelGroup">
                   <button type="button" class="levelToggle" @click="toggleSpellLevel(row.lvl)">
                     <span>{{ row.label }}</span>
-                    <span v-if="row.slotsMax > 0" class="slotBadge">{{ row.slotsMax }} 槽</span>
+                    <span v-if="row.slotsMax > 0" class="slotBadge">{{ t("character.spells.slotCount", { count: row.slotsMax }) }}</span>
                     <span class="chevron" :class="{ open: expandedSpellLevels.has(row.lvl) }">▾</span>
                   </button>
                   <div v-if="expandedSpellLevels.has(row.lvl)" class="spellNames">
@@ -1380,7 +1382,7 @@ function openCharacterSheet() {
                   </div>
                 </div>
               </div>
-              <div v-else class="emptyHint">暂无法术</div>
+              <div v-else class="emptyHint">{{ t("character.spells.noSpells") }}</div>
             </template>
             <div v-else class="emptyHint">—</div>
           </template>
