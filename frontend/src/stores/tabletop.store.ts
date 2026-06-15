@@ -110,6 +110,7 @@ export const useTabletopStore = defineStore("tabletop", {
           fog_state: {
             shapes: fogState.shapes ?? [],
             maps: remainingMaps,
+            player_opacity: fogState.player_opacity,
           },
         };
       }

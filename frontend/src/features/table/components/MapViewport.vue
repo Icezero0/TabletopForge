@@ -29,6 +29,8 @@ const props = withDefaults(
     drawings?: RoomDrawing[];
     combatState?: RoomCombatState | null;
     fogState?: RoomFogState | null;
+    fogPlayerOpacity?: number;
+    fogPreviewAsPlayer?: boolean;
     gridCellPx?: number;
     gridCellFt?: number;
     scaleBarCells?: number;
@@ -87,6 +89,8 @@ const props = withDefaults(
     measureSubTool: "line",
     fogSubTool: "erase",
     fogBrushRadius: 54,
+    fogPlayerOpacity: 0.95,
+    fogPreviewAsPlayer: false,
     currentUserId: null,
     characterOwnerById: () => new Map<number, number>(),
     characterDataHiddenById: () => new Map<number, boolean>(),
@@ -174,6 +178,7 @@ const sceneInteractive = computed(() => props.toolMode === "hand");
 const pointerMode = computed(() => props.toolMode === "pointer");
 const measureMode = computed(() => props.toolMode === "measure");
 const fogMode = computed(() => props.toolMode === "fog" && props.gameRole === "GM");
+const fogBlocksInteraction = computed(() => props.gameRole !== "GM" || props.fogPreviewAsPlayer);
 
 function scenePointFromClient(clientX: number, clientY: number) {
   return drawingLayerRef.value?.scenePointFromClient(clientX, clientY) ?? { x: 0, y: 0 };
@@ -200,9 +205,9 @@ function loadFogMaskPixels(mask: RoomFogMapMask) {
 }
 
 watch(
-  () => ({ gameRole: props.gameRole, masks: props.fogState?.maps ?? {} }),
-  async ({ gameRole, masks }) => {
-    if (gameRole === "GM") {
+  () => ({ blocksInteraction: fogBlocksInteraction.value, masks: props.fogState?.maps ?? {} }),
+  async ({ blocksInteraction, masks }) => {
+    if (!blocksInteraction) {
       fogHitMasks.value = {};
       return;
     }
@@ -224,7 +229,7 @@ watch(
 );
 
 function isScenePointFogged(x: number, y: number) {
-  if (props.gameRole === "GM") return false;
+  if (!fogBlocksInteraction.value) return false;
   const mapsByTop = [...props.maps].sort((a, b) => b.z_index - a.z_index || b.id - a.id);
   for (const map of mapsByTop) {
     const maskMeta = props.fogState?.maps?.[String(map.id)];
@@ -483,6 +488,8 @@ defineExpose({ getViewportWidth, scenePointFromClient, scenePointFromViewportCen
         :fog-state="fogState ?? null"
         :maps="maps"
         :game-role="gameRole"
+        :player-opacity="fogPlayerOpacity"
+        :preview-as-player="fogPreviewAsPlayer"
         :preview-point="fogMode ? fogPreviewPoint : null"
         :preview-mode="fogSubTool"
         :preview-radius="fogBrushRadius"

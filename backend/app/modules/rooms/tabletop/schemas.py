@@ -63,6 +63,7 @@ class RoomFogMapMask(BaseModel):
 class RoomFogState(BaseModel):
     shapes: list[RoomFogShape] = Field(default_factory=list)
     maps: dict[str, RoomFogMapMask] = Field(default_factory=dict)
+    player_opacity: float = Field(default=0.95, ge=0, le=1)
 
 
 class RoomTabletopSettingsResponse(BaseModel):

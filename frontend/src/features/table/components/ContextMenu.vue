@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import type { RoomDrawing, RoomMap, RoomToken } from "@/infra/api/rooms.api";
+import type { RoomCombatState, RoomDrawing, RoomMap, RoomToken } from "@/infra/api/rooms.api";
 import { useDicePresetsStore } from "@/stores/dicePresets.store";
 import type { DicePreset } from "@/infra/api/dice.api";
 import type { GameRole } from "@/features/room/types";
@@ -25,6 +25,7 @@ const props = defineProps<{
   maps: RoomMap[];
   tokens: RoomToken[];
   drawings: RoomDrawing[];
+  combatState?: RoomCombatState | null;
   gameRole: GameRole | "unknown";
   currentUserId?: number | null;
   characterOwnerById: Map<number, number>;
@@ -36,6 +37,7 @@ const emit = defineEmits<{
   deleteDrawing: [drawingId: number];
   deleteToken: [tokenId: number];
   inspectToken: [tokenId: number];
+  addTokenToCombat: [tokenId: number];
   editTextDrawing: [drawingId: number];
   toggleMapLock: [mapId: number, locked: boolean];
   fillMapFog: [mapId: number];
@@ -81,6 +83,11 @@ const canManageSelectedToken = computed(() => {
 });
 
 const canRollWithSelectedToken = computed(() => canManageSelectedToken.value);
+const canAddSelectedTokenToCombat = computed(() => {
+  const token = selectedToken.value;
+  if (!token || !isGm.value || !props.combatState?.active) return false;
+  return !props.combatState.combatants.some((combatant) => combatant.token_id === token.id);
+});
 
 const canInspectSelectedToken = computed(() => {
   const token = selectedToken.value;
@@ -596,6 +603,14 @@ onBeforeUnmount(() => {
           @click="onAction(() => emit('inspectToken', selectedToken!.id))"
         >
           {{ t("table.menu.inspectInfo") }}
+        </button>
+        <button
+          v-if="canAddSelectedTokenToCombat"
+          type="button"
+          class="menuItem"
+          @click="onAction(() => emit('addTokenToCombat', selectedToken!.id))"
+        >
+          加入战斗
         </button>
         <template v-if="canManageSelectedToken">
           <button

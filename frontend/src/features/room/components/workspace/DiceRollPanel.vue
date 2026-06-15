@@ -38,6 +38,7 @@ const props = defineProps<{
 }>();
 
 type EditorMode = "check" | "value";
+type D20Mode = "normal" | "advantage" | "disadvantage" | "custom";
 type ExtraTerm = {
   id: number;
   kind: "dice" | "modifier";
@@ -76,7 +77,10 @@ const auth = useAuthStore();
 const entitiesStore = useEntitiesStore();
 const tabletopStore = useTabletopStore();
 const mode = ref<EditorMode>("check");
-const d20Mode = ref<"normal" | "advantage" | "disadvantage">("normal");
+const d20Mode = ref<D20Mode>("normal");
+const customD20Count = ref(2);
+const customD20Keep = ref(1);
+const customD20KeepMode = ref<"kh" | "kl">("kh");
 const rollRepeat = ref(1);
 const extraTerms = ref<ExtraTerm[]>([]);
 const manualFormula = ref("");
@@ -203,9 +207,15 @@ const structuredFormula = computed(() => {
       ? "2d20kh1"
       : d20Mode.value === "disadvantage"
         ? "2d20kl1"
-        : "1d20";
+        : d20Mode.value === "custom"
+          ? `${customD20RollCount.value}d20${customD20KeepMode.value}${customD20KeepCount.value}`
+          : "1d20";
   return `${prefix}${main}${terms.join("")}`;
 });
+const customD20RollCount = computed(() => Math.max(1, Math.min(100, Math.floor(Number(customD20Count.value) || 1))));
+const customD20KeepCount = computed(() =>
+  Math.max(1, Math.min(customD20RollCount.value, Math.floor(Number(customD20Keep.value) || 1))),
+);
 
 let nextTermId = 1;
 
@@ -390,7 +400,7 @@ function parsedTermToEditor(term: ParsedTerm): ExtraTerm | null {
 }
 
 type ParsedTerm =
-  | { type: "dice"; sign: number; count: number; faces: number; keep: "kh1" | "kl1" | null }
+  | { type: "dice"; sign: number; count: number; faces: number; keep: "kh" | "kl" | null; keepCount: number | null }
   | { type: "modifier"; sign: number; value: number };
 
 function normalizeFormulaInput(raw: string) {
@@ -411,15 +421,15 @@ function normalizeFormulaInput(raw: string) {
 function parseTerms(raw: string): ParsedTerm[] | null {
   const normalized = normalizeFormulaInput(raw);
   if (!normalized) return [];
-  const re = /([+-]?)(?:(\d*)d(\d*)(kh1|kl1)?|(\d+))/g;
+  const re = /([+-]?)(?:(\d*)d(\d*)((kh|kl)(\d+))?|(\d+))/g;
   const terms: ParsedTerm[] = [];
   let pos = 0;
   for (const match of normalized.matchAll(re)) {
     if (match.index !== pos) return null;
     pos = match.index + match[0].length;
     const sign = match[1] === "-" ? -1 : 1;
-    if (match[5] != null) {
-      terms.push({ type: "modifier", sign, value: Number(match[5]) });
+    if (match[7] != null) {
+      terms.push({ type: "modifier", sign, value: Number(match[7]) });
       continue;
     }
     terms.push({
@@ -427,13 +437,25 @@ function parseTerms(raw: string): ParsedTerm[] | null {
       sign,
       count: Number(match[2] || "1"),
       faces: Number(match[3] || "20"),
-      keep: (match[4] as "kh1" | "kl1" | undefined) ?? null,
+      keep: (match[5] as "kh" | "kl" | undefined) ?? null,
+      keepCount: match[6] != null ? Number(match[6]) : null,
     });
   }
   return pos === normalized.length ? terms : null;
 }
 
+function resetFormulaEditorState() {
+  rollRepeat.value = 1;
+  mode.value = "check";
+  d20Mode.value = "normal";
+  customD20Count.value = 2;
+  customD20Keep.value = 1;
+  customD20KeepMode.value = "kh";
+  extraTerms.value = [];
+}
+
 function parseFormulaDraft(raw: string) {
+  resetFormulaEditorState();
   const command = parseRollCommand(raw);
   rollRepeat.value = command.repeat;
   const terms = parseTerms(command.formula);
@@ -446,16 +468,32 @@ function parseFormulaDraft(raw: string) {
     first.sign > 0 &&
     first.count === 1 &&
     first.faces === 20 &&
-    first.keep == null;
+    (first.keep == null || first.keepCount === 1);
   const isAdvD20 =
     first?.type === "dice" &&
     first.sign > 0 &&
     first.count === 2 &&
     first.faces === 20 &&
-    (first.keep === "kh1" || first.keep === "kl1");
-  if (isNormalD20 || isAdvD20) {
+    first.keepCount === 1 &&
+    (first.keep === "kh" || first.keep === "kl");
+  const isCustomD20 =
+    first?.type === "dice" &&
+    first.sign > 0 &&
+    first.faces === 20 &&
+    first.keepCount != null &&
+    first.keep != null;
+  if (isNormalD20 || isAdvD20 || isCustomD20) {
     mode.value = "check";
-    d20Mode.value = first.keep === "kh1" ? "advantage" : first.keep === "kl1" ? "disadvantage" : "normal";
+    if (isAdvD20) {
+      d20Mode.value = first.keep === "kh" ? "advantage" : "disadvantage";
+    } else if (isCustomD20) {
+      d20Mode.value = "custom";
+      customD20Count.value = first.count;
+      customD20Keep.value = first.keepCount ?? 1;
+      customD20KeepMode.value = first.keep ?? "kh";
+    } else {
+      d20Mode.value = "normal";
+    }
     const extras = terms.slice(1).map(parsedTermToEditor);
     if (extras.some(term => term == null)) {
       return;
@@ -814,6 +852,17 @@ function setRollRepeat(value: number) {
 
 function stepRollRepeat(delta: number) {
   setRollRepeat(rollRepeat.value + delta);
+}
+
+function setCustomD20Count(value: number) {
+  customD20Count.value = Math.max(1, Math.min(100, Math.floor(Number(value) || 1)));
+  if (customD20Keep.value > customD20Count.value) {
+    customD20Keep.value = customD20Count.value;
+  }
+}
+
+function setCustomD20Keep(value: number) {
+  customD20Keep.value = Math.max(1, Math.min(customD20RollCount.value, Math.floor(Number(value) || 1)));
 }
 
 function addTerm() {
@@ -1185,7 +1234,38 @@ function toggleVisibility() {
                 <button type="button" :class="{ active: d20Mode === 'normal' }" @click="d20Mode = 'normal'">普通</button>
                 <button type="button" :class="{ active: d20Mode === 'advantage' }" @click="d20Mode = 'advantage'">优势</button>
                 <button type="button" :class="{ active: d20Mode === 'disadvantage' }" @click="d20Mode = 'disadvantage'">劣势</button>
+                <button type="button" :class="{ active: d20Mode === 'custom' }" @click="d20Mode = 'custom'">自定义</button>
               </div>
+            </div>
+            <div v-if="d20Mode === 'custom'" class="customKeepRow">
+              <label class="customKeepField">
+                <span>投掷</span>
+                <input
+                  class="numInput"
+                  type="number"
+                  min="1"
+                  max="100"
+                  :value="customD20Count"
+                  @change="setCustomD20Count(Number(($event.target as HTMLInputElement).value))"
+                />
+                <span>次</span>
+              </label>
+              <div class="advantageToggle compact" role="group" aria-label="保留方式">
+                <button type="button" :class="{ active: customD20KeepMode === 'kh' }" @click="customD20KeepMode = 'kh'">取高</button>
+                <button type="button" :class="{ active: customD20KeepMode === 'kl' }" @click="customD20KeepMode = 'kl'">取低</button>
+              </div>
+              <label class="customKeepField">
+                <span>保留</span>
+                <input
+                  class="numInput"
+                  type="number"
+                  min="1"
+                  :max="customD20RollCount"
+                  :value="customD20Keep"
+                  @change="setCustomD20Keep(Number(($event.target as HTMLInputElement).value))"
+                />
+                <span>个</span>
+              </label>
             </div>
             <div class="termList">
               <div v-for="term in extraTerms" :key="term.id" class="termRow">
@@ -1665,6 +1745,26 @@ function toggleVisibility() {
 .advantageToggle button.active {
   background: color-mix(in srgb, var(--c-primary) 18%, var(--c-surface));
   color: var(--c-text);
+}
+
+.advantageToggle.compact button {
+  min-width: 38px;
+}
+
+.customKeepRow {
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--c-text-muted);
+  font-size: 12px;
+}
+
+.customKeepField {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .termKindToggle {

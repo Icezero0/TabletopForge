@@ -5,11 +5,15 @@ import type { FogSubTool } from "@/features/table/types";
 const props = defineProps<{
   subTool: FogSubTool;
   brushRadius: number;
+  playerOpacity: number;
+  previewAsPlayer: boolean;
 }>();
 
 const emit = defineEmits<{
   "update:subTool": [FogSubTool];
   "update:brushRadius": [number];
+  "update:playerOpacity": [number];
+  "update:previewAsPlayer": [boolean];
 }>();
 
 const { t } = useI18n();
@@ -30,6 +34,12 @@ function setBrushRadius(raw: string) {
     "update:brushRadius",
     Math.min(BRUSH_RADIUS_MAX, Math.max(BRUSH_RADIUS_MIN, value)),
   );
+}
+
+function setPlayerOpacity(raw: string) {
+  const value = Number(raw);
+  if (!Number.isFinite(value)) return;
+  emit("update:playerOpacity", Math.min(1, Math.max(0, value / 100)));
 }
 </script>
 
@@ -60,6 +70,26 @@ function setBrushRadius(raw: string) {
       />
       <span class="value">{{ brushRadius }}px</span>
     </label>
+    <label class="brushControl">
+      <span>非GM不透明度</span>
+      <input
+        type="range"
+        min="0"
+        max="100"
+        step="5"
+        :value="Math.round(playerOpacity * 100)"
+        @input="setPlayerOpacity(($event.target as HTMLInputElement).value)"
+      />
+      <span class="value">{{ Math.round(playerOpacity * 100) }}%</span>
+    </label>
+    <button
+      type="button"
+      class="subBtn toggleBtn"
+      :class="{ active: previewAsPlayer }"
+      @click="emit('update:previewAsPlayer', !previewAsPlayer)"
+    >
+      非GM视角
+    </button>
   </div>
 </template>
 
@@ -121,5 +151,9 @@ function setBrushRadius(raw: string) {
   background: color-mix(in srgb, var(--c-primary) 18%, transparent);
   border-color: color-mix(in srgb, var(--c-primary) 35%, transparent);
   color: var(--c-text);
+}
+
+.toggleBtn {
+  border-color: var(--c-border);
 }
 </style>

@@ -186,6 +186,8 @@ const {
 const measureSubTool = ref<"line" | "route">("line");
 const fogSubTool = ref<FogSubTool>("erase");
 const fogBrushRadius = ref(54);
+const fogPreviewAsPlayer = ref(false);
+const DEFAULT_FOG_PLAYER_OPACITY = 0.95;
 const FOG_MASK_MAX_SIZE = 2048;
 const fogMaskOverrides = ref<Record<number, RoomFogMapMask>>({});
 const fogBrushSession = ref<{
@@ -196,6 +198,14 @@ const fogBrushSession = ref<{
   lastY: number;
 } | null>(null);
 let pendingFogSave: Promise<void> | null = null;
+let fogPlayerOpacitySaveTimer: ReturnType<typeof window.setTimeout> | null = null;
+const fogPlayerOpacityDraft = ref<number | null>(null);
+
+function clampFogPlayerOpacity(value: unknown) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return DEFAULT_FOG_PLAYER_OPACITY;
+  return Math.min(1, Math.max(0, numeric));
+}
 
 const {
   measureState,
@@ -237,6 +247,10 @@ const tabletopMaps = computed(() => tabletopStore.getMaps(roomId.value));
 const tabletopDrawings = computed(() => tabletopStore.getDrawings(roomId.value));
 const tabletopTokens = computed(() => tabletopStore.getTokens(roomId.value));
 const tabletopSettings = computed(() => tabletopStore.getSettings(roomId.value));
+const savedFogPlayerOpacity = computed(() =>
+  clampFogPlayerOpacity(tabletopSettings.value?.fog_state?.player_opacity ?? DEFAULT_FOG_PLAYER_OPACITY),
+);
+const fogPlayerOpacity = computed(() => fogPlayerOpacityDraft.value ?? savedFogPlayerOpacity.value);
 const fogStateForViewport = computed<RoomFogState | null>(() => {
   const base = tabletopSettings.value?.fog_state ?? { shapes: [], maps: {} };
   return {
@@ -247,6 +261,7 @@ const fogStateForViewport = computed<RoomFogState | null>(() => {
         Object.entries(fogMaskOverrides.value).map(([mapId, mask]) => [String(mapId), mask]),
       ),
     },
+    player_opacity: fogPlayerOpacity.value,
   };
 });
 
@@ -599,6 +614,10 @@ function handleObjectSelection(payload: ObjectSelectionPayload) {
 
 onUnmounted(() => {
   releaseLocalObjectSelection();
+  if (fogPlayerOpacitySaveTimer != null) {
+    window.clearTimeout(fogPlayerOpacitySaveTimer);
+    fogPlayerOpacitySaveTimer = null;
+  }
   if (objectSelectionRenewTimer != null) {
     window.clearInterval(objectSelectionRenewTimer);
     objectSelectionRenewTimer = null;
@@ -975,7 +994,13 @@ function currentFogState(): RoomFogState {
   const current = tabletopSettings.value?.fog_state;
   return {
     shapes: current?.shapes ?? [],
-    maps: { ...(current?.maps ?? {}) },
+    maps: {
+      ...(current?.maps ?? {}),
+      ...Object.fromEntries(
+        Object.entries(fogMaskOverrides.value).map(([mapId, mask]) => [String(mapId), mask]),
+      ),
+    },
+    player_opacity: fogPlayerOpacity.value,
   };
 }
 
@@ -993,6 +1018,25 @@ function queueFogSave(next: RoomFogState) {
     pendingFogSave = null;
   });
   return pendingFogSave;
+}
+
+function handleFogPlayerOpacityUpdate(value: number) {
+  if (currentUserGameRole.value !== "GM") return;
+  const nextOpacity = clampFogPlayerOpacity(value);
+  fogPlayerOpacityDraft.value = nextOpacity;
+  if (fogPlayerOpacitySaveTimer != null) {
+    window.clearTimeout(fogPlayerOpacitySaveTimer);
+  }
+  fogPlayerOpacitySaveTimer = window.setTimeout(() => {
+    fogPlayerOpacitySaveTimer = null;
+    const next = currentFogState();
+    next.player_opacity = nextOpacity;
+    void saveFogState(next).finally(() => {
+      if (fogPlayerOpacityDraft.value === nextOpacity) {
+        fogPlayerOpacityDraft.value = null;
+      }
+    });
+  }, 250);
 }
 
 async function waitForPendingFogSave() {
@@ -1197,6 +1241,108 @@ function handleOpenDiceRoll(draft: DiceDraft) {
   if (!roomId.value) return;
   chatPanelCollapsed.value = false;
   diceStore.setDraft(roomId.value, activeScene.value?.id ?? null, draft);
+}
+
+function combatPanelNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function combatInitiativeBonus(token: typeof tabletopTokens.value[number]) {
+  const panel = token.panel;
+  if (!panel || typeof panel !== "object") return 0;
+  return combatPanelNumber((panel as Record<string, unknown>).initiative) ?? 0;
+}
+
+function combatInitiativeFormula(bonus: number) {
+  if (bonus === 0) return "d20";
+  return bonus > 0 ? `d20+${bonus}` : `d20${bonus}`;
+}
+
+function combatRollValueFromDetail(detail: unknown, fallback: number) {
+  const terms = (detail as { terms?: unknown[] } | null)?.terms;
+  if (!Array.isArray(terms)) return fallback;
+  const d20 = terms.find((term) => {
+    const typed = term as { type?: unknown; faces?: unknown };
+    return typed.type === "dice" && typed.faces === 20;
+  }) as { rolls?: { value?: unknown; kept?: unknown }[] } | undefined;
+  const kept = d20?.rolls?.find((roll) => roll.kept !== false);
+  return typeof kept?.value === "number" && Number.isFinite(kept.value)
+    ? kept.value
+    : fallback;
+}
+
+function combatIsPlayerToken(tokenId: number) {
+  const token = tabletopTokens.value.find((item) => item.id === tokenId);
+  if (!token) return false;
+  const ownerUserId = token.linked_character_owner_id ?? token.owner_user_id;
+  return entityRoomMembers.value.find((member) => member.user_id === ownerUserId)?.game_role === "PL";
+}
+
+function sortRoomCombatants<T extends { initiative: number; roll: number; token_id: number }>(combatants: T[]) {
+  return [...combatants]
+    .sort((a, b) => {
+      const initiativeDiff = b.initiative - a.initiative;
+      if (initiativeDiff !== 0) return initiativeDiff;
+      const playerPriorityDiff = Number(combatIsPlayerToken(b.token_id)) - Number(combatIsPlayerToken(a.token_id));
+      if (playerPriorityDiff !== 0) return playerPriorityDiff;
+      return b.roll - a.roll || a.token_id - b.token_id;
+    })
+    .map((combatant, index) => ({ ...combatant, turn_order: index }));
+}
+
+async function handleAddTokenToCombat(tokenId: number) {
+  if (!roomId.value || currentUserGameRole.value !== "GM" || combatSaving.value) return;
+  const state = tabletopSettings.value?.combat_state;
+  if (!state?.active || state.combatants.some((combatant) => combatant.token_id === tokenId)) return;
+  const token = tabletopTokens.value.find((item) => item.id === tokenId);
+  if (!token) return;
+
+  combatSaving.value = true;
+  try {
+    const bonus = combatInitiativeBonus(token);
+    const roll = await diceStore.roll(roomId.value, activeScene.value?.id ?? null, {
+      actor_type: "token",
+      actor_token_id: token.id,
+      label: "先攻掷骰",
+      formula: combatInitiativeFormula(bonus),
+      visibility: "public",
+    });
+    const total = roll.total ?? bonus;
+    const currentTokenId = state.combatants[state.turn_index]?.token_id ?? null;
+    const combatants = sortRoomCombatants([
+      ...state.combatants.map((combatant) => ({ ...combatant })),
+      {
+        token_id: token.id,
+        initiative_bonus: bonus,
+        roll: combatRollValueFromDetail(roll.detail, total - bonus),
+        initiative: total,
+        turn_order: 0,
+        ready_round: state.round + 1,
+      },
+    ]);
+    const nextTurnIndex = currentTokenId == null
+      ? Math.min(state.turn_index, Math.max(0, combatants.length - 1))
+      : Math.max(0, combatants.findIndex((combatant) => combatant.token_id === currentTokenId));
+    await tabletopStore.updateSettings(roomId.value, {
+      combat_state: {
+        ...state,
+        turn_index: nextTurnIndex,
+        combatants,
+      },
+    });
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error) || t("room.combat.saveFailed"),
+      tone: "danger",
+    });
+  } finally {
+    combatSaving.value = false;
+  }
 }
 
 async function handleUpdateCombat(state: RoomCombatState | null) {
@@ -2399,6 +2545,8 @@ watch(
             :drawings="tabletopDrawings"
             :combat-state="tabletopSettings?.combat_state ?? null"
             :fog-state="fogStateForViewport"
+            :fog-player-opacity="fogPlayerOpacity"
+            :fog-preview-as-player="fogPreviewAsPlayer"
             :grid-cell-px="gridCellPx"
             :grid-cell-ft="gridCellFt"
             :scale-bar-cells="scaleBarCells"
@@ -2472,6 +2620,7 @@ watch(
             :maps="tabletopMaps"
             :tokens="tabletopTokens"
             :drawings="tabletopDrawings"
+            :combat-state="tabletopSettings?.combat_state ?? null"
             :game-role="currentUserGameRole"
             :current-user-id="currentUserId"
             :character-owner-by-id="characterOwnerById"
@@ -2482,6 +2631,7 @@ watch(
             @delete-drawing="handleContextDeleteDrawing"
             @delete-token="handleContextDeleteToken"
             @inspect-token="handleInspectToken"
+            @add-token-to-combat="handleAddTokenToCombat"
             @edit-text-drawing="handleEditTextDrawing"
             @toggle-map-lock="handleContextToggleMapLock"
             @map-layer="handleContextMapLayer"
@@ -2733,6 +2883,9 @@ watch(
               v-if="toolMode === 'fog' && currentUserGameRole === 'GM'"
               v-model:sub-tool="fogSubTool"
               v-model:brush-radius="fogBrushRadius"
+              :player-opacity="fogPlayerOpacity"
+              v-model:preview-as-player="fogPreviewAsPlayer"
+              @update:player-opacity="handleFogPlayerOpacityUpdate"
             />
           </FloatingPanel>
 

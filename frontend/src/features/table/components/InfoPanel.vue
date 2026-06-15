@@ -567,6 +567,13 @@ function parseCurrentHpInput(raw: string | number | null | undefined): number | 
     return deltaMatch[1] === "-" ? base - delta : base + delta;
   }
 
+  const expressionMatch = /^(\d+)\s*([+-])\s*(\d+)$/.exec(trimmed);
+  if (expressionMatch) {
+    const base = Number(expressionMatch[1]);
+    const delta = Number(expressionMatch[3]);
+    return expressionMatch[2] === "-" ? base - delta : base + delta;
+  }
+
   return parseOptionalInt(trimmed);
 }
 

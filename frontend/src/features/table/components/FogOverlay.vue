@@ -9,13 +9,19 @@ const props = defineProps<{
   fogState: RoomFogState | null;
   maps: RoomMap[];
   gameRole: GameRole | "unknown";
+  playerOpacity?: number;
+  previewAsPlayer?: boolean;
   previewPoint?: { x: number; y: number } | null;
   previewMode?: FogSubTool;
   previewRadius?: number;
 }>();
 
 const uid = useId().replace(/:/g, "");
-const opacity = computed(() => (props.gameRole === "GM" ? 0.6 : 0.95));
+const opacity = computed(() =>
+  props.gameRole === "GM" && !props.previewAsPlayer
+    ? 0.6
+    : Math.min(1, Math.max(0, props.playerOpacity ?? 0.95)),
+);
 const previewRadius = computed(() => props.previewRadius ?? 48);
 const mapById = computed(() => new Map(props.maps.map((map) => [map.id, map])));
 const masks = computed(() => Object.values(props.fogState?.maps ?? {}));

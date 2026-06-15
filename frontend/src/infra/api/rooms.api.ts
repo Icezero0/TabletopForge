@@ -392,6 +392,7 @@ export type RoomFogMapMask = {
 export type RoomFogState = {
   shapes?: RoomFogShape[];
   maps?: Record<string, RoomFogMapMask>;
+  player_opacity?: number;
 };
 
 export type RoomMap = {
