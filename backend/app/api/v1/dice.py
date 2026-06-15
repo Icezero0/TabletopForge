@@ -45,6 +45,7 @@ async def create_dice_roll(
 @router.get("", response_model=DiceRollListResponse)
 async def get_dice_rolls(
     room_id: int,
+    scene_id: int | None = Query(default=None, ge=1),
     before_id: int | None = Query(default=None, ge=1),
     limit: int = Query(default=30, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
@@ -56,4 +57,5 @@ async def get_dice_rolls(
         user=current_user,
         before_id=before_id,
         limit=limit,
+        scene_id=scene_id,
     )

@@ -34,6 +34,7 @@ import type {
 
 type UseRoomRealtimeSessionOptions = {
   roomId: Ref<number>;
+  activeSceneId?: Ref<number | null | undefined>;
   gameRole: Ref<GameRole | "unknown">;
   refreshRoom: () => void | Promise<void>;
   refreshRoomMembers: () => void | Promise<void>;
@@ -165,6 +166,8 @@ export function useRoomRealtimeSession(options: UseRoomRealtimeSessionOptions) {
 
   function handleDiceRoll(payload: DiceRoll) {
     if (!payload?.room_id || payload.room_id !== options.roomId.value) return;
+    const activeSceneId = options.activeSceneId?.value ?? null;
+    if (activeSceneId != null && payload.scene_id !== activeSceneId) return;
     diceStore.appendRealtimeRoll(payload);
   }
 

@@ -1196,7 +1196,7 @@ function closeContextMenu() {
 function handleOpenDiceRoll(draft: DiceDraft) {
   if (!roomId.value) return;
   chatPanelCollapsed.value = false;
-  diceStore.setDraft(roomId.value, draft);
+  diceStore.setDraft(roomId.value, activeScene.value?.id ?? null, draft);
 }
 
 async function handleUpdateCombat(state: RoomCombatState | null) {
@@ -1890,6 +1890,7 @@ const {
 
 const realtime = useRoomRealtimeSession({
   roomId,
+  activeSceneId: computed(() => activeScene.value?.id ?? null),
   gameRole: currentUserGameRole,
   refreshRoom: () => fetchRoom({ silent: true }),
   refreshRoomMembers: fetchRoomMembers,
@@ -2128,9 +2129,9 @@ async function fetchRoomMessages() {
 }
 
 async function fetchRoomDiceRolls() {
-  if (!roomId.value) return;
+  if (!roomId.value || !activeScene.value?.id) return;
   try {
-    await diceStore.refreshRoomRolls(roomId.value, 30);
+    await diceStore.refreshRoomRolls(roomId.value, activeScene.value.id, 30);
   } catch {
     // dice.store keeps the panel error state
   }
@@ -2300,6 +2301,12 @@ watch(roomId, (newId, oldId) => {
     void fetchRoomScenes();
   }
 });
+watch(
+  () => activeScene.value?.id ?? null,
+  (sceneId) => {
+    if (sceneId) void fetchRoomDiceRolls();
+  },
+);
 watch(() => auth.me?.id, () => {
   syncCurrentUserRoles();
 });
@@ -2641,6 +2648,7 @@ watch(
           >
             <RoomChatTab
               :room-key="roomId"
+              :active-scene-id="activeScene?.id ?? null"
               :active="true"
               :game-role="currentUserGameRole"
               :current-user-id="currentUserId"
@@ -2669,6 +2677,7 @@ watch(
           >
             <CombatPanel
               :room-id="roomId"
+              :scene-id="activeScene?.id ?? null"
               :tokens="tabletopTokens"
               :members="entityRoomMembers"
               :combat-state="tabletopSettings?.combat_state ?? null"

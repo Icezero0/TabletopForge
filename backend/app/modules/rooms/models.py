@@ -392,6 +392,12 @@ class RoomDiceRoll(Base):
         nullable=False,
         index=True,
     )
+    scene_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("room_scenes.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     roller_user_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("users.id", ondelete="CASCADE"),
@@ -406,6 +412,7 @@ class RoomDiceRoll(Base):
         index=True,
     )
     actor_display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    actor_asset_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     label: Mapped[str] = mapped_column(String(255), nullable=False, default="", server_default="")
     formula: Mapped[str] = mapped_column(String(255), nullable=False)
     visibility: Mapped[str] = mapped_column(String(16), nullable=False, default="public", server_default="public")
@@ -418,6 +425,7 @@ class RoomDiceRoll(Base):
     )
 
     room: Mapped["Room"] = relationship("Room")
+    scene: Mapped["RoomScene"] = relationship("RoomScene")
     roller: Mapped["User"] = relationship("User", foreign_keys=[roller_user_id])
     actor_token: Mapped[Optional["RoomToken"]] = relationship("RoomToken")
 

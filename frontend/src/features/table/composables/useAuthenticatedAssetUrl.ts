@@ -23,7 +23,10 @@ export function useAuthenticatedAssetUrl(assetId: Ref<number | null | undefined>
     }
     loading.value = true;
     try {
-      const { data } = await http.get(assetContentUrl(id), { responseType: "blob" });
+      const { data } = await http.get(assetContentUrl(id), {
+        responseType: "blob",
+        timeout: 120000,
+      });
       const objectUrl = URL.createObjectURL(data);
       blobCache.set(id, objectUrl);
       url.value = objectUrl;

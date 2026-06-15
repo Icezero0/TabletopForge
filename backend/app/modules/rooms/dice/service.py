@@ -3,7 +3,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_reasons import ErrorReason
-from app.core.exceptions import BadRequestError, ForbiddenError
+from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from app.modules.dice.engine import DiceFormulaError, evaluate_formula
 from app.modules.character.repository import CharacterRepository
 from app.modules.rooms.constants import GamePermission, GameRole, RoomPermission
@@ -14,6 +14,7 @@ from app.modules.rooms.membership.service import RoomMembershipService
 from app.modules.rooms.permissions import require_room_permission
 from app.modules.rooms.room.service import RoomService
 from app.modules.rooms.models import RoomDiceRoll, RoomToken
+from app.modules.rooms.scenes.service import RoomSceneService
 from app.modules.users.models import User
 
 
@@ -23,6 +24,7 @@ class RoomDiceService:
         self.room_service = RoomService()
         self.membership_service = RoomMembershipService()
         self.character_repo = CharacterRepository()
+        self.scene_service = RoomSceneService()
 
     async def create_roll(
         self,
@@ -38,9 +40,11 @@ class RoomDiceService:
             user_id=user.id,
             permission=RoomPermission.SEND_MESSAGE,
         )
+        active_scene = await self._get_or_create_active_scene(db, room_id=room_id)
 
         actor_token_id = payload.actor_token_id
         actor_display_name = user.username or user.email
+        actor_asset_id: int | None = None
         if payload.actor_type == "token":
             if actor_token_id is None:
                 raise BadRequestError(
@@ -61,6 +65,7 @@ class RoomDiceService:
                 token=token,
             )
             actor_display_name = token.name
+            actor_asset_id = token.asset_id
         else:
             actor_token_id = None
 
@@ -71,10 +76,12 @@ class RoomDiceService:
         roll = await self.repo.create_roll(
             db,
             room_id=room_id,
+            scene_id=active_scene.id,
             roller_user_id=user.id,
             actor_type=payload.actor_type,
             actor_token_id=actor_token_id,
             actor_display_name=actor_display_name,
+            actor_asset_id=actor_asset_id,
             label=payload.label.strip(),
             formula=evaluated.formula,
             visibility=payload.visibility,
@@ -100,6 +107,7 @@ class RoomDiceService:
         user: User,
         before_id: int | None = None,
         limit: int = 30,
+        scene_id: int | None = None,
     ) -> DiceRollListResponse:
         game_role = await self._require_room_permission(
             db,
@@ -107,9 +115,15 @@ class RoomDiceService:
             user_id=user.id,
             permission=RoomPermission.VIEW_MESSAGES,
         )
-        rolls = await self.repo.get_rolls_by_room_id(
+        active_scene = (
+            await self._get_scene(db, room_id=room_id, scene_id=scene_id)
+            if scene_id is not None
+            else await self._get_or_create_active_scene(db, room_id=room_id, commit_on_create=True)
+        )
+        rolls = await self.repo.get_rolls_by_scene_id(
             db,
             room_id=room_id,
+            scene_id=active_scene.id,
             before_id=before_id,
             limit=limit,
             include_blind=game_role == GameRole.GM,
@@ -180,14 +194,39 @@ class RoomDiceService:
         )
         return game_role or GameRole.OB
 
+    async def _get_or_create_active_scene(
+        self,
+        db: AsyncSession,
+        *,
+        room_id: int,
+        commit_on_create: bool = False,
+    ):
+        scene = await self.repo.find_active_scene(db, room_id=room_id)
+        if scene is not None:
+            return scene
+        snapshot = await self.scene_service.build_snapshot(db, room_id=room_id)
+        scene = await self.repo.create_default_scene(db, room_id=room_id, snapshot=snapshot)
+        if commit_on_create:
+            await db.commit()
+            await db.refresh(scene)
+        return scene
+
+    async def _get_scene(self, db: AsyncSession, *, room_id: int, scene_id: int):
+        scene = await self.repo.find_scene(db, room_id=room_id, scene_id=scene_id)
+        if scene is None:
+            raise NotFoundError("Scene not found", details={"scene_id": scene_id})
+        return scene
+
     def _build_response(self, roll: RoomDiceRoll, *, hidden: bool) -> DiceRollResponse:
         return DiceRollResponse(
             id=roll.id,
             room_id=roll.room_id,
+            scene_id=roll.scene_id,
             roller_user_id=roll.roller_user_id,
             actor_type=roll.actor_type,
             actor_token_id=roll.actor_token_id,
             actor_display_name=roll.actor_display_name,
+            actor_asset_id=roll.actor_asset_id,
             label=roll.label,
             formula=roll.formula,
             visibility=roll.visibility,

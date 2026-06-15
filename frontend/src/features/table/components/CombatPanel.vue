@@ -7,6 +7,7 @@ import { useDiceStore } from "@/stores/dice.store";
 
 const props = defineProps<{
   roomId: number;
+  sceneId?: number | null;
   tokens: RoomToken[];
   members: Pick<RoomMember, "user_id" | "game_role">[];
   combatState: RoomCombatState | null;
@@ -193,7 +194,7 @@ function rollValueFromDetail(detail: unknown, fallback: number) {
 
 async function rollInitiativeForToken(token: RoomToken, readyRound: number) {
   const bonus = initiativeBonus(token);
-  const roll = await diceStore.roll(props.roomId, {
+  const roll = await diceStore.roll(props.roomId, props.sceneId ?? null, {
     actor_type: "token",
     actor_token_id: token.id,
     label: "先攻掷骰",

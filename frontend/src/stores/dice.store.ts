@@ -30,7 +30,7 @@ type RoomDiceState = {
 };
 
 type State = {
-  rooms: Record<number, RoomDiceState>;
+  rooms: Record<string, RoomDiceState>;
 };
 
 function createEmptyRoomState(): RoomDiceState {
@@ -76,6 +76,10 @@ function mergeRolls(existing: DiceRoll[], incoming: DiceRoll[], mode: "replace" 
   return normalizeRolls([...incoming, ...existing]);
 }
 
+function stateKey(roomId: number, sceneId: number | null | undefined) {
+  return `${roomId}:${sceneId ?? "active"}`;
+}
+
 export const useDiceStore = defineStore("dice", {
   state: (): State => ({
     rooms: {},
@@ -83,32 +87,38 @@ export const useDiceStore = defineStore("dice", {
 
   getters: {
     getRoomState: (state) => {
-      return (roomId: number | null | undefined) =>
+      return (roomId: number | null | undefined, sceneId?: number | null) =>
         typeof roomId === "number" && roomId > 0
-          ? state.rooms[roomId] ?? createEmptyRoomState()
+          ? state.rooms[stateKey(roomId, sceneId)] ?? createEmptyRoomState()
           : createEmptyRoomState();
     },
   },
 
   actions: {
-    ensureRoomState(roomId: number) {
-      this.rooms[roomId] = this.rooms[roomId] ?? createEmptyRoomState();
-      return this.rooms[roomId];
+    ensureRoomState(roomId: number, sceneId?: number | null) {
+      const key = stateKey(roomId, sceneId);
+      this.rooms[key] = this.rooms[key] ?? createEmptyRoomState();
+      return this.rooms[key];
     },
 
-    setRoomRolls(roomId: number, rolls: DiceRoll[], mode: "replace" | "append" | "prepend" = "replace") {
-      const roomState = this.ensureRoomState(roomId);
+    setRoomRolls(
+      roomId: number,
+      sceneId: number | null | undefined,
+      rolls: DiceRoll[],
+      mode: "replace" | "append" | "prepend" = "replace",
+    ) {
+      const roomState = this.ensureRoomState(roomId, sceneId);
       roomState.items = mergeRolls(roomState.items, rolls, mode);
       roomState.hasLoaded = true;
     },
 
-    async refreshRoomRolls(roomId: number, limit = 30) {
-      const roomState = this.ensureRoomState(roomId);
+    async refreshRoomRolls(roomId: number, sceneId: number | null | undefined, limit = 30) {
+      const roomState = this.ensureRoomState(roomId, sceneId);
       roomState.isLoading = true;
       roomState.error = null;
       try {
-        const response = await getRoomDiceRolls(roomId, { limit });
-        this.setRoomRolls(roomId, response.items, "replace");
+        const response = await getRoomDiceRolls(roomId, { limit, scene_id: sceneId ?? null });
+        this.setRoomRolls(roomId, sceneId, response.items, "replace");
         roomState.nextBeforeId = response.next_before_id ?? null;
         return response;
       } catch (error: any) {
@@ -120,8 +130,8 @@ export const useDiceStore = defineStore("dice", {
       }
     },
 
-    async loadOlderRolls(roomId: number, limit = 30) {
-      const roomState = this.ensureRoomState(roomId);
+    async loadOlderRolls(roomId: number, sceneId: number | null | undefined, limit = 30) {
+      const roomState = this.ensureRoomState(roomId, sceneId);
       if (roomState.isLoadingHistory || roomState.nextBeforeId == null) return roomState;
       roomState.isLoadingHistory = true;
       roomState.error = null;
@@ -129,8 +139,9 @@ export const useDiceStore = defineStore("dice", {
         const response = await getRoomDiceRolls(roomId, {
           before_id: roomState.nextBeforeId,
           limit,
+          scene_id: sceneId ?? null,
         });
-        this.setRoomRolls(roomId, response.items, "prepend");
+        this.setRoomRolls(roomId, sceneId, response.items, "prepend");
         roomState.nextBeforeId = response.next_before_id ?? null;
         return response;
       } catch (error: any) {
@@ -142,14 +153,14 @@ export const useDiceStore = defineStore("dice", {
       }
     },
 
-    async roll(roomId: number, payload: DiceRollCreate) {
-      const roomState = this.ensureRoomState(roomId);
+    async roll(roomId: number, sceneId: number | null | undefined, payload: DiceRollCreate) {
+      const roomState = this.ensureRoomState(roomId, sceneId);
       roomState.isRolling = true;
       roomState.error = null;
       try {
         const created = await createRoomDiceRoll(roomId, payload);
         if (!(created.visibility === "blind" && created.hidden)) {
-          this.setRoomRolls(roomId, [created], "append");
+          this.setRoomRolls(roomId, sceneId ?? created.scene_id, [created], "append");
         }
         return created;
       } catch (error: any) {
@@ -162,19 +173,23 @@ export const useDiceStore = defineStore("dice", {
     },
 
     appendRealtimeRoll(roll: DiceRoll) {
-      this.setRoomRolls(roll.room_id, [roll], "append");
+      this.setRoomRolls(roll.room_id, roll.scene_id, [roll], "append");
     },
 
-    setDraft(roomId: number, draft: DiceDraft) {
-      this.ensureRoomState(roomId).draft = draft;
+    setDraft(roomId: number, sceneId: number | null | undefined, draft: DiceDraft) {
+      this.ensureRoomState(roomId, sceneId).draft = draft;
     },
 
-    clearDraft(roomId: number) {
-      this.ensureRoomState(roomId).draft = null;
+    clearDraft(roomId: number, sceneId?: number | null) {
+      this.ensureRoomState(roomId, sceneId).draft = null;
     },
 
     clearRoom(roomId: number) {
-      delete this.rooms[roomId];
+      for (const key of Object.keys(this.rooms)) {
+        if (key === `${roomId}:active` || key.startsWith(`${roomId}:`)) {
+          delete this.rooms[key];
+        }
+      }
     },
   },
 });

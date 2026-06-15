@@ -26,10 +26,12 @@ export type DiceRollDetail = {
 export type DiceRoll = {
   id: number;
   room_id: number;
+  scene_id: number;
   roller_user_id: number;
   actor_type: DiceActorType;
   actor_token_id: number | null;
   actor_display_name: string;
+  actor_asset_id: number | null;
   label: string;
   formula: string;
   visibility: DiceVisibility;
@@ -86,7 +88,7 @@ export type DicePresetListResponse = {
 
 export async function getRoomDiceRolls(
   roomId: number,
-  params?: { before_id?: number | null; limit?: number },
+  params?: { before_id?: number | null; limit?: number; scene_id?: number | null },
 ) {
   const { data } = await http.get<DiceRollListResponse>(`/rooms/${roomId}/dice-rolls`, { params });
   return data;

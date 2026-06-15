@@ -23,10 +23,12 @@ class DiceRollCreate(BaseModel):
 class DiceRollResponse(BaseModel):
     id: int
     room_id: int
+    scene_id: int
     roller_user_id: int
     actor_type: DiceActorType
     actor_token_id: int | None = None
     actor_display_name: str
+    actor_asset_id: int | None = None
     label: str
     formula: str
     visibility: DiceVisibility

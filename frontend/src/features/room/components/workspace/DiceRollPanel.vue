@@ -30,6 +30,7 @@ import BaseInput from "@/ui/base/BaseInput.vue";
 
 const props = defineProps<{
   roomId: number;
+  sceneId?: number | null;
   active?: boolean;
   gameRole: GameRole | "unknown";
   currentUserId?: number | null;
@@ -111,7 +112,7 @@ const formulaHistoryDraft = ref("");
 
 const FORMULA_HISTORY_LIMIT = 50;
 
-const roomState = computed(() => diceStore.getRoomState(props.roomId));
+const roomState = computed(() => diceStore.getRoomState(props.roomId, props.sceneId ?? null));
 const rolls = computed(() => roomState.value.items);
 const roomTokens = computed(() => tabletopStore.getTokens(props.roomId));
 const formulaHistoryStorageKey = computed(() => `tabletopforge:dice-formula-history:${props.roomId}`);
@@ -211,7 +212,7 @@ let nextTermId = 1;
 watch(() => roomState.value.draft, (draft) => {
   if (!draft) return;
   applyDraft(draft);
-  diceStore.clearDraft(props.roomId);
+  diceStore.clearDraft(props.roomId, props.sceneId ?? null);
   formulaEditorOpen.value = true;
   void nextTick(scrollToBottom);
 }, { immediate: true });
@@ -483,7 +484,7 @@ async function loadOlderRolls() {
   const previousScrollHeight = el.scrollHeight;
   preservingHistoryScroll.value = true;
   try {
-    await diceStore.loadOlderRolls(props.roomId, 30);
+    await diceStore.loadOlderRolls(props.roomId, props.sceneId ?? null, 30);
     await nextTick();
     el.scrollTop += el.scrollHeight - previousScrollHeight;
   } finally {
@@ -536,7 +537,7 @@ function findUser(userId: number | null | undefined) {
 
 function rollActorName(roll: DiceRoll) {
   if (roll.actor_type === "token") {
-    return findToken(roll.actor_token_id)?.name || roll.actor_display_name || "指示物";
+    return roll.actor_display_name || findToken(roll.actor_token_id)?.name || "指示物";
   }
   const user = findUser(roll.roller_user_id);
   return user?.username || user?.email || roll.actor_display_name || "用户";
@@ -549,7 +550,7 @@ function rollActorAvatarUrl(roll: DiceRoll) {
 
 function rollActorAssetId(roll: DiceRoll) {
   if (roll.actor_type !== "token") return null;
-  return findToken(roll.actor_token_id)?.asset_id ?? null;
+  return roll.actor_asset_id ?? findToken(roll.actor_token_id)?.asset_id ?? null;
 }
 
 function selectUserActor() {
@@ -779,7 +780,7 @@ async function submitRoll() {
   const command = parseRollCommand(nextFormula);
   if (!command.formula) return;
   for (let i = 0; i < command.repeat; i++) {
-    await diceStore.roll(props.roomId, {
+    await diceStore.roll(props.roomId, props.sceneId ?? null, {
       actor_type: actorType.value,
       actor_token_id: actorType.value === "token" ? actorTokenId.value : null,
       label: label.value.trim(),

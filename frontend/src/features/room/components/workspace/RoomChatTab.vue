@@ -9,6 +9,7 @@ import type { GameRole, MemberStatus } from "@/features/room/types";
 
 const props = defineProps<{
   roomKey: number;
+  activeSceneId?: number | null;
   active?: boolean;
   gameRole: GameRole | "unknown";
   currentUserId?: number | null;
@@ -36,7 +37,7 @@ const diceStore = useDiceStore();
 const activeTab = ref<"chat" | "adventureLog" | "dice">("chat");
 
 watch(
-  () => diceStore.getRoomState(props.roomKey).draft,
+  () => diceStore.getRoomState(props.roomKey, props.activeSceneId ?? null).draft,
   (draft) => {
     if (draft) activeTab.value = "dice";
   },
@@ -102,6 +103,7 @@ watch(
     <DiceRollPanel
       v-show="activeTab === 'dice'"
       :room-id="roomKey"
+      :scene-id="activeSceneId ?? null"
       :active="active && activeTab === 'dice'"
       :game-role="gameRole"
       :current-user-id="currentUserId"
