@@ -335,7 +335,7 @@ class RoomToken(Base):
     )
     library_resource_id: Mapped[int | None] = mapped_column(
         Integer,
-        ForeignKey("library_resources.id", ondelete="RESTRICT"),
+        ForeignKey("library_resources.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )

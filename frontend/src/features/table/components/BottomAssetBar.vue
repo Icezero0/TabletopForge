@@ -32,7 +32,7 @@ const emit = defineEmits<{
   addScene: [];
   editScene: [scene: RoomScene];
   deleteScene: [sceneId: number];
-  spawnToken: [characterId: number, tokenConfigId: number];
+  spawnToken: [characterId: number, tokenConfigId?: number];
   spawnAll: [characterId: number];
   addCharacter: [];
 }>();

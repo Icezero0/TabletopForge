@@ -168,7 +168,7 @@ async function save() {
       name: charName.value,
       system: formSystem.value,
       portrait_asset_id: formPortraitAssetId.value,
-      token_image_asset_id: formPortraitAssetId.value ?? undefined,
+      token_image_asset_id: formPortraitAssetId.value,
       identity: formIdentity.value,
       flavor: formFlavor.value,
       attributes: formAttributes.value,

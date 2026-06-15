@@ -1,6 +1,7 @@
 from math import ceil
 
 from fastapi import UploadFile
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_reasons import ErrorReason
@@ -11,6 +12,7 @@ from app.modules.library.constants import RESOURCE_TYPE_SPECS, ResourceType
 from app.modules.library.models import LibraryResource
 from app.modules.library.repository import LibraryRepository
 from app.modules.library.schemas import LibraryResourceGridPatch, LibraryResourceListResponse, LibraryResourceResponse
+from app.modules.rooms.models import RoomToken
 from app.modules.users.models import User
 
 
@@ -201,6 +203,11 @@ class LibraryService:
             )
 
         primary_asset_id = resource.primary_asset_id
+        await db.execute(
+            sa.update(RoomToken)
+            .where(RoomToken.library_resource_id == resource.id)
+            .values(library_resource_id=None)
+        )
         await self.repo.delete(db, resource=resource)
 
         if primary_asset_id is not None:
@@ -266,6 +273,41 @@ class LibraryService:
             meta={},
         )
         return resource
+
+    async def sync_character_primary_token_resource(
+        self,
+        db: AsyncSession,
+        *,
+        resource: LibraryResource,
+        character_id: int,
+        name: str,
+        asset_id: int | None,
+    ) -> LibraryResource:
+        """Keep the character-bound primary token resource aligned with the character.
+
+        This is not exposed as a generic library edit operation: the character remains
+        the source of truth for its primary token name/image.
+        """
+        old_asset_id = resource.primary_asset_id
+        if old_asset_id != asset_id:
+            if asset_id is not None:
+                new_asset = await self.asset_service.get_asset_by_id(db, asset_id)
+                new_asset.ref_count += 1
+            if old_asset_id is not None:
+                old_asset = await self.asset_service.get_asset_by_id(db, old_asset_id)
+                old_asset.ref_count = max(0, old_asset.ref_count - 1)
+
+        meta_patch = {
+            "generated_from": "character_primary_token",
+            "character_id": character_id,
+        }
+        return await self.repo.update_token_source(
+            db,
+            resource=resource,
+            name=name,
+            primary_asset_id=asset_id,
+            meta_patch=meta_patch,
+        )
 
     async def copy_resource(
         self,

@@ -1,10 +1,16 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import type { RoomCharacterTokenConfig } from "@/infra/api/roomCharacters.api";
 import { useAuthenticatedAssetUrl } from "@/features/table/composables/useAuthenticatedAssetUrl";
 
+type TokenConfigPreview = {
+  id: number | null;
+  is_primary: boolean;
+  name: string;
+  asset_id: number | null;
+};
+
 const props = defineProps<{
-  config: RoomCharacterTokenConfig;
+  config: TokenConfigPreview;
   characterName: string;
   primaryLabel: string;
   secondaryLabel: string;

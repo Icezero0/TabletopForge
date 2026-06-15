@@ -60,6 +60,7 @@ export type Character = {
   player_name: string;
   portrait_asset_id: number | null;
   token_image_asset_id: number | null;
+  primary_token_resource_id?: number | null;
   system: string;
   identity: Record<string, unknown>;
   flavor: Record<string, unknown>;

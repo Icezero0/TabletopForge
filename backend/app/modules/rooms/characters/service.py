@@ -304,6 +304,7 @@ class RoomCharacterService:
             attributes=payload.attributes,
             explicit=payload.state,
         )
+        await self.character_service._ensure_primary_token_resource(db, character=character)
         await self.repo.create(
             db,
             room_id=room_id,
@@ -351,6 +352,7 @@ class RoomCharacterService:
                 reason=ErrorReason.CHARACTER_PERMISSION_DENIED,
                 details={"character_id": character_id},
             )
+        await self.character_service._ensure_primary_token_resource(db, character=character)
 
         existing = await self.repo.get_by_room_and_character(
             db,

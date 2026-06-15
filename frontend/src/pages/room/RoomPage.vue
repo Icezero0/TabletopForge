@@ -851,21 +851,19 @@ async function handleSpawnCharacter(characterId: number, tokenConfigId?: number)
 async function handleSpawnAllTokens(characterId: number) {
   const entry = roomCharacters.value.find((e) => e.character_id === characterId);
   if (!entry || !roomId.value) return;
-  const configs = entry.token_configs;
-  if (configs.length === 0) return;
+  const tokenConfigIds = [undefined, ...entry.token_configs.map((cfg) => cfg.id)];
 
   const center = viewportCenterPoint();
   const step = gridCellPx.value;
-  const startX = center.x - (configs.length / 2) * step;
+  const startX = center.x - ((tokenConfigIds.length - 1) / 2) * step;
 
-  for (let i = 0; i < configs.length; i++) {
-    const cfg = configs[i];
-    if (!cfg) continue;
+  for (let i = 0; i < tokenConfigIds.length; i++) {
+    const tokenConfigId = tokenConfigIds[i];
     try {
       await tabletopStore.spawnCharacterToken(roomId.value, characterId, {
         x: startX + i * step,
         y: center.y,
-        token_config_id: cfg.id,
+        token_config_id: tokenConfigId,
       });
       toasts.push({ message: t("table.characterList.spawned"), tone: "success" });
     } catch (error) {

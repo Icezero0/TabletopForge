@@ -73,6 +73,7 @@ class CharacterResponse(BaseModel):
     player_name: str
     portrait_asset_id: int | None
     token_image_asset_id: int | None
+    primary_token_resource_id: int | None = None
     system: str
     identity: dict[str, Any]
     flavor: dict[str, Any]

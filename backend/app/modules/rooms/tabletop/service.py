@@ -11,6 +11,7 @@ from app.modules.character.repository import CharacterRepository
 from app.modules.character.state_repository import CharacterStateRepository
 from app.modules.library.constants import ResourceType
 from app.modules.library.repository import LibraryRepository
+from app.modules.library.service import LibraryService
 from app.modules.rooms.characters.repository import RoomCharacterRepository
 from app.modules.rooms.constants import GamePermission, GameRole
 from app.modules.rooms.game_permissions import require_game_permission
@@ -65,6 +66,7 @@ class RoomTabletopService:
         self.room_service = RoomService()
         self.asset_service = AssetService()
         self.library_repo = LibraryRepository()
+        self.library_service = LibraryService()
         self.room_character_repo = RoomCharacterRepository()
         self.character_repo = CharacterRepository()
         self.state_repo = CharacterStateRepository()
@@ -326,6 +328,46 @@ class RoomTabletopService:
             "resources": list(resources),
             "inherit_items_from_character": True,
         }
+
+    async def _ensure_character_primary_token_resource(
+        self,
+        db: AsyncSession,
+        *,
+        character: Character,
+    ) -> int:
+        asset_id = character.token_image_asset_id or character.portrait_asset_id
+        resource = None
+        if character.primary_token_resource_id is not None:
+            resource = await self.library_repo.get_by_id(
+                db,
+                resource_id=character.primary_token_resource_id,
+            )
+        if resource is None:
+            resource = await self.library_service.create_resource_from_asset_id(
+                db,
+                owner_id=character.owner_id,
+                type=ResourceType.TOKEN,
+                name=character.name,
+                asset_id=asset_id,
+            )
+            resource.meta = {
+                **(resource.meta or {}),
+                "generated_from": "character_primary_token",
+                "character_id": character.id,
+            }
+            character.primary_token_resource_id = resource.id
+            await db.flush()
+            await self.library_service.increment_usage(db, resource_id=resource.id)
+            return resource.id
+
+        await self.library_service.sync_character_primary_token_resource(
+            db,
+            resource=resource,
+            character_id=character.id,
+            name=character.name,
+            asset_id=asset_id,
+        )
+        return resource.id
 
     async def _token_responses(
         self,
@@ -855,6 +897,29 @@ class RoomTabletopService:
             room_id=room_id,
             character_id=linked_character_id,
         )
+        if library_resource_id is not None:
+            resource = await self.library_repo.get_by_id(
+                db,
+                resource_id=library_resource_id,
+            )
+            if resource is None:
+                raise NotFoundError(
+                    "Library resource not found",
+                    reason=ErrorReason.ROOM_NOT_FOUND,
+                    details={"resource_id": library_resource_id},
+                )
+            if resource.owner_id != user.id:
+                raise ForbiddenError(
+                    "You do not have permission to use this resource",
+                    reason=ErrorReason.ROOM_PERMISSION_DENIED,
+                    details={"resource_id": library_resource_id},
+                )
+            if resource.type != ResourceType.TOKEN.value:
+                raise BadRequestError(
+                    "Library resource is not a token",
+                    reason=ErrorReason.REQUEST_VALIDATION_FAILED,
+                    details={"resource_id": library_resource_id, "type": resource.type},
+                )
 
         settings = await self._get_or_create_settings(db, room_id=room_id)
         existing_tokens = await self.repo.list_tokens(db, room_id=room_id)
@@ -926,20 +991,10 @@ class RoomTabletopService:
 
         spawn_library_resource_id = selected_config.library_resource_id if selected_config else None
         if selected_config is None:
-            source_asset_id = character.portrait_asset_id or character.token_image_asset_id
-            if source_asset_id is not None:
-                resource = await self.library_repo.create(
-                    db,
-                    owner_id=character.owner_id,
-                    type=ResourceType.TOKEN,
-                    name=character.name,
-                    primary_asset_id=source_asset_id,
-                    meta={
-                        "generated_from": "character_primary_token",
-                        "character_id": character.id,
-                    },
-                )
-                spawn_library_resource_id = resource.id
+            spawn_library_resource_id = await self._ensure_character_primary_token_resource(
+                db,
+                character=character,
+            )
 
         spawn_name = (
             payload.name

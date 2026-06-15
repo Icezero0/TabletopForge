@@ -14,7 +14,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
-  spawnToken: [characterId: number, tokenConfigId: number];
+  spawnToken: [characterId: number, tokenConfigId?: number];
   spawnAll: [characterId: number];
   addCharacter: [];
 }>();
@@ -97,7 +97,20 @@ function goBack() {
   selectedCharacter.value = null;
 }
 
-function onSpawn(characterId: number, tokenConfigId: number) {
+function primaryTokenConfig(entry: RoomCharacterEntry) {
+  return {
+    id: null,
+    is_primary: true,
+    name: entry.name,
+    asset_id: entry.token_image_asset_id,
+  };
+}
+
+function tokenConfigCount(entry: RoomCharacterEntry) {
+  return 1 + entry.token_configs.length;
+}
+
+function onSpawn(characterId: number, tokenConfigId?: number) {
   emit("spawnToken", characterId, tokenConfigId);
   emit("close");
 }
@@ -147,7 +160,7 @@ function onSpawnAll() {
           </button>
           <span class="popoverTitle characterName">{{ selectedCharacter.name }}</span>
           <button
-            v-if="selectedCharacter.token_configs.length > 1"
+            v-if="tokenConfigCount(selectedCharacter) > 1"
             type="button"
             class="spawnAllBtn"
             @click="onSpawnAll"
@@ -156,9 +169,13 @@ function onSpawnAll() {
           </button>
         </div>
         <div class="track">
-          <p v-if="selectedCharacter.token_configs.length === 0" class="muted">
-            {{ t("table.assets.tokenConfigEmpty") }}
-          </p>
+          <TokenConfigCard
+            :config="primaryTokenConfig(selectedCharacter)"
+            :character-name="selectedCharacter.name"
+            :primary-label="t('table.assets.tokenPrimary')"
+            :secondary-label="t('table.assets.tokenSecondary')"
+            @spawn="onSpawn(selectedCharacter!.character_id)"
+          />
           <TokenConfigCard
             v-for="cfg in selectedCharacter.token_configs"
             :key="cfg.id"

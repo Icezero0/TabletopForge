@@ -33,6 +33,12 @@ class Character(Base):
         nullable=True,
         index=True,
     )
+    primary_token_resource_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("library_resources.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     system: Mapped[str] = mapped_column(
         String(50), nullable=False, default="dnd5e", server_default="dnd5e"
     )
@@ -56,6 +62,7 @@ class Character(Base):
     owner = relationship("User", foreign_keys=[owner_id])
     portrait_asset = relationship("Asset", foreign_keys=[portrait_asset_id])
     token_image_asset = relationship("Asset", foreign_keys=[token_image_asset_id])
+    primary_token_resource = relationship("LibraryResource", foreign_keys=[primary_token_resource_id])
     state = relationship(
         "CharacterState",
         back_populates="character",

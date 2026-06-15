@@ -88,6 +88,23 @@ class LibraryRepository:
         await db.refresh(resource)
         return resource
 
+    async def update_token_source(
+        self,
+        db: AsyncSession,
+        *,
+        resource: LibraryResource,
+        name: str,
+        primary_asset_id: int | None,
+        meta_patch: dict | None = None,
+    ) -> LibraryResource:
+        resource.name = name
+        resource.primary_asset_id = primary_asset_id
+        if meta_patch is not None:
+            resource.meta = {**resource.meta, **meta_patch}
+        await db.flush()
+        await db.refresh(resource)
+        return resource
+
     async def update_grid(
         self,
         db: AsyncSession,

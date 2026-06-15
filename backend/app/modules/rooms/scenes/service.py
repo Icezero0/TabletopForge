@@ -4,6 +4,8 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
+from app.modules.character.models import Character
+from app.modules.library.models import LibraryResource
 from app.modules.rooms.constants import GameRole
 from app.modules.rooms.membership.service import RoomMembershipService
 from app.modules.rooms.models import (
@@ -297,12 +299,49 @@ class RoomSceneService:
         settings.music_state = settings_payload.get("music_state")
         settings.fog_state = settings_payload.get("fog_state")
 
+        map_resource_ids = {
+            item.get("library_resource_id")
+            for item in snapshot.get("maps") or []
+            if item.get("library_resource_id") is not None
+        }
+        token_resource_ids = {
+            item.get("library_resource_id")
+            for item in snapshot.get("tokens") or []
+            if item.get("library_resource_id") is not None
+        }
+        resource_ids = map_resource_ids | token_resource_ids
+        existing_resource_ids: set[int] = set()
+        if resource_ids:
+            resource_result = await db.execute(
+                select(LibraryResource.id).where(LibraryResource.id.in_(resource_ids))
+            )
+            existing_resource_ids = {row[0] for row in resource_result.all()}
+
+        character_ids = {
+            item.get("character_id")
+            for item in snapshot.get("characters") or []
+            if item.get("character_id") is not None
+        } | {
+            item.get("linked_character_id")
+            for item in snapshot.get("tokens") or []
+            if item.get("linked_character_id") is not None
+        }
+        existing_character_ids: set[int] = set()
+        if character_ids:
+            character_result = await db.execute(
+                select(Character.id).where(Character.id.in_(character_ids))
+            )
+            existing_character_ids = {row[0] for row in character_result.all()}
+
         for item in snapshot.get("maps") or []:
+            library_resource_id = item.get("library_resource_id")
+            if library_resource_id not in existing_resource_ids:
+                continue
             db.add(
                 RoomMap(
                     id=item.get("id"),
                     room_id=room_id,
-                    library_resource_id=item["library_resource_id"],
+                    library_resource_id=library_resource_id,
                     x=item.get("x", 0),
                     y=item.get("y", 0),
                     scale=item.get("scale", 1),
@@ -325,12 +364,18 @@ class RoomSceneService:
                 )
             )
         for item in snapshot.get("tokens") or []:
+            linked_character_id = item.get("linked_character_id")
+            if linked_character_id not in existing_character_ids:
+                continue
+            library_resource_id = item.get("library_resource_id")
+            if library_resource_id not in existing_resource_ids:
+                library_resource_id = None
             db.add(
                 RoomToken(
                     id=item.get("id"),
                     room_id=room_id,
-                    library_resource_id=item.get("library_resource_id"),
-                    linked_character_id=item["linked_character_id"],
+                    library_resource_id=library_resource_id,
+                    linked_character_id=linked_character_id,
                     name=item["name"],
                     x=item.get("x", 0),
                     y=item.get("y", 0),
@@ -345,11 +390,14 @@ class RoomSceneService:
                 )
             )
         for item in snapshot.get("characters") or []:
+            character_id = item.get("character_id")
+            if character_id not in existing_character_ids:
+                continue
             db.add(
                 RoomCharacter(
                     id=item.get("id"),
                     room_id=room_id,
-                    character_id=item["character_id"],
+                    character_id=character_id,
                     is_hidden=item.get("is_hidden", False),
                     hide_data=item.get("hide_data", False),
                     added_by_user_id=item["added_by_user_id"],

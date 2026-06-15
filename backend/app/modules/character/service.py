@@ -73,6 +73,52 @@ class CharacterService:
             result.append(cfg)
         return result
 
+    @staticmethod
+    def _primary_token_asset_id(character: Character) -> int | None:
+        return character.token_image_asset_id or character.portrait_asset_id
+
+    async def _ensure_primary_token_resource(
+        self,
+        db: AsyncSession,
+        *,
+        character: Character,
+    ) -> int:
+        """Ensure the character has its lifecycle-bound primary token resource."""
+        asset_id = self._primary_token_asset_id(character)
+        resource = None
+        if character.primary_token_resource_id is not None:
+            resource = await self.library_service.repo.get_by_id(
+                db,
+                resource_id=character.primary_token_resource_id,
+            )
+
+        if resource is None:
+            resource = await self.library_service.create_resource_from_asset_id(
+                db,
+                owner_id=character.owner_id,
+                type=ResourceType.TOKEN,
+                name=character.name,
+                asset_id=asset_id,
+            )
+            resource.meta = {
+                **(resource.meta or {}),
+                "generated_from": "character_primary_token",
+                "character_id": character.id,
+            }
+            character.primary_token_resource_id = resource.id
+            await db.flush()
+            await self.library_service.increment_usage(db, resource_id=resource.id)
+            return resource.id
+
+        await self.library_service.sync_character_primary_token_resource(
+            db,
+            resource=resource,
+            character_id=character.id,
+            name=character.name,
+            asset_id=asset_id,
+        )
+        return resource.id
+
     def _require_owner(self, character: Character, user: User) -> None:
         if character.owner_id != user.id:
             raise ForbiddenError(
@@ -203,6 +249,7 @@ class CharacterService:
             attributes=attributes,
             explicit=state,
         )
+        await self._ensure_primary_token_resource(db, character=character)
         if token_configs:
             token_configs = await self._ensure_token_lib_resources(
                 db,
@@ -296,7 +343,10 @@ class CharacterService:
         self._require_stable_layer_write(character, user, game_role)
 
         token_configs: list[TokenConfigUpsert] | None = patch_fields.pop("token_configs", None)
+        if "portrait_asset_id" in patch_fields and "token_image_asset_id" not in patch_fields:
+            patch_fields["token_image_asset_id"] = patch_fields["portrait_asset_id"]
         updated = await self.repo.update(db, character=character, **patch_fields)
+        await self._ensure_primary_token_resource(db, character=updated)
 
         if token_configs is not None:
             token_configs = await self._ensure_token_lib_resources(
@@ -332,6 +382,8 @@ class CharacterService:
         self._require_owner(character, user)
         token_configs = await self.token_config_repo.list_by_character(db, character_id=character_id)
         lib_ids = {cfg.library_resource_id for cfg in token_configs if cfg.library_resource_id is not None}
+        if character.primary_token_resource_id is not None:
+            lib_ids.add(character.primary_token_resource_id)
         await self.tabletop_repo.delete_all_tokens_by_character(db, character_id=character_id)
         await self.room_character_repo.delete_by_character(db, character_id=character_id)
         await self.repo.delete(db, character=character)
