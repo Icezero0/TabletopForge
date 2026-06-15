@@ -12,6 +12,7 @@ import PlayerColorPicker from "@/features/room/components/PlayerColorPicker.vue"
 import { getUsers, type UserResponse } from "@/infra/api/users.api";
 import { resolveMediaUrl } from "@/infra/media";
 import type { GameRole, MemberStatus, RoomRole } from "@/features/room/types";
+import { useMediaViewerStore } from "@/stores/media-viewer.store";
 
 type RoomMemberPanelItem = {
   id: number;
@@ -75,6 +76,7 @@ function gameRoleLabel(role: GameRole) {
 }
 
 const { t } = useI18n();
+const mediaViewer = useMediaViewerStore();
 const memberKeyword = ref("");
 const inviteDialogOpen = ref(false);
 const inviteKeyword = ref("");
@@ -157,6 +159,10 @@ const isSelfProfile = computed(
     props.currentUserId != null &&
     selectedMember.value.id === props.currentUserId,
 );
+const selectedMemberAvatarViewerUrl = computed(() => {
+  const avatarUrl = selectedMember.value?.avatarUrl;
+  return avatarUrl ? resolveMediaUrl(avatarUrl) : "";
+});
 
 function userDisplayName(user: UserResponse) {
   return user.username || user.email || `User #${user.id}`;
@@ -175,6 +181,14 @@ function handleMemberProfileOpenChange(open: boolean) {
   if (!open) {
     closeMemberProfile();
   }
+}
+
+function openSelectedMemberAvatar() {
+  if (!selectedMember.value || !selectedMemberAvatarViewerUrl.value) return;
+  mediaViewer.openViewer({
+    src: selectedMemberAvatarViewerUrl.value,
+    alt: selectedMember.value.name,
+  });
 }
 
 function openInviteDialog() {
@@ -462,16 +476,23 @@ onBeforeUnmount(() => {
     >
       <BaseCard v-if="selectedMember" class="memberProfileCard">
         <div class="memberProfileTitle">{{ t("room.members.profileTitle") }}</div>
-        <div class="memberProfileAvatarWrap">
+        <button
+          type="button"
+          class="memberProfileAvatarWrap"
+          :class="{ clickable: !!selectedMemberAvatarViewerUrl }"
+          :disabled="!selectedMemberAvatarViewerUrl"
+          :aria-label="selectedMemberAvatarViewerUrl ? `查看${selectedMember.name}的头像` : selectedMember.name"
+          @click="openSelectedMemberAvatar"
+        >
           <RoomMemberAvatar
             :name="selectedMember.name"
             :src="selectedMember.avatarUrl"
             :role="selectedMember.room_role"
             status="idle"
-            :player-color="selectedMember.player_color"
             :size="96"
+            :decorated="false"
           />
-        </div>
+        </button>
         <div class="memberProfileText">
           <div class="memberProfileName">{{ selectedMember.name }}</div>
           <div class="memberProfileEmail">
@@ -861,6 +882,24 @@ onBeforeUnmount(() => {
 .memberProfileAvatarWrap {
   display: grid;
   place-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.memberProfileAvatarWrap.clickable {
+  cursor: zoom-in;
+}
+
+.memberProfileAvatarWrap:disabled {
+  cursor: default;
+}
+
+.memberProfileAvatarWrap:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--c-primary) 55%, transparent);
+  outline-offset: 4px;
+  border-radius: 16px;
 }
 
 .playerColorSection {

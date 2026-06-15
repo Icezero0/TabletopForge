@@ -272,6 +272,12 @@ watch(
   padding: 0 12px 12px;
 }
 
+.floatingPanel.memo .panelBody {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
 @media (max-width: 720px) {
   .floatingPanel:not(.inline).top-left,
   .floatingPanel:not(.inline).bottom-left {

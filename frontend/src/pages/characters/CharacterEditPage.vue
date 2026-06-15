@@ -128,15 +128,17 @@ async function loadCharacter(id: number) {
     formResources.value = char.resources ?? defaultResources();
     formEquipment.value = char.equipment as Record<string, unknown>;
     formExtras.value = char.extras as Record<string, unknown>;
-    formTokenConfigs.value = (char.token_configs ?? []).map(tc => ({
-      id: tc.id,
-      is_primary: tc.is_primary,
-      name: tc.name,
-      asset_id: tc.asset_id,
-      library_resource_id: tc.library_resource_id,
-      panel_initial: tc.panel_initial,
-      sort_order: tc.sort_order,
-    }));
+    formTokenConfigs.value = (char.token_configs ?? [])
+      .filter(tc => !tc.is_primary)
+      .map(tc => ({
+        id: tc.id,
+        is_primary: tc.is_primary,
+        name: tc.name,
+        asset_id: tc.asset_id,
+        library_resource_id: tc.library_resource_id,
+        panel_initial: tc.panel_initial,
+        sort_order: tc.sort_order,
+      }));
     // Stamp snapshot after data is loaded
     savedSnapshot.value = currentSnapshot.value;
   } catch {
@@ -175,7 +177,7 @@ async function save() {
       resources: formResources.value,
       equipment: formEquipment.value,
       extras: formExtras.value,
-      token_configs: formTokenConfigs.value,
+      token_configs: formTokenConfigs.value.filter(tc => !tc.is_primary),
     };
 
     if (isEdit.value) {

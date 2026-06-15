@@ -10,9 +10,11 @@ const props = withDefaults(
     status: MemberStatus;
     playerColor?: string | null;
     size?: number;
+    decorated?: boolean;
   }>(),
   {
     size: 42,
+    decorated: true,
   },
 );
 
@@ -36,22 +38,24 @@ function memberInitial(name: string) {
   >
     <BaseAvatar
       class="avatarInner"
+      :class="{ plainAvatar: !decorated }"
       :src="src || undefined"
       :name="name"
       :alt="name"
-      shape="circle"
+      :shape="decorated ? 'circle' : 'rounded'"
       fit="cover"
+      :border-width="decorated ? 2 : 0"
+      :border-color="avatarBorderColor"
       :style="{
         width: `${props.size}px`,
         height: `${props.size}px`,
-        borderColor: avatarBorderColor,
       }"
     >
       <template #fallback>
         <span>{{ memberInitial(name) }}</span>
       </template>
     </BaseAvatar>
-    <span class="statusDot" :data-status="status" />
+    <span v-if="decorated" class="statusDot" :data-status="status" />
   </div>
 </template>
 
@@ -63,10 +67,12 @@ function memberInitial(name: string) {
 }
 
 .avatarInner {
-  border-radius: 999px;
   font-size: 13px;
-  border: 2px solid var(--c-border);
   user-select: none;
+}
+
+.plainAvatar :deep(.mask) {
+  border-radius: 14px;
 }
 
 .statusDot {

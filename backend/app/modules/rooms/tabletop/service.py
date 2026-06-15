@@ -35,6 +35,28 @@ from app.modules.rooms.tabletop.schemas import (
 )
 from app.modules.users.models import User
 
+ABILITY_KEYS = ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma")
+SKILL_KEYS = (
+    "acrobatics",
+    "animal_handling",
+    "arcana",
+    "athletics",
+    "deception",
+    "history",
+    "insight",
+    "intimidation",
+    "investigation",
+    "medicine",
+    "nature",
+    "perception",
+    "performance",
+    "persuasion",
+    "religion",
+    "sleight_of_hand",
+    "stealth",
+    "survival",
+)
+
 
 class RoomTabletopService:
     def __init__(self) -> None:
@@ -227,6 +249,83 @@ class RoomTabletopService:
 
         panel["resources"] = normalized_resources
         return panel
+
+    @staticmethod
+    def _build_primary_panel_from_character(character: Character) -> dict:
+        attributes = character.attributes or {}
+        features = character.features or {}
+        spells = character.spells or {}
+        equipment = character.equipment or {}
+        resources = character.resources or []
+
+        def parse_num(value: object) -> int | None:
+            if isinstance(value, dict):
+                value = value.get("value")
+            try:
+                if value is None or str(value).strip() == "":
+                    return None
+                return int(float(str(value).strip()))
+            except (TypeError, ValueError):
+                return None
+
+        def is_auto(raw: object, flag: object) -> bool:
+            if isinstance(flag, bool):
+                return flag
+            return str(raw or "").strip() == ""
+
+        ability_scores = dict(attributes.get("ability_scores") or {})
+        derived = dict(attributes.get("derived") or {})
+        save_values = dict(attributes.get("saving_throws") or {})
+        save_autos = dict(attributes.get("saving_throw_autos") or {})
+        save_profs = dict(attributes.get("saving_throw_profs") or {})
+        skill_values = dict(attributes.get("skill_values") or {})
+        skill_autos = dict(attributes.get("skill_value_autos") or {})
+        skill_profs = dict(attributes.get("skill_profs") or {})
+
+        saving_throws: dict[str, int | None] = {}
+        for key in ABILITY_KEYS:
+            raw = save_values.get(key)
+            override = parse_num(raw)
+            saving_throws[key] = override if not is_auto(raw, save_autos.get(key)) and override is not None else None
+
+        skills: dict[str, int | None] = {}
+        for key in SKILL_KEYS:
+            raw = skill_values.get(key)
+            override = parse_num(raw)
+            skills[key] = override if not is_auto(raw, skill_autos.get(key)) and override is not None else None
+
+        return {
+            "ability_scores": ability_scores,
+            "ac": parse_num(derived.get("ac")),
+            "hp_current": parse_num(derived.get("max_hp")),
+            "hp_max": parse_num(derived.get("max_hp")),
+            "initiative": parse_num(derived.get("initiative")),
+            "speed": parse_num(derived.get("speed")),
+            "pp": parse_num(derived.get("passive_perception")),
+            "proficiency_bonus": parse_num(derived.get("proficiency_bonus")) or 2,
+            "saving_throws": saving_throws,
+            "saving_throw_profs": save_profs,
+            "skills": skills,
+            "skill_profs": skill_profs,
+            "racial_traits": list(features.get("racial_traits") or []),
+            "feats": list(features.get("feats") or []),
+            "class_features": list(features.get("class_features") or []),
+            "items": list((equipment.get("items") if isinstance(equipment, dict) else []) or []),
+            "weapons": [],
+            "armor": [],
+            "spellcasting_ability": spells.get("spellcasting_ability") or "intelligence",
+            "spell_save_dc": {
+                "value": parse_num((spells.get("spell_save_dc") or {}).get("value") if isinstance(spells.get("spell_save_dc"), dict) else None) or 0,
+                "breakdown": "",
+            },
+            "spell_attack_bonus": {
+                "value": parse_num((spells.get("spell_attack_bonus") or {}).get("value") if isinstance(spells.get("spell_attack_bonus"), dict) else None) or 0,
+                "breakdown": "",
+            },
+            "spellbook": dict(spells.get("spellbook") or {}),
+            "resources": list(resources),
+            "inherit_items_from_character": True,
+        }
 
     async def _token_responses(
         self,
@@ -818,18 +917,29 @@ class RoomTabletopService:
         existing_tokens = await self.repo.list_tokens(db, room_id=room_id)
         next_z_index = max((t.z_index for t in existing_tokens), default=-1) + 1
 
+        selected_config = None
         if payload.token_config_id is not None:
             selected_config = next(
                 (cfg for cfg in (character.token_configs or []) if cfg.id == payload.token_config_id),
                 None,
             )
-        else:
-            selected_config = next(
-                (cfg for cfg in (character.token_configs or []) if cfg.is_primary),
-                None,
-            )
 
         spawn_library_resource_id = selected_config.library_resource_id if selected_config else None
+        if selected_config is None:
+            source_asset_id = character.portrait_asset_id or character.token_image_asset_id
+            if source_asset_id is not None:
+                resource = await self.library_repo.create(
+                    db,
+                    owner_id=character.owner_id,
+                    type=ResourceType.TOKEN,
+                    name=character.name,
+                    primary_asset_id=source_asset_id,
+                    meta={
+                        "generated_from": "character_primary_token",
+                        "character_id": character.id,
+                    },
+                )
+                spawn_library_resource_id = resource.id
 
         spawn_name = (
             payload.name
@@ -843,9 +953,12 @@ class RoomTabletopService:
                 reason=ErrorReason.REQUEST_VALIDATION_FAILED,
             )
 
-        spawn_panel = self._build_spawn_panel_from_config(
-            selected_config.panel_initial if selected_config else None
+        spawn_panel_source = (
+            selected_config.panel_initial
+            if selected_config
+            else self._build_primary_panel_from_character(character)
         )
+        spawn_panel = self._build_spawn_panel_from_config(spawn_panel_source)
 
         token = await self.repo.create_token(
             db,

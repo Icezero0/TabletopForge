@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { PlusIcon } from "@heroicons/vue/24/outline";
 import { createLibraryResource } from "@/infra/api/library.api";
@@ -33,8 +33,16 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: "update:modelValue", v: TokenConfigUpsert[]): void }>();
 const { t } = useI18n();
 
-const primaryConfig = () => props.modelValue.find(c => c.is_primary) ?? null;
 const secondaryConfigs = () => props.modelValue.filter(c => !c.is_primary);
+const generatedPrimaryConfig = computed<TokenConfigUpsert>(() => ({
+  id: undefined,
+  is_primary: true,
+  name: props.characterName,
+  asset_id: props.portraitAssetId,
+  library_resource_id: null,
+  sort_order: 0,
+  panel_initial: buildPanelFromCharacter(),
+}));
 
 function push(configs: TokenConfigUpsert[]) {
   emit("update:modelValue", configs);
@@ -128,28 +136,12 @@ function buildPanelFromCharacter(): TokenPanelInitial {
   };
 }
 
-function addPrimary() {
-  const cfg: TokenConfigUpsert = {
-    id: undefined,
-    is_primary: true,
-    name: props.characterName,
-    asset_id: props.portraitAssetId,
-    sort_order: 0,
-    panel_initial: buildPanelFromCharacter(),
-  };
-  push([cfg, ...secondaryConfigs()]);
-}
-
 function addSecondary() {
-  const primary = primaryConfig() ? [primaryConfig()!] : [];
-  push([...primary, ...secondaryConfigs(), defaultTokenConfig(false, secondaryConfigs().length) as TokenConfigUpsert]);
+  push([...secondaryConfigs(), defaultTokenConfig(false, secondaryConfigs().length) as TokenConfigUpsert]);
 }
-
-function removePrimary() { push(secondaryConfigs()); }
 
 function removeSecondary(idx: number) {
-  const primary = primaryConfig() ? [primaryConfig()!] : [];
-  push([...primary, ...secondaryConfigs().filter((_, i) => i !== idx)]);
+  push(secondaryConfigs().filter((_, i) => i !== idx));
 }
 
 function copySecondary(idx: number) {
@@ -164,9 +156,8 @@ function copySecondary(idx: number) {
     sort_order: secondaryConfigs().length,
     panel_initial: src.panel_initial ? { ...src.panel_initial } : {},
   };
-  const primary = primaryConfig() ? [primaryConfig()!] : [];
   const secs = secondaryConfigs();
-  push([...primary, ...secs.slice(0, idx + 1), copy, ...secs.slice(idx + 1)]);
+  push([...secs.slice(0, idx + 1), copy, ...secs.slice(idx + 1)]);
 }
 
 function patchAt(target: TokenConfigUpsert, patch: Partial<TokenConfigUpsert>) {
@@ -251,22 +242,11 @@ function closeEditor() {
       <div class="section-header">
         <span class="section-title">{{ t("character.token.primaryToken") }}</span>
       </div>
-      <div v-if="!primaryConfig()" class="empty-row">
-        <BaseButton variant="default" @click="addPrimary">
-          <span class="btn-icon-text">
-            <AppIcon :icon="PlusIcon" :size="14" />
-            {{ t("character.token.generateFromSheet") }}
-          </span>
-        </BaseButton>
-      </div>
       <TokenCard
-        v-else
-        :config="primaryConfig()!"
+        :config="generatedPrimaryConfig"
         :is-primary="true"
-        @edit="openEditor(primaryConfig()!)"
-        @pick-image="triggerImagePick(primaryConfig()!)"
-        @remove="removePrimary"
-        @update:name="patchAt(primaryConfig()!, { name: $event })"
+        readonly
+        sync-label="自动同步"
       />
     </div>
 

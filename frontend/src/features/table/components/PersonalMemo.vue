@@ -6,6 +6,7 @@ import {
   putRoomPersonalMemo,
 } from "@/infra/api/rooms.api";
 import { getBackendErrorMessage } from "@/infra/http/client";
+import BaseTextarea from "@/ui/base/BaseTextarea.vue";
 
 const props = defineProps<{
   roomId: number;
@@ -94,12 +95,14 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="personalMemo">
-    <textarea
+    <BaseTextarea
       v-model="memoText"
       class="memoInput"
       :placeholder="t('table.inspector.memoPlaceholder')"
       :disabled="loading"
-      rows="4"
+      :rows="3"
+      min-height="84px"
+      max-height="100%"
     />
     <p v-if="statusHint" class="memoStatus">{{ statusHint }}</p>
   </div>
@@ -107,35 +110,15 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .personalMemo {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 6px;
+  height: 100%;
   min-height: 0;
 }
 
-.memoInput {
-  width: 100%;
-  min-height: 88px;
-  resize: vertical;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--c-border) 80%, transparent);
-  background: color-mix(in srgb, var(--c-surface) 96%, var(--c-bg));
-  color: var(--c-text);
-  font-size: 13px;
-  line-height: 1.5;
-  font-family: inherit;
-  box-sizing: border-box;
-}
-
-.memoInput:focus {
-  outline: 2px solid color-mix(in srgb, var(--c-primary) 35%, transparent);
-  outline-offset: 1px;
-}
-
-.memoInput:disabled {
-  opacity: 0.7;
-}
-
 .memoStatus {
-  margin: 6px 0 0;
+  margin: 0;
   font-size: 11px;
   color: var(--c-text-muted);
 }

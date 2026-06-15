@@ -10,7 +10,7 @@ from app.modules.assets.constants import AssetType
 from app.modules.assets.service import AssetService
 from app.modules.character.models import CharacterState
 from app.modules.character.presenter import present_character_state_summary
-from app.modules.character.schemas import CharacterStateCreate, TokenConfigUpsert
+from app.modules.character.schemas import CharacterStateCreate
 from app.modules.character.service import CharacterService
 from app.modules.rooms.characters.repository import RoomCharacterRepository
 from app.modules.rooms.tabletop.repository import RoomTabletopRepository
@@ -304,38 +304,6 @@ class RoomCharacterService:
             attributes=payload.attributes,
             explicit=payload.state,
         )
-        panel: dict = {}
-        if payload.state is not None:
-            if payload.state.max_hp is not None:
-                panel["hp_max"] = payload.state.max_hp
-                panel["hp_current"] = payload.state.max_hp
-            if payload.state.armor_class is not None:
-                panel["ac"] = payload.state.armor_class
-        if payload.features:
-            panel["racial_traits"] = list(payload.features.get("racial_traits") or [])
-            panel["feats"] = list(payload.features.get("feats") or [])
-            panel["class_features"] = list(payload.features.get("class_features") or [])
-        primary_config = TokenConfigUpsert(
-            is_primary=True,
-            name=payload.name.strip(),
-            asset_id=token_image_asset_id,
-            panel_initial=panel,
-            sort_order=0,
-        )
-        configs = await self.character_service._ensure_token_lib_resources(
-            db,
-            owner_id=user.id,
-            character_name=payload.name.strip(),
-            portrait_asset_id=payload.portrait_asset_id,
-            configs=[primary_config],
-        )
-        _, added_lib_ids, _ = await self.character_service.token_config_repo.upsert_all(
-            db,
-            character_id=character.id,
-            configs=configs,
-        )
-        for rid in added_lib_ids:
-            await self.character_service.library_service.increment_usage(db, resource_id=rid)
         await self.repo.create(
             db,
             room_id=room_id,

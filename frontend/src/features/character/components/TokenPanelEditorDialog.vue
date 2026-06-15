@@ -34,6 +34,15 @@ type TokenResource = { name: string; max: number; recovery: string; notes: strin
 type SimpleFeature = { name: string; notes: string };
 type ClassFeature = { name: string; source: string; notes: string };
 type SkillProf = "none" | "proficient" | "expert" | "expertise";
+type FeatureListKey = "racial_traits" | "feats" | "class_features";
+type TokenFeatureEntry = {
+  key: FeatureListKey;
+  index: number;
+  name: string;
+  notes: string;
+  source?: string;
+};
+type EditingFeatureRef = { key: FeatureListKey; index: number; isNew: boolean };
 
 const props = defineProps<{
   config: TokenConfigUpsert;
@@ -290,6 +299,99 @@ const skillRows = computed<CompactRow[]>(() =>
 const tokenRacialTraits = computed(() => (draft.value.racial_traits ?? []) as SimpleFeature[]);
 const tokenFeats = computed(() => (draft.value.feats ?? []) as SimpleFeature[]);
 const tokenClassFeatures = computed(() => (draft.value.class_features ?? []) as ClassFeature[]);
+const editingFeature = ref<EditingFeatureRef | null>(null);
+const editingFeatureDraft = ref<{ name: string; notes: string; source?: string } | null>(null);
+const tokenFeatures = computed<TokenFeatureEntry[]>(() => [
+  ...tokenRacialTraits.value.map((feature, index) => ({
+    key: "racial_traits" as const,
+    index,
+    name: feature.name,
+    notes: feature.notes,
+  })),
+  ...tokenClassFeatures.value.map((feature, index) => ({
+    key: "class_features" as const,
+    index,
+    name: feature.name,
+    notes: feature.notes,
+    source: feature.source,
+  })),
+  ...tokenFeats.value.map((feature, index) => ({
+    key: "feats" as const,
+    index,
+    name: feature.name,
+    notes: feature.notes,
+  })),
+]);
+
+function updateFeatureList(
+  key: FeatureListKey,
+  index: number,
+  patch: Partial<SimpleFeature & ClassFeature>,
+) {
+  const list = ([...((draft.value[key] ?? []) as (SimpleFeature | ClassFeature)[])]).map((item, i) =>
+    i === index ? { ...item, ...patch } : item,
+  );
+  draft.value = { ...draft.value, [key]: list };
+}
+
+function removeFeature(key: FeatureListKey, index: number) {
+  const list = [...((draft.value[key] ?? []) as (SimpleFeature | ClassFeature)[])];
+  draft.value = { ...draft.value, [key]: list.filter((_, i) => i !== index) };
+  if (editingFeature.value?.key === key && editingFeature.value.index === index) {
+    cancelFeatureEdit();
+  }
+}
+
+function addFeature() {
+  const list = [...((draft.value.class_features ?? []) as ClassFeature[])];
+  const index = list.length;
+  draft.value = {
+    ...draft.value,
+    class_features: [...list, { name: "", source: "", notes: "" }],
+  };
+  editingFeature.value = { key: "class_features", index, isNew: true };
+  editingFeatureDraft.value = { name: "", source: "", notes: "" };
+}
+
+function isEditingFeature(feature: TokenFeatureEntry) {
+  return editingFeature.value?.key === feature.key && editingFeature.value.index === feature.index;
+}
+
+function beginFeatureEdit(feature: TokenFeatureEntry) {
+  editingFeature.value = { key: feature.key, index: feature.index, isNew: false };
+  editingFeatureDraft.value = {
+    name: feature.name,
+    notes: feature.notes,
+    source: feature.source,
+  };
+}
+
+function updateFeatureDraft(patch: Partial<{ name: string; notes: string }>) {
+  if (!editingFeatureDraft.value) return;
+  editingFeatureDraft.value = { ...editingFeatureDraft.value, ...patch };
+}
+
+function saveFeatureEdit() {
+  const current = editingFeature.value;
+  const next = editingFeatureDraft.value;
+  if (!current || !next) return;
+  updateFeatureList(current.key, current.index, {
+    name: next.name.trim(),
+    notes: next.notes.trim(),
+  });
+  editingFeature.value = null;
+  editingFeatureDraft.value = null;
+}
+
+function cancelFeatureEdit() {
+  const current = editingFeature.value;
+  if (current?.isNew) {
+    const list = [...((draft.value[current.key] ?? []) as (SimpleFeature | ClassFeature)[])];
+    draft.value = { ...draft.value, [current.key]: list.filter((_, i) => i !== current.index) };
+  }
+  editingFeature.value = null;
+  editingFeatureDraft.value = null;
+}
 
 function handleSaveUpdate(key: string, value: string) {
   saveStrings.value = { ...saveStrings.value, [key]: value };
@@ -609,42 +711,83 @@ const activeTab = ref<PanelTab>("overview");
         </div>
 
         <!-- Features -->
-        <div v-show="activeTab === 'features'" class="panel-body">
-          <div v-if="tokenRacialTraits.length" class="field-group">
-            <div class="field-group-title">{{ t("character.features.racialTraits") }}</div>
-            <div class="feature-list">
-              <div v-for="(trait, i) in tokenRacialTraits" :key="i" class="feature-card">
-                <div class="feature-name">{{ trait.name || "—" }}</div>
-                <div v-if="trait.notes" class="feature-notes">{{ trait.notes }}</div>
-              </div>
-            </div>
+        <div v-show="activeTab === 'features'" class="panel-body features-panel">
+          <div class="resource-header">
+            <BaseButton v-if="!isPrimary" variant="default" @click="addFeature">
+              <span class="btn-icon-text">
+                <AppIcon :icon="PlusIcon" :size="14" />
+                添加特性
+              </span>
+            </BaseButton>
           </div>
 
-          <div v-if="tokenClassFeatures.length" class="field-group">
-            <div class="field-group-title">{{ t("character.features.classFeatures") }}</div>
+          <div v-if="tokenFeatures.length" class="field-group">
             <div class="feature-list">
-              <div v-for="(feat, i) in tokenClassFeatures" :key="i" class="feature-card">
-                <div class="feature-card-head">
-                  <span class="feature-name">{{ feat.name || "—" }}</span>
-                  <span v-if="feat.source" class="feature-source">{{ t(`character.classes.${feat.source}`, feat.source) }}</span>
-                </div>
-                <div v-if="feat.notes" class="feature-notes">{{ feat.notes }}</div>
-              </div>
-            </div>
-          </div>
-
-          <div v-if="tokenFeats.length" class="field-group">
-            <div class="field-group-title">{{ t("character.features.feats") }}</div>
-            <div class="feature-list">
-              <div v-for="(feat, i) in tokenFeats" :key="i" class="feature-card">
-                <div class="feature-name">{{ feat.name || "—" }}</div>
-                <div v-if="feat.notes" class="feature-notes">{{ feat.notes }}</div>
+              <div
+                v-for="feature in tokenFeatures"
+                :key="`${feature.key}-${feature.index}`"
+                class="resource-row feature-row"
+              >
+                <template v-if="!isPrimary && isEditingFeature(feature) && editingFeatureDraft">
+                  <div class="feature-edit-content">
+                    <input
+                      class="feature-input"
+                      :value="editingFeatureDraft.name"
+                      @input="updateFeatureDraft({ name: ($event.target as HTMLInputElement).value })"
+                    />
+                    <textarea
+                      class="feature-textarea"
+                      :value="editingFeatureDraft.notes"
+                      rows="2"
+                      @input="updateFeatureDraft({ notes: ($event.target as HTMLTextAreaElement).value })"
+                    />
+                  </div>
+                  <div class="resource-actions">
+                    <button
+                      type="button"
+                      class="resource-icon-button confirm"
+                      @click="saveFeatureEdit"
+                    >
+                      <AppIcon :icon="CheckIcon" :size="16" />
+                    </button>
+                    <button
+                      type="button"
+                      class="resource-icon-button"
+                      @click="cancelFeatureEdit"
+                    >
+                      <AppIcon :icon="XMarkIcon" :size="16" />
+                    </button>
+                  </div>
+                </template>
+                <template v-else>
+                  <div class="resource-display">
+                    <span class="resource-display-name">{{ feature.name || "—" }}</span>
+                    <span v-if="feature.source" class="feature-source">{{ t(`character.classes.${feature.source}`, feature.source) }}</span>
+                    <span v-if="feature.notes" class="resource-display-notes">{{ feature.notes }}</span>
+                  </div>
+                  <div v-if="!isPrimary" class="resource-actions">
+                    <button
+                      type="button"
+                      class="resource-icon-button"
+                      @click="beginFeatureEdit(feature)"
+                    >
+                      <AppIcon :icon="PencilSquareIcon" :size="16" />
+                    </button>
+                    <button
+                      type="button"
+                      class="resource-icon-button danger"
+                      @click="removeFeature(feature.key, feature.index)"
+                    >
+                      <AppIcon :icon="TrashIcon" :size="16" />
+                    </button>
+                  </div>
+                </template>
               </div>
             </div>
           </div>
 
           <div
-            v-if="!tokenRacialTraits.length && !tokenFeats.length && !tokenClassFeatures.length"
+            v-if="!tokenFeatures.length"
             class="empty-resource"
           >—</div>
         </div>
@@ -948,50 +1091,61 @@ const activeTab = ref<PanelTab>("overview");
 }
 
 /* Features */
+.features-panel {
+  gap: 6px;
+}
+
 .feature-list {
   display: grid;
   gap: 8px;
   min-width: 0;
 }
 
-.feature-card {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--c-border);
-  border-radius: var(--r-1);
-  background: var(--c-surface-raised);
+.feature-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: flex-start;
 }
 
-.feature-card-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+.feature-edit-content {
+  display: grid;
   gap: 8px;
   min-width: 0;
 }
 
-.feature-name {
+.feature-input,
+.feature-textarea {
   min-width: 0;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-1);
+  background: var(--c-surface);
   color: var(--c-text);
+  font: inherit;
   font-size: 13px;
-  font-weight: 600;
-  word-break: break-word;
+  outline: none;
 }
+
+.feature-input {
+  height: 30px;
+  padding: 0 8px;
+}
+
+.feature-textarea {
+  width: 100%;
+  resize: none;
+  padding: 5px 8px;
+  line-height: 1.45;
+}
+
+.feature-input:focus,
+.feature-textarea:focus { border-color: var(--c-accent); }
 
 .feature-source {
   color: var(--c-text-muted);
   font-size: 11px;
-  flex-shrink: 0;
-}
-
-.feature-notes {
-  color: var(--c-text-muted);
-  font-size: 12px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-break: break-word;
+  padding: 1px 6px;
+  border: 1px solid var(--c-border);
+  border-radius: 999px;
+  width: fit-content;
 }
 
 /* Spells */

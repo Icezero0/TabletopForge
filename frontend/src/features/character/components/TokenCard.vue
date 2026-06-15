@@ -9,6 +9,8 @@ import AppIcon from "@/ui/base/AppIcon.vue";
 const props = defineProps<{
   config: TokenConfigUpsert;
   isPrimary?: boolean;
+  readonly?: boolean;
+  syncLabel?: string;
 }>();
 const emit = defineEmits<{
   (e: "edit"): void;
@@ -25,14 +27,19 @@ const { url: imageUrl } = useAuthenticatedAssetUrl(assetId);
 </script>
 
 <template>
-  <div class="token-card">
-    <div class="token-thumb" @click="emit('pickImage')">
+  <div class="token-card" :class="{ readonly }">
+    <button
+      type="button"
+      class="token-thumb"
+      :disabled="readonly"
+      @click="!readonly && emit('pickImage')"
+    >
       <img v-if="imageUrl" :src="imageUrl" class="thumb-img" />
       <div v-else class="thumb-placeholder">
         <AppIcon :icon="PhotoIcon" :size="24" />
       </div>
-      <div class="thumb-overlay">{{ t("character.token.changeImage") }}</div>
-    </div>
+      <div v-if="!readonly" class="thumb-overlay">{{ t("character.token.changeImage") }}</div>
+    </button>
 
     <div class="token-meta">
       <input
@@ -40,11 +47,14 @@ const { url: imageUrl } = useAuthenticatedAssetUrl(assetId);
         type="text"
         :value="config.name"
         :placeholder="t('character.token.namePlaceholder')"
+        :readonly="readonly"
+        :aria-readonly="readonly"
         @input="emit('update:name', ($event.target as HTMLInputElement).value)"
       />
+      <span v-if="syncLabel" class="sync-pill">{{ syncLabel }}</span>
     </div>
 
-    <div class="token-actions">
+    <div v-if="!readonly" class="token-actions">
       <button class="action-btn" :title="t('character.token.editPanel')" @click="emit('edit')">
         <AppIcon :icon="PencilSquareIcon" :size="16" />
       </button>
@@ -73,12 +83,16 @@ const { url: imageUrl } = useAuthenticatedAssetUrl(assetId);
   position: relative;
   width: 56px;
   height: 56px;
+  padding: 0;
   border-radius: 50%;
   overflow: hidden;
   cursor: pointer;
   flex-shrink: 0;
   border: 2px solid var(--c-border);
   background: var(--c-surface);
+}
+.token-thumb:disabled {
+  cursor: default;
 }
 
 .thumb-img { width: 100%; height: 100%; object-fit: cover; }
@@ -126,7 +140,29 @@ const { url: imageUrl } = useAuthenticatedAssetUrl(assetId);
 }
 .token-name-input:hover { border-bottom-color: var(--c-border); }
 .token-name-input:focus { border-bottom-color: var(--c-accent); }
+.token-name-input[readonly] {
+  cursor: default;
+  border-bottom-color: transparent;
+}
+.token-name-input[readonly]:hover,
+.token-name-input[readonly]:focus {
+  border-bottom-color: transparent;
+}
 .token-name-input::placeholder { color: var(--c-text-muted); font-weight: 400; }
+
+.sync-pill {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid color-mix(in srgb, var(--c-primary) 28%, var(--c-border));
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c-primary) 12%, transparent);
+  color: color-mix(in srgb, var(--c-primary) 82%, var(--c-text));
+  font-size: 12px;
+  line-height: 1;
+}
 
 .token-actions { display: flex; gap: 4px; flex-shrink: 0; }
 
