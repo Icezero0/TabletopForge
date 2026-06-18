@@ -20,6 +20,11 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # SQLite batch migrations leave this table behind if a previous run is
+    # interrupted before Alembic can clean up. The real characters table is not
+    # touched at that point, so dropping the leftover temp table is safe.
+    op.execute("DROP TABLE IF EXISTS _alembic_tmp_characters")
+
     with op.batch_alter_table("characters") as batch_op:
         batch_op.add_column(sa.Column("primary_token_resource_id", sa.Integer(), nullable=True))
         batch_op.create_index(

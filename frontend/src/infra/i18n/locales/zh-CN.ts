@@ -660,6 +660,10 @@ export default {
       submit: "创建",
       nameLabel: "房间名称",
       namePlaceholder: "输入房间名称",
+      roomTypeLabel: "房间类型",
+      roomTypeHint: "决定房间使用哪套桌游规则与工具",
+      roomTypeDnd5eLabel: "DND5E",
+      roomTypeThunderStoneLabel: "ThunderStone",
       visibilityLabel: "房间可见性",
       visibilityPublicLabel: "公开",
       visibilityPrivateLabel: "私有",
@@ -942,12 +946,21 @@ export default {
       "房间页骨架已经建立。下一阶段将在这里接入成员、设置、消息和实时能力。",
     invalidId: "房间 ID 无效。",
     loadFailed: "加载房间失败。",
+    unsupportedType: "暂不支持该房间类型。",
     chatEmpty: "房间里还没有消息。",
     chatSendFailed: "消息发送失败，请稍后再试。",
     workspace: {
       chatTab: "聊天",
       adventureLogTab: "冒险日志",
       diceLogTab: "掷骰日志",
+    },
+    modes: {
+      thunderStone: {
+        prototype: "模式骨架",
+        village: "村庄区域",
+        dungeon: "地下城区域",
+        playerArea: "玩家区域",
+      },
     },
     dice: {
       errors: {
@@ -1031,6 +1044,7 @@ export default {
     settings: {
       nameLabel: "房间名称",
       namePlaceholder: "输入房间名称",
+      typeLabel: "房间类型",
       visibilityLabel: "房间可见性",
       visibilityHint: "公开房间会出现在大厅中，私有房间只对成员可见。",
       joinAuditLabel: "入房审批",
@@ -1113,6 +1127,10 @@ export default {
       visibility: "可见性",
       public: "公开",
       private: "私有",
+    },
+    types: {
+      DND5E: "DND5E",
+      ThunderStone: "ThunderStone",
     },
   },
 

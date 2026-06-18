@@ -20,6 +20,7 @@ type EntityUser = {
 type EntityRoom = {
   id: number;
   name?: string;
+  type?: Room["type"];
   owner_id?: number;
   owner_name?: string | null;
   owner_avatar_url?: string | null;
@@ -85,6 +86,7 @@ function normalizeRoom(room: RoomSummaryInput): EntityRoom {
   return {
     id: room.id,
     name: room.name,
+    type: room.type,
     owner_id: room.owner_id,
     visibility: room.visibility,
     owner_name: "owner_name" in room ? room.owner_name : undefined,

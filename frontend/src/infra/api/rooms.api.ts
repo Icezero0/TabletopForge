@@ -1,6 +1,7 @@
 import { http } from "@/infra/http/client";
 
 export type RoomVisibility = "public" | "private";
+export type RoomType = "DND5E" | "ThunderStone";
 export type RoomJoinAuditMode =
   | "auto_approve"
   | "manual_review"
@@ -8,6 +9,7 @@ export type RoomJoinAuditMode =
 export type Room = {
   id: number;
   name: string;
+  type: RoomType;
   owner_id: number;
   owner_name?: string | null;
   owner_avatar_url?: string | null;
@@ -29,6 +31,7 @@ export type GameRole = "GM" | "PL" | "OB";
 
 export type RoomCreatePayload = {
   name: string;
+  type?: RoomType;
   visibility?: RoomVisibility;
   join_audit_mode?: RoomJoinAuditMode;
   creator_game_role?: GameRole;
@@ -102,6 +105,7 @@ export type RoomJoinRequestListResponse = {
 type RoomResponse = {
   id: number;
   name: string;
+  type: RoomType;
   owner_id: number;
   visibility: RoomVisibility;
   join_audit_mode: RoomJoinAuditMode;
@@ -110,6 +114,7 @@ type RoomResponse = {
 export type RoomBrief = {
   id: number;
   name: string;
+  type: RoomType;
   owner_id: number;
   visibility: RoomVisibility;
 };
@@ -117,6 +122,7 @@ export type RoomBrief = {
 type UserRoomSummaryResponse = {
   id: number;
   name: string;
+  type: RoomType;
   owner_id: number;
   owner: RoomUserBrief;
   my_room_role: RoomRole;
@@ -136,6 +142,7 @@ function mapRoomResponse(room: RoomResponse): Room {
   return {
     id: room.id,
     name: room.name,
+    type: room.type ?? "DND5E",
     owner_id: room.owner_id,
     visibility: room.visibility,
     join_audit_mode: room.join_audit_mode,
@@ -146,6 +153,7 @@ function mapUserRoomSummary(room: UserRoomSummaryResponse): Room {
   return {
     id: room.id,
     name: room.name,
+    type: room.type ?? "DND5E",
     owner_id: room.owner_id,
     owner_name: room.owner?.username || room.owner?.email || null,
     owner_avatar_url: room.owner?.avatar_url || null,

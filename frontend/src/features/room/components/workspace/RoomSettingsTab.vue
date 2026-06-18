@@ -80,6 +80,11 @@ function submit() {
       </label>
 
       <div class="settingRow">
+        <span class="label">{{ $t("room.settings.typeLabel") }}</span>
+        <span class="readonlyValue">{{ $t(`room.types.${room.type}`) }}</span>
+      </div>
+
+      <div class="settingRow">
         <span class="label">{{ $t("room.settings.visibilityLabel") }}</span>
 
         <BaseSelect
@@ -144,6 +149,14 @@ function submit() {
   color: var(--c-text);
   font-size: 13px;
   font-weight: 600;
+}
+
+.readonlyValue {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  color: var(--c-text);
+  font-size: 13px;
 }
 
 .actions {

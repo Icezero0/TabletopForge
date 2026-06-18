@@ -100,6 +100,7 @@ async def get_my_rooms(
             UserRoomSummaryResponse(
                 id=room.id,
                 name=room.name,
+                type=room.type,
                 owner_id=room.owner_id,
                 owner=room.owner,
                 my_room_role=my_room_role,
@@ -133,6 +134,7 @@ async def get_my_owned_rooms(
             UserRoomSummaryResponse(
                 id=room.id,
                 name=room.name,
+                type=room.type,
                 owner_id=room.owner_id,
                 owner=room.owner,
                 my_room_role=my_room_role,

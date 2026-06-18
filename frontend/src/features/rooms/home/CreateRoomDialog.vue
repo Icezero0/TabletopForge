@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import type { GameRole, RoomJoinAuditMode } from "@/infra/api/rooms.api";
+import type { GameRole, RoomJoinAuditMode, RoomType } from "@/infra/api/rooms.api";
 
 const props = withDefaults(
   defineProps<{
@@ -11,6 +11,10 @@ const props = withDefaults(
     cancelText: string;
     nameLabel: string;
     namePlaceholder: string;
+    roomTypeLabel: string;
+    roomTypeHint: string;
+    roomTypeDnd5eLabel: string;
+    roomTypeThunderStoneLabel: string;
     visibilityLabel: string;
     visibilityPublicLabel: string;
     visibilityPrivateLabel: string;
@@ -38,6 +42,7 @@ const emit = defineEmits<{
     e: "submit",
     payload: {
       name: string;
+      type: RoomType;
       visibility: "public" | "private";
       join_audit_mode: RoomJoinAuditMode;
       creator_game_role: GameRole;
@@ -46,6 +51,7 @@ const emit = defineEmits<{
 }>();
 
 const name = ref("");
+const roomType = ref<RoomType>("DND5E");
 const visibility = ref<"public" | "private">("public");
 const joinAuditMode = ref<RoomJoinAuditMode>("manual_review");
 const creatorGameRole = ref<GameRole>("GM");
@@ -55,6 +61,7 @@ watch(
   (open) => {
     if (!open) return;
     name.value = props.defaultName || "";
+    roomType.value = "DND5E";
     visibility.value = "public";
     joinAuditMode.value = "manual_review";
     creatorGameRole.value = "GM";
@@ -73,6 +80,7 @@ function submit() {
 
   emit("submit", {
     name: name.value.trim(),
+    type: roomType.value,
     visibility: visibility.value,
     join_audit_mode: joinAuditMode.value,
     creator_game_role: creatorGameRole.value,
@@ -95,6 +103,32 @@ function submit() {
         <label class="field">
           <span class="label">{{ nameLabel }}</span>
           <BaseInput v-model="name" :placeholder="namePlaceholder" />
+        </label>
+
+        <label class="toggleRow">
+          <span class="controlCopy">
+            <span class="label">{{ roomTypeLabel }}</span>
+            <span class="hint">{{ roomTypeHint }}</span>
+          </span>
+
+          <span class="segmentedControl" role="radiogroup" :aria-label="roomTypeLabel">
+            <button
+              type="button"
+              class="segment"
+              :data-active="String(roomType === 'DND5E')"
+              @click="roomType = 'DND5E'"
+            >
+              {{ roomTypeDnd5eLabel }}
+            </button>
+            <button
+              type="button"
+              class="segment"
+              :data-active="String(roomType === 'ThunderStone')"
+              @click="roomType = 'ThunderStone'"
+            >
+              {{ roomTypeThunderStoneLabel }}
+            </button>
+          </span>
         </label>
 
         <label class="toggleRow">

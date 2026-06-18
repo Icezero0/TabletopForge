@@ -30,6 +30,7 @@ onMounted(() => {
 
 async function handleCreateRoom(payload: {
   name: string;
+  type: "DND5E" | "ThunderStone";
   visibility: "public" | "private";
   join_audit_mode: "auto_approve" | "manual_review" | "auto_reject";
   creator_game_role: "GM" | "PL" | "OB";
@@ -71,6 +72,10 @@ function enterRoom(roomId: number) {
       :cancel-text="t('common.cancel')"
       :name-label="t('home.create.nameLabel')"
       :name-placeholder="t('home.create.namePlaceholder')"
+      :room-type-label="t('home.create.roomTypeLabel')"
+      :room-type-hint="t('home.create.roomTypeHint')"
+      :room-type-dnd5e-label="t('home.create.roomTypeDnd5eLabel')"
+      :room-type-thunder-stone-label="t('home.create.roomTypeThunderStoneLabel')"
       :visibility-label="t('home.create.visibilityLabel')"
       :visibility-public-label="t('home.create.visibilityPublicLabel')"
       :visibility-private-label="t('home.create.visibilityPrivateLabel')"

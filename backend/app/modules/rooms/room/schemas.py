@@ -5,6 +5,7 @@ from app.modules.rooms.constants import (
     GameRole,
     RoomJoinAuditMode,
     RoomRole,
+    RoomType,
     RoomVisibility,
 )
 from app.modules.users.schemas import UserBriefResponse
@@ -12,6 +13,7 @@ from app.modules.users.schemas import UserBriefResponse
 
 class RoomCreate(BaseModel):
     name: str
+    type: RoomType = RoomType.DND5E
     visibility: RoomVisibility = RoomVisibility.PRIVATE
     join_audit_mode: RoomJoinAuditMode = RoomJoinAuditMode.MANUAL_REVIEW
     creator_game_role: GameRole = GameRole.GM
@@ -38,6 +40,7 @@ class RoomResponse(BaseModel):
 
     id: int
     name: str
+    type: RoomType
     owner_id: int
     visibility: RoomVisibility
     join_audit_mode: RoomJoinAuditMode
@@ -56,6 +59,7 @@ class RoomBriefResponse(BaseModel):
 
     id: int
     name: str
+    type: RoomType = RoomType.DND5E
     owner_id: int
     visibility: RoomVisibility
 
@@ -67,6 +71,7 @@ class UserRoomSummaryResponse(BaseModel):
     owner: UserBriefResponse
     my_room_role: RoomRole
     my_game_role: GameRole | None = None
+    type: RoomType = RoomType.DND5E
     visibility: RoomVisibility = Field(exclude=True)
 
     @computed_field

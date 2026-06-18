@@ -660,6 +660,10 @@ export default {
       submit: "Create",
       nameLabel: "Room name",
       namePlaceholder: "Enter a room name",
+      roomTypeLabel: "Room type",
+      roomTypeHint: "Determines which tabletop rules and tools this room uses",
+      roomTypeDnd5eLabel: "DND5E",
+      roomTypeThunderStoneLabel: "ThunderStone",
       visibilityLabel: "Room visibility",
       visibilityPublicLabel: "Public",
       visibilityPrivateLabel: "Private",
@@ -942,12 +946,21 @@ export default {
       "The room page skeleton is now in place. Members, settings, messages, and realtime features will be added next.",
     invalidId: "Invalid room id.",
     loadFailed: "Failed to load the room.",
+    unsupportedType: "This room type is not supported yet.",
     chatEmpty: "No messages in this room yet.",
     chatSendFailed: "Failed to send message. Please try again later.",
     workspace: {
       chatTab: "Chat",
       adventureLogTab: "Adventure Log",
       diceLogTab: "Dice Log",
+    },
+    modes: {
+      thunderStone: {
+        prototype: "Mode prototype",
+        village: "Village",
+        dungeon: "Dungeon",
+        playerArea: "Player Area",
+      },
     },
     dice: {
       errors: {
@@ -1031,6 +1044,7 @@ export default {
     settings: {
       nameLabel: "Room name",
       namePlaceholder: "Enter a room name",
+      typeLabel: "Room type",
       visibilityLabel: "Room visibility",
       visibilityHint: "Public rooms appear in the lobby. Private rooms are visible only to members.",
       joinAuditLabel: "Join approval",
@@ -1113,6 +1127,10 @@ export default {
       visibility: "Visibility",
       public: "Public",
       private: "Private",
+    },
+    types: {
+      DND5E: "DND5E",
+      ThunderStone: "ThunderStone",
     },
   },
 

@@ -13,6 +13,11 @@ class GameRole(StrEnum):
     OB = "OB"
 
 
+class RoomType(StrEnum):
+    DND5E = "DND5E"
+    THUNDER_STONE = "ThunderStone"
+
+
 class GamePermission(StrEnum):
     UPLOAD_MAP = "upload_map"
     DELETE_MAP = "delete_map"

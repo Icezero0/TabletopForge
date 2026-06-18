@@ -46,6 +46,9 @@ defineEmits<{
               : t("room.fields.private")
           }}
         </BasePill>
+        <BasePill size="sm" tone="muted" class="typePill">
+          {{ t(`room.types.${room.type}`) }}
+        </BasePill>
       </div>
 
       <div class="meta">
@@ -97,7 +100,8 @@ defineEmits<{
   text-overflow: ellipsis;
 }
 
-.visibilityPill {
+.visibilityPill,
+.typePill {
   flex: 0 0 auto;
   cursor: default;
 }

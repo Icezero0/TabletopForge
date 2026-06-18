@@ -86,6 +86,7 @@ class RoomService:
         room = await self.repo.create_room(
             db,
             name=payload.name,
+            type=payload.type,
             owner_id=user.id,
             visibility=payload.visibility,
             join_audit_mode=payload.join_audit_mode,

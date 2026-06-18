@@ -18,6 +18,7 @@ from app.modules.rooms.constants import (
     RoomJoinRequestAction,
     RoomJoinRequestSource,
     RoomJoinRequestStatus,
+    RoomType,
     RoomVisibility,
 )
 
@@ -27,6 +28,13 @@ class Room(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    type: Mapped[RoomType] = mapped_column(
+        String(32),
+        nullable=False,
+        default=RoomType.DND5E,
+        server_default=RoomType.DND5E.value,
+        index=True,
+    )
 
     owner_id: Mapped[int] = mapped_column(
         Integer,

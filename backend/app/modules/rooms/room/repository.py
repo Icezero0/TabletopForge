@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from sqlalchemy.orm import selectinload
 
-from app.modules.rooms.constants import GameRole, RoomJoinAuditMode, RoomRole, RoomVisibility
+from app.modules.rooms.constants import GameRole, RoomJoinAuditMode, RoomRole, RoomType, RoomVisibility
 from app.modules.rooms.models import Room, RoomMember
 from app.modules.users.models import User
 
@@ -14,12 +14,14 @@ class RoomRepository:
         db: AsyncSession,
         *,
         name: str,
+        type: RoomType,
         owner_id: int,
         visibility: RoomVisibility,
         join_audit_mode: RoomJoinAuditMode,
     ) -> Room:
         room = Room(
             name=name,
+            type=type,
             owner_id=owner_id,
             visibility=visibility,
             join_audit_mode=join_audit_mode,
