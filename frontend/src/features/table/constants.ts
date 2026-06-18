@@ -16,10 +16,10 @@ export const SCENE_SPAN = SCENE_GRID_HALF_EXTENT * 2;
 export const TOKEN_BAND_BASE = 100;
 /** 绘制 band 基准（effectiveZ = base + z_index，见 tabletop_scene.md §3.2） */
 export const DRAWING_BAND_BASE = 200;
-/** 测距叠层：高于绘制，低于网格 */
+/** 测距叠层：高于绘制与战争迷雾，低于网格 */
 export const MEASURE_LAYER_Z = DRAWING_BAND_BASE + 5;
-/** 战争迷雾：高于指示物，低于绘制、Pointer、测距 */
-export const FOG_LAYER_Z = DRAWING_BAND_BASE - 1;
+/** 战争迷雾：高于指示物与绘制，低于 Pointer、测距 */
+export const FOG_LAYER_Z = DRAWING_BAND_BASE + 2;
 /** 网格叠层：SceneCanvas 内最上（不拦截指针） */
 export const GRID_LAYER_Z = DRAWING_BAND_BASE + 10;
 

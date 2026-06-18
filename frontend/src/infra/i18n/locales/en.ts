@@ -385,6 +385,7 @@ export default {
       hitDiceResource: "Hit Dice d{die}",
       spellSlotResource: "Level {level} Spell Slots",
       warlockPactSlot: "Warlock Pact Slots (Level {level})",
+      mysticArcanum: "Mystic Arcanum (Level {level})",
       rage: "Rage",
       bardicInspiration: "Bardic Inspiration",
       channelDivinity: "Channel Divinity",

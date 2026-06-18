@@ -385,6 +385,7 @@ export default {
       hitDiceResource: "生命骰d{die}",
       spellSlotResource: "{level}环法术位",
       warlockPactSlot: "邪术师法术位（{level}环）",
+      mysticArcanum: "秘法奥秘（{level}环）",
       rage: "狂暴",
       bardicInspiration: "诗人激励",
       channelDivinity: "引导神力",

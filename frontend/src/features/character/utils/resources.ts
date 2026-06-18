@@ -34,8 +34,15 @@ const HIT_DIE_BY_CLASS: Record<DND5EClass, number> = {
 
 const FULL_CASTER_CLASSES = new Set(["bard", "cleric", "druid", "sorcerer", "wizard"]);
 const HALF_CASTER_CLASSES = new Set(["paladin", "ranger"]);
+const NORMAL_SPELLCASTING_CLASSES = new Set([
+  ...FULL_CASTER_CLASSES,
+  ...HALF_CASTER_CLASSES,
+  "artificer",
+]);
 
-const MULTICLASS_SPELL_SLOTS: Record<number, Record<string, number>> = {
+type SpellSlotTable = Record<number, Record<string, number>>;
+
+const FULL_CASTER_SPELL_SLOTS: SpellSlotTable = {
   1: { "1": 2 },
   2: { "1": 3 },
   3: { "1": 4, "2": 2 },
@@ -56,6 +63,54 @@ const MULTICLASS_SPELL_SLOTS: Record<number, Record<string, number>> = {
   18: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 3, "6": 1, "7": 1, "8": 1, "9": 1 },
   19: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 3, "6": 2, "7": 1, "8": 1, "9": 1 },
   20: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 3, "6": 2, "7": 2, "8": 1, "9": 1 },
+};
+
+const MULTICLASS_SPELL_SLOTS = FULL_CASTER_SPELL_SLOTS;
+
+const HALF_CASTER_SPELL_SLOTS: SpellSlotTable = {
+  1: {},
+  2: { "1": 2 },
+  3: { "1": 3 },
+  4: { "1": 3 },
+  5: { "1": 4, "2": 2 },
+  6: { "1": 4, "2": 2 },
+  7: { "1": 4, "2": 3 },
+  8: { "1": 4, "2": 3 },
+  9: { "1": 4, "2": 3, "3": 2 },
+  10: { "1": 4, "2": 3, "3": 2 },
+  11: { "1": 4, "2": 3, "3": 3 },
+  12: { "1": 4, "2": 3, "3": 3 },
+  13: { "1": 4, "2": 3, "3": 3, "4": 1 },
+  14: { "1": 4, "2": 3, "3": 3, "4": 1 },
+  15: { "1": 4, "2": 3, "3": 3, "4": 2 },
+  16: { "1": 4, "2": 3, "3": 3, "4": 2 },
+  17: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 1 },
+  18: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 1 },
+  19: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 2 },
+  20: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 2 },
+};
+
+const ARTIFICER_SPELL_SLOTS: SpellSlotTable = {
+  1: { "1": 2 },
+  2: { "1": 2 },
+  3: { "1": 3 },
+  4: { "1": 3 },
+  5: { "1": 4, "2": 2 },
+  6: { "1": 4, "2": 2 },
+  7: { "1": 4, "2": 3 },
+  8: { "1": 4, "2": 3 },
+  9: { "1": 4, "2": 3, "3": 2 },
+  10: { "1": 4, "2": 3, "3": 2 },
+  11: { "1": 4, "2": 3, "3": 3 },
+  12: { "1": 4, "2": 3, "3": 3 },
+  13: { "1": 4, "2": 3, "3": 3, "4": 1 },
+  14: { "1": 4, "2": 3, "3": 3, "4": 1 },
+  15: { "1": 4, "2": 3, "3": 3, "4": 2 },
+  16: { "1": 4, "2": 3, "3": 3, "4": 2 },
+  17: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 1 },
+  18: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 1 },
+  19: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 2 },
+  20: { "1": 4, "2": 3, "3": 3, "4": 3, "5": 2 },
 };
 
 const WARLOCK_PACT_SLOTS: Record<number, { level: number; slots: number }> = {
@@ -79,6 +134,19 @@ const WARLOCK_PACT_SLOTS: Record<number, { level: number; slots: number }> = {
   18: { level: 5, slots: 4 },
   19: { level: 5, slots: 4 },
   20: { level: 5, slots: 4 },
+};
+
+const WARLOCK_MYSTIC_ARCANUM: Record<number, number[]> = {
+  11: [6],
+  12: [6],
+  13: [6, 7],
+  14: [6, 7],
+  15: [6, 7, 8],
+  16: [6, 7, 8],
+  17: [6, 7, 8, 9],
+  18: [6, 7, 8, 9],
+  19: [6, 7, 8, 9],
+  20: [6, 7, 8, 9],
 };
 
 function normalizedClassKey(rawName: unknown, t: ResourceTranslator): DND5EClass | null {
@@ -105,6 +173,28 @@ function normalCasterLevelForClass(key: DND5EClass, level: number) {
   if (key === "artificer") return Math.ceil(level / 2);
   if (HALF_CASTER_CLASSES.has(key)) return Math.floor(level / 2);
   return 0;
+}
+
+function spellSlotsForSingleClass(key: DND5EClass, level: number) {
+  const safeLevel = Math.min(20, Math.max(1, level));
+  if (FULL_CASTER_CLASSES.has(key)) return FULL_CASTER_SPELL_SLOTS[safeLevel] ?? {};
+  if (HALF_CASTER_CLASSES.has(key)) return HALF_CASTER_SPELL_SLOTS[safeLevel] ?? {};
+  if (key === "artificer") return ARTIFICER_SPELL_SLOTS[safeLevel] ?? {};
+  return {};
+}
+
+function normalSpellSlotsForClasses(classes: { key: DND5EClass; level: number }[]) {
+  const normalCasters = classes.filter((cls) => NORMAL_SPELLCASTING_CLASSES.has(cls.key));
+  if (classes.length === 1 && normalCasters.length === 1) {
+    const caster = normalCasters[0]!;
+    return spellSlotsForSingleClass(caster.key, caster.level);
+  }
+
+  const normalCasterLevel = Math.min(
+    20,
+    normalCasters.reduce((sum, cls) => sum + normalCasterLevelForClass(cls.key, cls.level), 0),
+  );
+  return MULTICLASS_SPELL_SLOTS[normalCasterLevel] ?? {};
 }
 
 function addResource(resources: CharacterResource[], name: string, max: number, recovery: string, notes = "") {
@@ -147,11 +237,7 @@ export function buildCommonResourcesFromCharacter(
     addResource(resources, t("character.resources.hitDiceResource", { die }), max, longRest);
   }
 
-  const normalCasterLevel = Math.min(
-    20,
-    classes.reduce((sum, cls) => sum + normalCasterLevelForClass(cls.key, cls.level), 0),
-  );
-  const slots = MULTICLASS_SPELL_SLOTS[normalCasterLevel] ?? {};
+  const slots = normalSpellSlotsForClasses(classes);
   for (let level = 1; level <= 9; level += 1) {
     addResource(
       resources,
@@ -167,6 +253,9 @@ export function buildCommonResourcesFromCharacter(
       const pact = WARLOCK_PACT_SLOTS[Math.min(20, level)];
       if (pact) {
         addResource(resources, t("character.resources.warlockPactSlot", { level: pact.level }), pact.slots, shortRest);
+      }
+      for (const arcanumLevel of WARLOCK_MYSTIC_ARCANUM[Math.min(20, level)] ?? []) {
+        addResource(resources, t("character.resources.mysticArcanum", { level: arcanumLevel }), 1, longRest);
       }
     } else if (cls.key === "barbarian") {
       const max = level >= 17 ? 6 : level >= 12 ? 5 : level >= 6 ? 4 : level >= 3 ? 3 : 2;
