@@ -276,10 +276,6 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
-.baseSortableList.dragging {
-  cursor: grabbing;
-}
-
 .baseSortableSlot.placeholder {
   box-sizing: border-box;
   border: 1px dashed color-mix(in srgb, var(--c-accent) 60%, transparent);
@@ -308,14 +304,6 @@ onBeforeUnmount(() => {
 .baseSortableList.dragging .baseSortableItem,
 .baseSortableList.suppressHover .baseSortableItem {
   pointer-events: none;
-}
-
-.baseSortableItem.canDrag {
-  cursor: grab;
-}
-
-.baseSortableItem.canDrag:active {
-  cursor: grabbing;
 }
 
 .baseSortableFloating {

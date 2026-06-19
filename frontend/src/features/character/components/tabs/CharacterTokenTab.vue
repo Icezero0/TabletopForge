@@ -16,7 +16,7 @@ import TokenPanelEditorDialog from "@/features/character/components/TokenPanelEd
 import AvatarCropDialog from "@/ui/domain/avatar/AvatarCropDialog.vue";
 
 type Item = { name: string; quantity: number; notes: string };
-type TokenResource = { name: string; max: number; recovery: string; notes: string };
+type TokenResource = { name: string; max: number; recovery: string; notes: string; section?: "common" | "special" };
 type SkillProf = "none" | "proficient" | "expert" | "expertise";
 
 const props = defineProps<{
@@ -51,7 +51,13 @@ function push(configs: TokenConfigUpsert[]) {
 function buildResourcesFromCharacter(): TokenResource[] {
   const sheetResources = props.resourcesBlock
     .map((item) => normalizeCharacterResource(item))
-    .filter((item): item is TokenResource => item != null);
+    .filter((item) => item != null)
+    .map((item) => ({
+      name: item.name,
+      max: item.max,
+      recovery: item.recovery,
+      notes: item.notes,
+    }));
   return sheetResources.length
     ? sheetResources
     : buildCommonResourcesFromCharacter(props.identityBlock, props.attributesBlock, t);

@@ -596,14 +596,6 @@ function cancelCustomField(i: number) {
     transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.draggableCard.canDrag {
-  cursor: grab;
-}
-
-.draggableCard.canDrag:active {
-  cursor: grabbing;
-}
-
 /* Row shell */
 .feature-row { display: flex; align-items: flex-start; gap: 8px; }
 

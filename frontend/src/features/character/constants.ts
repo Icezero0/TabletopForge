@@ -146,7 +146,7 @@ export function defaultEquipment() {
 }
 
 export function defaultResources() {
-  return [] as { name: string; max: number; recovery: string; notes: string }[];
+  return [] as { name: string; max: number; recovery: string; notes: string; section: "common" | "special" }[];
 }
 
 export function defaultTokenPanelInitial(isPrimary: boolean) {

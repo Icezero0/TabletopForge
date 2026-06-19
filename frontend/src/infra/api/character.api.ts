@@ -27,11 +27,11 @@ export type TokenPanelInitial = {
   spell_attack_bonus?: { value: number; breakdown?: string };
   spellbook?: Record<string, string[]>;
   prepared_spells?: string[];
-  resources?: { name: string; max: number; current?: number; recovery: string; notes?: string }[];
+  resources?: { name: string; max: number; current?: number; recovery: string; notes?: string; section?: "common" | "special" }[];
   inherit_items_from_character?: boolean;
 };
 
-export type CharacterResource = { name: string; max: number; recovery: string; notes: string };
+export type CharacterResource = { name: string; max: number; recovery: string; notes: string; section: "common" | "special" };
 
 export type TokenConfig = {
   id: number;

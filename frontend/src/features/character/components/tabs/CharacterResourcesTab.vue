@@ -17,6 +17,12 @@ import {
   type CharacterResource,
 } from "@/features/character/utils/resources";
 
+type ResourceSection = CharacterResource["section"];
+type ResourceRow = {
+  resource: CharacterResource;
+  globalIndex: number | null;
+};
+
 const props = defineProps<{
   modelValue: CharacterResource[];
   identityBlock: Record<string, unknown>;
@@ -28,6 +34,7 @@ const emit = defineEmits<{
 }>();
 
 const { t } = useI18n();
+const sections: ResourceSection[] = ["common", "special"];
 
 const resources = computed(() =>
   (props.modelValue ?? [])
@@ -35,15 +42,25 @@ const resources = computed(() =>
     .filter((item): item is CharacterResource => item != null),
 );
 
-const editingIndex = ref<number | null>(null);
+const editingTarget = ref<{ section: ResourceSection; index: number | null } | null>(null);
 const editingDraft = ref<CharacterResource | null>(null);
 
-const rows = computed(() => {
-  if (editingIndex.value === resources.value.length && editingDraft.value) {
-    return [...resources.value, editingDraft.value];
+const commonResources = computed(() => resources.value.filter((resource) => resource.section === "common"));
+const specialResources = computed(() => resources.value.filter((resource) => resource.section === "special"));
+
+function rowsFor(section: ResourceSection): ResourceRow[] {
+  const rows: ResourceRow[] = resources.value
+    .map((resource, globalIndex) => ({ resource, globalIndex }))
+    .filter((row) => row.resource.section === section);
+  if (editingTarget.value?.section === section && editingTarget.value.index == null && editingDraft.value) {
+    rows.push({ resource: editingDraft.value, globalIndex: null });
   }
-  return resources.value;
-});
+  return rows;
+}
+
+function sectionTitle(section: ResourceSection) {
+  return t(section === "common" ? "character.resources.commonResources" : "character.resources.specialResources");
+}
 
 function push(next: CharacterResource[]) {
   emit("update:modelValue", next);
@@ -60,17 +77,20 @@ function normalize(resource: CharacterResource): CharacterResource {
     max: Math.max(0, Number(resource.max) || 0),
     recovery: resource.recovery.trim(),
     notes: resource.notes.trim(),
+    section: resource.section === "special" ? "special" : "common",
   };
 }
 
 function addResource() {
-  editingIndex.value = resources.value.length;
-  editingDraft.value = { name: "", max: 0, recovery: "", notes: "" };
+  editingTarget.value = { section: "special", index: null };
+  editingDraft.value = { name: "", max: 0, recovery: "", notes: "", section: "special" };
 }
 
-function beginEdit(index: number) {
-  editingIndex.value = index;
-  editingDraft.value = { ...resources.value[index]! };
+function beginEdit(section: ResourceSection, index: number) {
+  const row = rowsFor(section)[index];
+  if (!row) return;
+  editingTarget.value = { section, index };
+  editingDraft.value = { ...row.resource };
 }
 
 function updateDraft(patch: Partial<CharacterResource>) {
@@ -79,149 +99,173 @@ function updateDraft(patch: Partial<CharacterResource>) {
 }
 
 function commitEdit() {
-  const index = editingIndex.value;
+  const target = editingTarget.value;
   const draft = editingDraft.value;
-  if (index == null || !draft) return;
-  const normalized = normalize(draft);
-  if (index >= resources.value.length) {
+  if (!target || !draft) return;
+  const normalized = normalize({ ...draft, section: target.section });
+  const row = target.index == null ? null : rowsFor(target.section)[target.index];
+  if (!row || row.globalIndex == null) {
     push([...resources.value, normalized]);
   } else {
-    push(resources.value.map((item, i) => (i === index ? normalized : item)));
+    push(resources.value.map((item, i) => (i === row.globalIndex ? normalized : item)));
   }
   cancelEdit();
 }
 
 function cancelEdit() {
-  editingIndex.value = null;
+  editingTarget.value = null;
   editingDraft.value = null;
 }
 
-function removeResource(index: number) {
-  push(resources.value.filter((_, i) => i !== index));
-  if (editingIndex.value === index) cancelEdit();
+function removeResource(globalIndex: number | null) {
+  if (globalIndex == null) {
+    cancelEdit();
+    return;
+  }
+  push(resources.value.filter((_, i) => i !== globalIndex));
+  cancelEdit();
 }
 
 function autoCalcCommonResources() {
   cancelEdit();
-  push(buildCommonResourcesFromCharacter(props.identityBlock, props.attributesBlock, t));
+  push([
+    ...buildCommonResourcesFromCharacter(props.identityBlock, props.attributesBlock, t),
+    ...specialResources.value,
+  ]);
 }
 
-function moveResource(from: number, to: number) {
+function moveResource(section: ResourceSection, from: number, to: number) {
   if (from === to || from < 0 || to < 0) return;
-  const next = [...resources.value];
+  const targetResources = section === "common" ? [...commonResources.value] : [...specialResources.value];
+  const next = [...targetResources];
   const [item] = next.splice(from, 1);
   if (!item) return;
   next.splice(to, 0, item);
-  push(next);
+  push(section === "common" ? [...next, ...specialResources.value] : [...commonResources.value, ...next]);
+}
+
+function isEditing(section: ResourceSection, index: number) {
+  if (editingTarget.value?.section !== section || !editingDraft.value) return false;
+  const row = rowsFor(section)[index];
+  if (!row) return false;
+  return editingTarget.value.index == null
+    ? row.globalIndex == null
+    : editingTarget.value.index === index;
 }
 </script>
 
 <template>
   <div class="tab-content">
-    <div class="section-header">
+    <div class="section-header top-actions">
       <BaseButton variant="default" @click="autoCalcCommonResources">
         {{ t("character.resources.autoCalcCommon") }}
       </BaseButton>
-      <BaseButton variant="default" @click="addResource">
-        <span class="btn-icon-text">
-          <AppIcon :icon="PlusIcon" :size="14" />
-          {{ t("character.resources.addResource") }}
-        </span>
-      </BaseButton>
     </div>
 
-    <div v-if="!rows.length" class="empty-resource">{{ t("character.resources.noResources") }}</div>
-    <BaseSortableList
-      v-else
-      :count="rows.length"
-      :disabled="editingIndex != null"
-      :placeholder-min-height="56"
-      placeholder-radius="var(--r-1)"
-      @reorder="moveResource($event.from, $event.to)"
-    >
-      <template #default="{ index }">
-      <div
-        class="resource-row"
-        :class="{
-          editing: editingIndex === index && editingDraft,
-          draggable: editingIndex == null,
-        }"
-      >
-        <template v-if="editingIndex === index && editingDraft">
-          <label class="resource-name">
-            <span class="resource-label">{{ t("character.resources.resourceName") }}</span>
-            <input
-              class="resource-input"
-              type="text"
-              :value="editingDraft.name"
-              :placeholder="t('character.resources.resourceNamePlaceholder')"
-              @input="updateDraft({ name: ($event.target as HTMLInputElement).value })"
-            />
-          </label>
-          <label class="resource-notes">
-            <span class="resource-label">{{ t("character.resources.resourceNotes") }}</span>
-            <input
-              class="resource-input"
-              type="text"
-              :value="editingDraft.notes"
-              :placeholder="t('character.resources.resourceNotesPlaceholder')"
-              @input="updateDraft({ notes: ($event.target as HTMLInputElement).value })"
-            />
-          </label>
-          <label class="resource-number">
-            <span class="resource-label">{{ t("character.resources.resourceMax") }}</span>
-            <input
-              class="resource-input no-spin"
-              type="number"
-              min="0"
-              :value="editingDraft.max"
-              @change="updateDraft({ max: parseResourceNumber(($event.target as HTMLInputElement).value) })"
-            />
-          </label>
-          <label class="resource-recovery">
-            <span class="resource-label">{{ t("character.resources.resourceRecovery") }}</span>
-            <input
-              class="resource-input"
-              type="text"
-              :value="editingDraft.recovery"
-              :placeholder="t('character.resources.resourceRecoveryPlaceholder')"
-              @input="updateDraft({ recovery: ($event.target as HTMLInputElement).value })"
-            />
-          </label>
-          <div class="resource-actions">
-            <button class="resource-icon-button confirm" type="button" :title="t('common.save')" @click="commitEdit">
-              <AppIcon :icon="CheckIcon" :size="16" />
-            </button>
-            <button class="resource-icon-button" type="button" :title="t('common.cancel')" @click="cancelEdit">
-              <AppIcon :icon="XMarkIcon" :size="16" />
-            </button>
-          </div>
-        </template>
-        <template v-else>
-          <div class="resource-display">
-            <span class="resource-display-name">{{ rows[index]?.name || t("character.resources.unnamedResource") }}</span>
-            <span v-if="rows[index]?.notes" class="resource-display-notes">{{ rows[index]?.notes }}</span>
-          </div>
-          <div class="resource-display-limit">
-            <span class="resource-limit-label">{{ t("character.resources.resourceMax") }}</span>
-            <span class="resource-limit-value">{{ rows[index]?.max }}</span>
-          </div>
-          <div class="resource-display-recovery">
-            <span v-if="rows[index]?.recovery">{{ rows[index]?.recovery }}</span>
-            <span v-else class="resource-empty">—</span>
-          </div>
-          <div class="resource-actions">
-            <button class="resource-icon-button" type="button" :title="t('character.resources.editResource')" @click="beginEdit(index)">
-              <AppIcon :icon="PencilSquareIcon" :size="16" />
-            </button>
-            <button class="resource-icon-button danger" type="button" :title="t('character.resources.removeResource')" @click="removeResource(index)">
-              <AppIcon :icon="TrashIcon" :size="16" />
-            </button>
-          </div>
-        </template>
+    <section v-for="section in sections" :key="section" class="resource-section">
+      <div class="resource-section-header">
+        <h3>{{ sectionTitle(section) }}</h3>
+        <BaseButton v-if="section === 'special'" variant="default" @click="addResource">
+          <span class="btn-icon-text">
+            <AppIcon :icon="PlusIcon" :size="14" />
+            {{ t("character.resources.addResource") }}
+          </span>
+        </BaseButton>
       </div>
-      </template>
-    </BaseSortableList>
+
+      <div v-if="!rowsFor(section).length" class="empty-resource section-empty">—</div>
+      <BaseSortableList
+        v-else
+        :count="rowsFor(section).length"
+        :disabled="editingTarget != null"
+        :placeholder-min-height="56"
+        placeholder-radius="var(--r-1)"
+        @reorder="moveResource(section, $event.from, $event.to)"
+      >
+        <template #default="{ index }">
+        <div
+          class="resource-row"
+          :class="{
+            editing: isEditing(section, index),
+            draggable: editingTarget == null,
+          }"
+        >
+          <template v-if="isEditing(section, index) && editingDraft">
+            <label class="resource-name">
+              <span class="resource-label">{{ t("character.resources.resourceName") }}</span>
+              <input
+                class="resource-input"
+                type="text"
+                :value="editingDraft.name"
+                :placeholder="t('character.resources.resourceNamePlaceholder')"
+                @input="updateDraft({ name: ($event.target as HTMLInputElement).value })"
+              />
+            </label>
+            <label class="resource-notes">
+              <span class="resource-label">{{ t("character.resources.resourceNotes") }}</span>
+              <input
+                class="resource-input"
+                type="text"
+                :value="editingDraft.notes"
+                :placeholder="t('character.resources.resourceNotesPlaceholder')"
+                @input="updateDraft({ notes: ($event.target as HTMLInputElement).value })"
+              />
+            </label>
+            <label class="resource-number">
+              <span class="resource-label">{{ t("character.resources.resourceMax") }}</span>
+              <input
+                class="resource-input no-spin"
+                type="number"
+                min="0"
+                :value="editingDraft.max"
+                @change="updateDraft({ max: parseResourceNumber(($event.target as HTMLInputElement).value) })"
+              />
+            </label>
+            <label class="resource-recovery">
+              <span class="resource-label">{{ t("character.resources.resourceRecovery") }}</span>
+              <input
+                class="resource-input"
+                type="text"
+                :value="editingDraft.recovery"
+                :placeholder="t('character.resources.resourceRecoveryPlaceholder')"
+                @input="updateDraft({ recovery: ($event.target as HTMLInputElement).value })"
+              />
+            </label>
+            <div class="resource-actions">
+              <button class="resource-icon-button confirm" type="button" :title="t('common.save')" @click="commitEdit">
+                <AppIcon :icon="CheckIcon" :size="16" />
+              </button>
+              <button class="resource-icon-button" type="button" :title="t('common.cancel')" @click="cancelEdit">
+                <AppIcon :icon="XMarkIcon" :size="16" />
+              </button>
+            </div>
+          </template>
+          <template v-else>
+            <div class="resource-display">
+              <span class="resource-display-name">{{ rowsFor(section)[index]?.resource.name || t("character.resources.unnamedResource") }}</span>
+              <span v-if="rowsFor(section)[index]?.resource.notes" class="resource-display-notes">{{ rowsFor(section)[index]?.resource.notes }}</span>
+            </div>
+            <div class="resource-display-limit">
+              <span class="resource-limit-label">{{ t("character.resources.resourceMax") }}</span>
+              <span class="resource-limit-value">{{ rowsFor(section)[index]?.resource.max }}</span>
+            </div>
+            <div class="resource-display-recovery">
+              <span v-if="rowsFor(section)[index]?.resource.recovery">{{ rowsFor(section)[index]?.resource.recovery }}</span>
+              <span v-else class="resource-empty">—</span>
+            </div>
+            <div class="resource-actions">
+              <button class="resource-icon-button" type="button" :title="t('character.resources.editResource')" @click="beginEdit(section, index)">
+                <AppIcon :icon="PencilSquareIcon" :size="16" />
+              </button>
+              <button class="resource-icon-button danger" type="button" :title="t('character.resources.removeResource')" @click="removeResource(rowsFor(section)[index]?.globalIndex ?? null)">
+                <AppIcon :icon="TrashIcon" :size="16" />
+              </button>
+            </div>
+          </template>
+        </div>
+        </template>
+      </BaseSortableList>
+    </section>
   </div>
 </template>
 
@@ -237,6 +281,29 @@ function moveResource(from: number, to: number) {
   gap: 10px;
 }
 
+.top-actions {
+  margin-bottom: -2px;
+}
+
+.resource-section {
+  display: grid;
+  gap: 10px;
+}
+
+.resource-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.resource-section-header h3 {
+  margin: 0;
+  color: var(--c-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
 .btn-icon-text {
   display: inline-flex;
   align-items: center;
@@ -246,6 +313,10 @@ function moveResource(from: number, to: number) {
 .empty-resource {
   color: var(--c-text-muted);
   font-size: 13px;
+}
+
+.section-empty {
+  padding: 4px 0;
 }
 
 .resource-row {
@@ -269,14 +340,6 @@ function moveResource(from: number, to: number) {
 .resource-row.editing {
   grid-template-columns: minmax(150px, 0.9fr) minmax(180px, 1.1fr) 86px minmax(120px, 0.7fr) auto;
   gap: 10px;
-}
-
-.resource-row.draggable {
-  cursor: grab;
-}
-
-.resource-row.draggable:active {
-  cursor: grabbing;
 }
 
 .resource-row:not(.editing):hover {

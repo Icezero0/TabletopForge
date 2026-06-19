@@ -30,7 +30,7 @@ import SkillSaveCompactList, { type CompactRow } from "@/features/character/comp
 import EquipmentItemsList from "@/features/character/components/EquipmentItemsList.vue";
 
 type Item = { name: string; quantity: number; notes: string };
-type TokenResource = { name: string; max: number; recovery: string; notes: string };
+type TokenResource = { name: string; max: number; recovery: string; notes: string; section?: "common" | "special" };
 type SimpleFeature = { name: string; notes: string };
 type ClassFeature = { name: string; source: string; notes: string };
 type SkillProf = "none" | "proficient" | "expert" | "expertise";
@@ -257,7 +257,13 @@ function cancelResourceEdit() {
 function buildResourcesFromCharacter(): TokenResource[] {
   const sheetResources = props.resourcesBlock
     .map((item) => normalizeCharacterResource(item))
-    .filter((item): item is TokenResource => item != null);
+    .filter((item) => item != null)
+    .map((item) => ({
+      name: item.name,
+      max: item.max,
+      recovery: item.recovery,
+      notes: item.notes,
+    }));
   return sheetResources.length
     ? sheetResources
     : buildCommonResourcesFromCharacter(props.identityBlock, props.attributesBlock, t);

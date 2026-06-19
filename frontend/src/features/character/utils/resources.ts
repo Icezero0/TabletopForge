@@ -9,6 +9,7 @@ export type CharacterResource = {
   max: number;
   recovery: string;
   notes: string;
+  section: "common" | "special";
 };
 
 export type ResourceTranslator = (
@@ -199,7 +200,7 @@ function normalSpellSlotsForClasses(classes: { key: DND5EClass; level: number }[
 
 function addResource(resources: CharacterResource[], name: string, max: number, recovery: string, notes = "") {
   if (!name || max <= 0) return;
-  resources.push({ name, max, recovery, notes });
+  resources.push({ name, max, recovery, notes, section: "common" });
 }
 
 function abilityScore(attributesBlock: Record<string, unknown>, key: string) {
@@ -214,8 +215,9 @@ export function normalizeCharacterResource(raw: unknown): CharacterResource | nu
   const max = Math.max(0, Number(item.max ?? 0));
   const recovery = String(item.recovery ?? "").trim();
   const notes = String(item.notes ?? "").trim();
+  const section = item.section === "special" ? "special" : "common";
   if (!name && max <= 0 && !recovery && !notes) return null;
-  return { name, max, recovery, notes };
+  return { name, max, recovery, notes, section };
 }
 
 export function buildCommonResourcesFromCharacter(

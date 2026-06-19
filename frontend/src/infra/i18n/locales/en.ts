@@ -367,6 +367,8 @@ export default {
     },
     resources: {
       title: "Resources",
+      commonResources: "Common Resources",
+      specialResources: "Special Resources",
       addResource: "Add Resource",
       autoCalcCommon: "Auto-calc common resources",
       noResources: "No resources yet",

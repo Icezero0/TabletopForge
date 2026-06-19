@@ -50,7 +50,7 @@ export type RoomCharacterCreatePayload = {
   attributes?: Record<string, unknown>;
   features?: Record<string, unknown>;
   spells?: Record<string, unknown> | null;
-  resources?: { name: string; max: number; recovery: string; notes?: string }[];
+  resources?: { name: string; max: number; recovery: string; notes?: string; section?: "common" | "special" }[];
   equipment?: Record<string, unknown>;
   extras?: Record<string, unknown>;
   state?: RoomCharacterStateInput;

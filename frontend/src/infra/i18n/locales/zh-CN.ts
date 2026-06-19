@@ -367,6 +367,8 @@ export default {
     },
     resources: {
       title: "资源",
+      commonResources: "通用资源",
+      specialResources: "特殊资源",
       addResource: "添加资源",
       autoCalcCommon: "自动计算通用资源",
       noResources: "暂无资源",

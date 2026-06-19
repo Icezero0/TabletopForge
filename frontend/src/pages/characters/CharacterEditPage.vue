@@ -29,6 +29,7 @@ import BaseButton from "@/ui/base/BaseButton.vue";
 import BaseConfirmDialog from "@/ui/base/BaseConfirmDialog.vue";
 import BaseDialog from "@/ui/base/BaseDialog.vue";
 import type { TokenConfigUpsert } from "@/infra/api/character.api";
+import { normalizeCharacterResource, type CharacterResource } from "@/features/character/utils/resources";
 
 const route = useRoute();
 const router = useRouter();
@@ -81,7 +82,7 @@ const formFlavor = ref<Record<string, unknown>>(defaultFlavor() as unknown as Re
 const formAttributes = ref<Record<string, unknown>>(defaultAttributes() as unknown as Record<string, unknown>);
 const formFeatures = ref<Record<string, unknown>>(defaultFeatures() as unknown as Record<string, unknown>);
 const formSpells = ref<Record<string, unknown>>(defaultSpells() as unknown as Record<string, unknown>);
-const formResources = ref<{ name: string; max: number; recovery: string; notes: string }[]>(defaultResources());
+const formResources = ref<CharacterResource[]>(defaultResources());
 const formEquipment = ref<Record<string, unknown>>(defaultEquipment() as unknown as Record<string, unknown>);
 const formExtras = ref<Record<string, unknown>>({});
 const formTokenConfigs = ref<TokenConfigUpsert[]>([]);
@@ -121,6 +122,13 @@ const canEditCharacter = computed(() =>
 const isReadOnly = computed(() => isEdit.value && !canEditCharacter.value);
 const isDirty = computed(() => canEditCharacter.value && currentSnapshot.value !== savedSnapshot.value);
 
+function normalizeResourcesBlock(resources: unknown): CharacterResource[] {
+  if (!Array.isArray(resources)) return defaultResources();
+  return resources
+    .map((item) => normalizeCharacterResource(item))
+    .filter((item): item is CharacterResource => item != null);
+}
+
 async function loadCharacter(id: number) {
   isLoading.value = true;
   try {
@@ -134,7 +142,7 @@ async function loadCharacter(id: number) {
     formAttributes.value = char.attributes as Record<string, unknown>;
     formFeatures.value = char.features as Record<string, unknown>;
     formSpells.value = (char.spells as Record<string, unknown> | null) ?? (defaultSpells() as unknown as Record<string, unknown>);
-    formResources.value = char.resources ?? defaultResources();
+    formResources.value = normalizeResourcesBlock(char.resources);
     formEquipment.value = char.equipment as Record<string, unknown>;
     formExtras.value = char.extras as Record<string, unknown>;
     formTokenConfigs.value = (char.token_configs ?? [])
@@ -307,14 +315,7 @@ function applyImportDraft(draft: CharacterImportPreview) {
       defaultSpells() as unknown as Record<string, unknown>,
     );
   }
-  formResources.value = Array.isArray(draft.resources)
-    ? draft.resources.map((item) => ({
-        name: String((item as Record<string, unknown>)?.name ?? ""),
-        max: Math.max(0, Number((item as Record<string, unknown>)?.max ?? 0)),
-        recovery: String((item as Record<string, unknown>)?.recovery ?? ""),
-        notes: String((item as Record<string, unknown>)?.notes ?? ""),
-      }))
-    : defaultResources();
+  formResources.value = normalizeResourcesBlock(draft.resources);
   formEquipment.value = mergeImportBlock(
     defaultEquipment() as unknown as Record<string, unknown>,
     draft.equipment,

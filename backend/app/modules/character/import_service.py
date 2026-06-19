@@ -187,6 +187,33 @@ def _clamp_ability_scores(scores: dict[str, Any]) -> dict[str, int]:
     return result
 
 
+def _normalize_resources(resources: list[Any]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for item in resources:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        recovery = str(item.get("recovery") or "").strip()
+        notes = str(item.get("notes") or "").strip()
+        section = "special" if item.get("section") == "special" else "common"
+        try:
+            max_value = max(0, int(item.get("max") or 0))
+        except (TypeError, ValueError):
+            max_value = 0
+        if not name and max_value <= 0 and not recovery and not notes:
+            continue
+        normalized.append(
+            {
+                "name": name,
+                "max": max_value,
+                "recovery": recovery,
+                "notes": notes,
+                "section": section,
+            }
+        )
+    return normalized
+
+
 def parse_and_normalize(
     raw_json: str,
     *,
@@ -251,6 +278,7 @@ def parse_and_normalize(
     resources = data.get("resources")
     if not isinstance(resources, list):
         resources = default_resources()
+    resources = _normalize_resources(resources)
     equipment = _deep_merge(default_equipment(), data.get("equipment") or {})
     extras = _deep_merge(default_extras(), data.get("extras") or {})
 

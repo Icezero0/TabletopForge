@@ -200,14 +200,6 @@ function moveItem(from: number, to: number) {
     transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.draggable-card.canDrag {
-  cursor: grab;
-}
-
-.draggable-card.canDrag:active {
-  cursor: grabbing;
-}
-
 .item-row { display: flex; align-items: flex-start; gap: 8px; }
 
 .item-display-content { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
