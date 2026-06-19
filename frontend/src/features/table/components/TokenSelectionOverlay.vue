@@ -98,6 +98,7 @@ let dragOriginX = 0;
 let dragOriginY = 0;
 let lastDragPayload: { x?: number; y?: number } | null = null;
 let dragInteractionStarted = false;
+let dragDisabledLogged = false;
 
 let resizePointerId: number | null = null;
 let resizeCorner: Corner | null = null;
@@ -119,6 +120,7 @@ function pxToFt(px: number) {
 
 function beginDrag(event: PointerEvent, token: RoomToken, captureEl: HTMLElement) {
   event.stopPropagation();
+  event.preventDefault();
   dragPointerId = event.pointerId;
   dragTargetId = token.id;
   dragStartX = event.clientX;
@@ -127,6 +129,7 @@ function beginDrag(event: PointerEvent, token: RoomToken, captureEl: HTMLElement
   dragOriginY = token.y;
   lastDragPayload = null;
   dragInteractionStarted = false;
+  dragDisabledLogged = false;
   captureEl.setPointerCapture(event.pointerId);
 }
 
@@ -139,6 +142,16 @@ function onDragDown(event: PointerEvent) {
 
 function onDragMove(event: PointerEvent) {
   if (dragPointerId !== event.pointerId || dragTargetId == null) return;
+  if (!canTransform.value && !dragDisabledLogged) {
+    dragDisabledLogged = true;
+    console.debug("[token-drag] transform disabled during drag", {
+      tokenId: dragTargetId,
+      pointerId: event.pointerId,
+      remoteClaimed: remoteClaimedSelected.value,
+      locked: selectedToken.value?.locked,
+      toolMode: props.toolMode,
+    });
+  }
   if (!dragInteractionStarted && Math.hypot(event.clientX - dragStartX, event.clientY - dragStartY) < 2) return;
   const vs = props.viewportScale ?? 1;
   const dx = (event.clientX - dragStartX) / vs;
@@ -153,6 +166,14 @@ function onDragMove(event: PointerEvent) {
 
 function onDragUp(event: PointerEvent) {
   if (dragPointerId !== event.pointerId) return;
+  if (event.type === "pointercancel") {
+    console.debug("[token-drag] pointer cancelled", {
+      tokenId: dragTargetId,
+      pointerId: event.pointerId,
+      hadPayload: !!lastDragPayload,
+      interactionStarted: dragInteractionStarted,
+    });
+  }
   if (dragTargetId != null && lastDragPayload) {
     emit("commitToken", dragTargetId, lastDragPayload);
   } else if (dragTargetId != null && dragInteractionStarted) {
@@ -162,7 +183,11 @@ function onDragUp(event: PointerEvent) {
   dragTargetId = null;
   lastDragPayload = null;
   dragInteractionStarted = false;
-  (event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId);
+  dragDisabledLogged = false;
+  const target = event.currentTarget as HTMLElement;
+  if (target.hasPointerCapture(event.pointerId)) {
+    target.releasePointerCapture(event.pointerId);
+  }
 }
 
 function cornerScenePoint(corner: Corner, b: { x: number; y: number; width: number; height: number }) {

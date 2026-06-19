@@ -39,6 +39,7 @@ const menuRef = ref<HTMLElement | null>(null);
 const open = ref(false);
 const menuPlacement = ref<"down" | "up">("down");
 const menuMaxHeight = ref<number | null>(null);
+const menuRect = ref({ left: 0, top: 0, width: 0 });
 
 const selectedOption = computed(() => {
   return props.options.find((option) => option.value === props.modelValue) ?? null;
@@ -60,9 +61,12 @@ const rootStyle = computed(() => {
 });
 
 const menuStyle = computed(() => {
-  return menuMaxHeight.value
-    ? { maxHeight: `${menuMaxHeight.value}px` }
-    : {};
+  return {
+    left: `${menuRect.value.left}px`,
+    top: `${menuRect.value.top}px`,
+    width: `${menuRect.value.width}px`,
+    ...(menuMaxHeight.value ? { maxHeight: `${menuMaxHeight.value}px` } : {}),
+  };
 });
 
 function getScrollParent(element: HTMLElement | null) {
@@ -100,6 +104,13 @@ async function updateMenuPlacement() {
   const availableHeight = shouldOpenUp ? availableAbove : availableBelow;
 
   menuPlacement.value = shouldOpenUp ? "up" : "down";
+  menuRect.value = {
+    left: rootRect.left,
+    top: shouldOpenUp
+      ? Math.max(viewportTop + gap, rootRect.top - gap - Math.min(naturalHeight, availableHeight))
+      : rootRect.bottom + gap,
+    width: rootRect.width,
+  };
   menuMaxHeight.value = naturalHeight > availableHeight
     ? Math.max(80, availableHeight)
     : null;
@@ -130,6 +141,8 @@ function onDocPointerDown(event: PointerEvent) {
   const target = event.target as Node | null;
 
   if (root && target && !root.contains(target)) {
+    const menu = menuRef.value;
+    if (menu && menu.contains(target)) return;
     close();
   }
 }
@@ -186,25 +199,29 @@ onBeforeUnmount(() => {
         <AppIcon class="triggerIcon" :icon="ChevronDownIcon" :size="16" />
       </button>
 
-      <Transition name="menu-fade">
-        <div
-          v-show="open"
-          ref="menuRef"
-          class="menu"
-          role="listbox"
-          :style="menuStyle"
-        >
-          <BaseMenuItem
-            v-for="option in options"
-            :key="option.value"
-            :rightIcon="modelValue === option.value ? CheckIcon : undefined"
-            @click="selectOption(option.value)"
-          >
-            {{ option.label }}
-          </BaseMenuItem>
-        </div>
-      </Transition>
     </div>
+
+    <Teleport to="body">
+      <Transition name="menu-fade">
+          <div
+            v-show="open"
+            ref="menuRef"
+            class="menu"
+            :class="{ 'placement-up': menuPlacement === 'up' }"
+            role="listbox"
+            :style="menuStyle"
+          >
+            <BaseMenuItem
+              v-for="option in options"
+              :key="option.value"
+              :rightIcon="modelValue === option.value ? CheckIcon : undefined"
+              @click="selectOption(option.value)"
+            >
+              {{ option.label }}
+            </BaseMenuItem>
+          </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -229,6 +246,10 @@ onBeforeUnmount(() => {
 
 .selectRoot {
   position: relative;
+}
+
+.selectRoot.open {
+  z-index: 3000;
 }
 
 .trigger {
@@ -290,11 +311,8 @@ onBeforeUnmount(() => {
 }
 
 .menu {
-  position: absolute;
-  top: calc(100% + 10px);
-  left: 0;
-  right: 0;
-  min-width: 100%;
+  position: fixed;
+  min-width: 0;
   border: 1px solid var(--c-border);
   background: var(--c-surface);
   border-radius: 14px;
@@ -302,12 +320,10 @@ onBeforeUnmount(() => {
   overflow-y: auto;
   box-shadow: 0 18px 50px rgb(0 0 0 / 0.12);
   transform-origin: top center;
-  z-index: 30;
+  z-index: 10000;
 }
 
-.selectRoot.placement-up .menu {
-  top: auto;
-  bottom: calc(100% + 10px);
+.menu.placement-up {
   transform-origin: bottom center;
 }
 
@@ -322,8 +338,8 @@ onBeforeUnmount(() => {
   transform: translateY(-6px);
 }
 
-.selectRoot.placement-up .menu-fade-enter-from,
-.selectRoot.placement-up .menu-fade-leave-to {
+.menu.placement-up.menu-fade-enter-from,
+.menu.placement-up.menu-fade-leave-to {
   transform: translateY(6px);
 }
 
@@ -361,14 +377,8 @@ onBeforeUnmount(() => {
   }
 
   .menu {
-    top: calc(100% + 6px);
     border-radius: 12px;
     padding: 4px;
-  }
-
-  .selectRoot.placement-up .menu {
-    top: auto;
-    bottom: calc(100% + 6px);
   }
 }
 </style>

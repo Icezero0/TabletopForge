@@ -52,6 +52,7 @@ const emit = defineEmits<{
 
 const name = ref("");
 const roomType = ref<RoomType>("DND5E");
+const thunderStoneCreationEnabled = false;
 const visibility = ref<"public" | "private">("public");
 const joinAuditMode = ref<RoomJoinAuditMode>("manual_review");
 const creatorGameRole = ref<GameRole>("GM");
@@ -80,7 +81,7 @@ function submit() {
 
   emit("submit", {
     name: name.value.trim(),
-    type: roomType.value,
+    type: thunderStoneCreationEnabled ? roomType.value : "DND5E",
     visibility: visibility.value,
     join_audit_mode: joinAuditMode.value,
     creator_game_role: creatorGameRole.value,
@@ -124,6 +125,7 @@ function submit() {
               type="button"
               class="segment"
               :data-active="String(roomType === 'ThunderStone')"
+              :disabled="!thunderStoneCreationEnabled"
               @click="roomType = 'ThunderStone'"
             >
               {{ roomTypeThunderStoneLabel }}
@@ -323,6 +325,11 @@ function submit() {
   background: color-mix(in srgb, var(--c-primary) 16%, var(--c-surface));
   color: var(--c-text);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-primary) 26%, var(--c-border));
+}
+
+.segment:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .actions {

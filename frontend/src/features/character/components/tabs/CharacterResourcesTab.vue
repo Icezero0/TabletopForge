@@ -10,6 +10,7 @@ import {
 } from "@heroicons/vue/24/outline";
 import BaseButton from "@/ui/base/BaseButton.vue";
 import AppIcon from "@/ui/base/AppIcon.vue";
+import BaseSortableList from "@/ui/base/BaseSortableList.vue";
 import {
   buildCommonResourcesFromCharacter,
   normalizeCharacterResource,
@@ -104,6 +105,15 @@ function autoCalcCommonResources() {
   cancelEdit();
   push(buildCommonResourcesFromCharacter(props.identityBlock, props.attributesBlock, t));
 }
+
+function moveResource(from: number, to: number) {
+  if (from === to || from < 0 || to < 0) return;
+  const next = [...resources.value];
+  const [item] = next.splice(from, 1);
+  if (!item) return;
+  next.splice(to, 0, item);
+  push(next);
+}
 </script>
 
 <template>
@@ -121,12 +131,21 @@ function autoCalcCommonResources() {
     </div>
 
     <div v-if="!rows.length" class="empty-resource">{{ t("character.resources.noResources") }}</div>
-    <div v-else class="resource-list">
+    <BaseSortableList
+      v-else
+      :count="rows.length"
+      :disabled="editingIndex != null"
+      :placeholder-min-height="56"
+      placeholder-radius="var(--r-1)"
+      @reorder="moveResource($event.from, $event.to)"
+    >
+      <template #default="{ index }">
       <div
-        v-for="(resource, index) in rows"
-        :key="index"
         class="resource-row"
-        :class="{ editing: editingIndex === index && editingDraft }"
+        :class="{
+          editing: editingIndex === index && editingDraft,
+          draggable: editingIndex == null,
+        }"
       >
         <template v-if="editingIndex === index && editingDraft">
           <label class="resource-name">
@@ -180,15 +199,15 @@ function autoCalcCommonResources() {
         </template>
         <template v-else>
           <div class="resource-display">
-            <span class="resource-display-name">{{ resource.name || t("character.resources.unnamedResource") }}</span>
-            <span v-if="resource.notes" class="resource-display-notes">{{ resource.notes }}</span>
+            <span class="resource-display-name">{{ rows[index]?.name || t("character.resources.unnamedResource") }}</span>
+            <span v-if="rows[index]?.notes" class="resource-display-notes">{{ rows[index]?.notes }}</span>
           </div>
           <div class="resource-display-limit">
             <span class="resource-limit-label">{{ t("character.resources.resourceMax") }}</span>
-            <span class="resource-limit-value">{{ resource.max }}</span>
+            <span class="resource-limit-value">{{ rows[index]?.max }}</span>
           </div>
           <div class="resource-display-recovery">
-            <span v-if="resource.recovery">{{ resource.recovery }}</span>
+            <span v-if="rows[index]?.recovery">{{ rows[index]?.recovery }}</span>
             <span v-else class="resource-empty">—</span>
           </div>
           <div class="resource-actions">
@@ -201,7 +220,8 @@ function autoCalcCommonResources() {
           </div>
         </template>
       </div>
-    </div>
+      </template>
+    </BaseSortableList>
   </div>
 </template>
 
@@ -228,12 +248,6 @@ function autoCalcCommonResources() {
   font-size: 13px;
 }
 
-.resource-list {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-
 .resource-row {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) max-content max-content auto;
@@ -244,6 +258,12 @@ function autoCalcCommonResources() {
   border: 1px solid var(--c-border);
   border-radius: var(--r-1);
   background: var(--c-surface-raised);
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .resource-row.editing {
@@ -251,11 +271,26 @@ function autoCalcCommonResources() {
   gap: 10px;
 }
 
+.resource-row.draggable {
+  cursor: grab;
+}
+
+.resource-row.draggable:active {
+  cursor: grabbing;
+}
+
+.resource-row:not(.editing):hover {
+  background: color-mix(in srgb, var(--c-hover) 55%, var(--c-surface));
+  border-color: color-mix(in srgb, var(--c-border) 65%, var(--c-text));
+  box-shadow: 0 10px 22px rgb(0 0 0 / 0.08);
+}
+
 .resource-display {
   min-width: 0;
   display: grid;
   gap: 2px;
 }
+
 
 .resource-display-name {
   min-width: 0;

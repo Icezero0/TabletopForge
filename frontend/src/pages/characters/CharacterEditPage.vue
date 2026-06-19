@@ -729,6 +729,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", handleBeforeUnload)
         <CharacterFeaturesTab
           v-show="activeTab === 'features'"
           v-model="formFeatures"
+          :identity-block="formIdentity"
         />
 
         <CharacterSpellsTab

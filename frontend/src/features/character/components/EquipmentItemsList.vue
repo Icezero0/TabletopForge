@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { PlusIcon, TrashIcon, PencilIcon, CheckIcon, XMarkIcon } from "@heroicons/vue/24/outline";
 import BaseButton from "@/ui/base/BaseButton.vue";
 import BaseListItem from "@/ui/base/BaseListItem.vue";
+import BaseSortableList from "@/ui/base/BaseSortableList.vue";
 import AppIcon from "@/ui/base/AppIcon.vue";
 
 type Item = { name: string; quantity: number; notes: string };
@@ -27,6 +28,7 @@ function shiftMap<T>(m: Map<number, T>, idx: number): Map<number, T> {
 const localItems = ref<Item[]>([...props.modelValue]);
 const editingItems = ref(new Set<number>());
 const itemDrafts = ref(new Map<number, ItemDraft>());
+const canDragItems = computed(() => !props.readonly && editingItems.value.size === 0);
 
 watch(
   () => props.modelValue,
@@ -91,6 +93,16 @@ function syncReplicatedValue(e: Event) {
   const textarea = e.target as HTMLTextAreaElement;
   textarea.parentElement?.setAttribute("data-replicated-value", textarea.value);
 }
+
+function moveItem(from: number, to: number) {
+  if (from === to || from < 0 || to < 0 || props.readonly) return;
+  const next = [...localItems.value];
+  const [item] = next.splice(from, 1);
+  if (!item) return;
+  next.splice(to, 0, item);
+  localItems.value = next;
+  emit("update:modelValue", next);
+}
 </script>
 
 <template>
@@ -103,18 +115,32 @@ function syncReplicatedValue(e: Event) {
       </BaseButton>
     </div>
     <div v-if="!localItems.length" class="empty-hint">—</div>
-    <BaseListItem v-for="(item, i) in localItems" :key="i" dense>
+    <BaseSortableList
+      :count="localItems.length"
+      :disabled="!canDragItems"
+      :placeholder-min-height="48"
+      :placeholder-radius="14"
+      @reorder="moveItem($event.from, $event.to)"
+    >
+      <template #default="{ index }">
+    <BaseListItem
+      dense
+      class="draggable-card"
+      :class="{
+        canDrag: canDragItems,
+      }"
+    >
       <div class="item-row">
-        <template v-if="!editingItems.has(i)">
+        <template v-if="!editingItems.has(index)">
           <div class="item-display-content">
             <div class="item-display-main">
-              <span class="item-display-name">{{ item.name || "—" }}</span>
-              <span class="item-qty-badge">×{{ item.quantity }}</span>
+              <span class="item-display-name">{{ localItems[index]?.name || "—" }}</span>
+              <span class="item-qty-badge">×{{ localItems[index]?.quantity }}</span>
             </div>
-            <span v-if="item.notes" class="display-notes">{{ item.notes }}</span>
+            <span v-if="localItems[index]?.notes" class="display-notes">{{ localItems[index]?.notes }}</span>
           </div>
-          <button v-if="!readonly" class="action-btn" @click="startEditItem(i)"><AppIcon :icon="PencilIcon" :size="14" /></button>
-          <button v-if="!readonly" class="del-btn" @click="removeItem(i)"><AppIcon :icon="TrashIcon" :size="14" /></button>
+          <button v-if="!readonly" class="action-btn" @click="startEditItem(index)"><AppIcon :icon="PencilIcon" :size="14" /></button>
+          <button v-if="!readonly" class="del-btn" @click="removeItem(index)"><AppIcon :icon="TrashIcon" :size="14" /></button>
         </template>
         <template v-else>
           <div class="item-edit">
@@ -123,40 +149,42 @@ function syncReplicatedValue(e: Event) {
                 class="item-name"
                 type="text"
                 :placeholder="t('character.equipment.itemName')"
-                :value="item.name"
-                @input="updateItem(i, 'name', ($event.target as HTMLInputElement).value)"
+                :value="localItems[index]?.name"
+                @input="updateItem(index, 'name', ($event.target as HTMLInputElement).value)"
               />
               <div class="qty-stepper">
-                <button class="qty-btn" @click="changeQty(i, -1)">−</button>
+                <button class="qty-btn" @click="changeQty(index, -1)">−</button>
                 <input
                   type="number"
                   class="qty-input no-spin"
-                  :value="item.quantity"
-                  @change="updateItem(i, 'quantity', Math.max(0, parseInt(($event.target as HTMLInputElement).value) || 0))"
+                  :value="localItems[index]?.quantity"
+                  @change="updateItem(index, 'quantity', Math.max(0, parseInt(($event.target as HTMLInputElement).value) || 0))"
                 />
-                <button class="qty-btn" @click="changeQty(i, 1)">+</button>
+                <button class="qty-btn" @click="changeQty(index, 1)">+</button>
               </div>
             </div>
-            <div class="notes-grow-wrap" :data-replicated-value="item.notes">
+            <div class="notes-grow-wrap" :data-replicated-value="localItems[index]?.notes">
               <textarea
                 :placeholder="t('character.equipment.itemNotes')"
-                :value="item.notes"
+                :value="localItems[index]?.notes"
                 rows="1"
-                @input="(e) => { syncReplicatedValue(e); updateItem(i, 'notes', (e.target as HTMLTextAreaElement).value); }"
+                @input="(e) => { syncReplicatedValue(e); updateItem(index, 'notes', (e.target as HTMLTextAreaElement).value); }"
               />
             </div>
           </div>
           <div class="item-actions">
-            <button class="action-btn confirm-btn" :disabled="!item.name.trim()" @click="confirmItem(i)">
+            <button class="action-btn confirm-btn" :disabled="!localItems[index]?.name.trim()" @click="confirmItem(index)">
               <AppIcon :icon="CheckIcon" :size="14" />
             </button>
-            <button class="action-btn cancel-btn" @click="cancelItem(i)">
+            <button class="action-btn cancel-btn" @click="cancelItem(index)">
               <AppIcon :icon="XMarkIcon" :size="14" />
             </button>
           </div>
         </template>
       </div>
     </BaseListItem>
+      </template>
+    </BaseSortableList>
   </div>
 </template>
 
@@ -165,6 +193,20 @@ function syncReplicatedValue(e: Event) {
 .list-toolbar { display: flex; justify-content: flex-end; }
 .empty-hint { font-size: 13px; color: var(--c-text-muted); }
 .btn-icon-text { display: inline-flex; align-items: center; gap: 5px; }
+
+.draggable-card {
+  transition:
+    opacity 140ms ease,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.draggable-card.canDrag {
+  cursor: grab;
+}
+
+.draggable-card.canDrag:active {
+  cursor: grabbing;
+}
 
 .item-row { display: flex; align-items: flex-start; gap: 8px; }
 
@@ -242,4 +284,5 @@ function syncReplicatedValue(e: Event) {
   transition: color 0.12s; flex-shrink: 0;
 }
 .del-btn:hover { color: var(--c-danger, #e53e3e); }
+
 </style>

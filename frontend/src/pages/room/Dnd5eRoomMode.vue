@@ -1010,7 +1010,15 @@ function handlePatchDrawing(
 }
 
 function handleBeginTokenInteraction(tokenId: number) {
-  ensureLocalObjectClaim({ type: "token", id: tokenId });
+  const target = { type: "token", id: tokenId } as const;
+  const claimed = ensureLocalObjectClaim(target);
+  if (!claimed) {
+    console.debug("[token-drag] begin claim rejected", {
+      tokenId,
+      remoteClaim: remoteClaimFor(target),
+      lastClaimedSelection,
+    });
+  }
 }
 
 function handleEndTokenInteraction(tokenId: number) {
@@ -1728,7 +1736,16 @@ function handlePreviewToken(
   tokenId: number,
   payload: { x?: number; y?: number; width?: number; height?: number },
 ) {
-  if (!ensureLocalObjectClaim({ type: "token", id: tokenId })) return;
+  const target = { type: "token", id: tokenId } as const;
+  if (!ensureLocalObjectClaim(target)) {
+    console.debug("[token-drag] preview claim rejected", {
+      tokenId,
+      payload,
+      remoteClaim: remoteClaimFor(target),
+      lastClaimedSelection,
+    });
+    return;
+  }
   tokenTransformPreview.preview({ tokenId, payload });
 }
 
@@ -1737,9 +1754,18 @@ function handleCommitToken(
   payload: { x?: number; y?: number; width?: number; height?: number },
 ) {
   tokenTransformPreview.cancel();
-  if (!ensureLocalObjectClaim({ type: "token", id: tokenId })) return;
+  const target = { type: "token", id: tokenId } as const;
+  if (!ensureLocalObjectClaim(target)) {
+    console.debug("[token-drag] commit claim rejected", {
+      tokenId,
+      payload,
+      remoteClaim: remoteClaimFor(target),
+      lastClaimedSelection,
+    });
+    return;
+  }
   void commitTokenTransform(tokenId, payload).finally(() => {
-    releaseObjectInteraction({ type: "token", id: tokenId });
+    releaseObjectInteraction(target);
   });
 }
 
@@ -1794,6 +1820,15 @@ async function createPastedToken(
   point: { x: number; y: number },
 ) {
   if (!roomId.value) return null;
+  if (token.linked_character_id != null) {
+    const inCurrentScene = roomCharacters.value.some(
+      (entry) => entry.character_id === token.linked_character_id,
+    );
+    if (!inCurrentScene) {
+      const entry = await linkRoomCharacter(roomId.value, token.linked_character_id);
+      upsertRoomCharacter(entry);
+    }
+  }
   const basePayload = {
     name: token.name,
     x: point.x,

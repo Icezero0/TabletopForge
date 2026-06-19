@@ -2,14 +2,17 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { PlusIcon, TrashIcon, PencilIcon, CheckIcon, XMarkIcon } from "@heroicons/vue/24/outline";
-import { DND5E_CLASSES } from "@/features/character/constants";
 import BaseInput from "@/ui/base/BaseInput.vue";
 import BaseSelect from "@/ui/base/BaseSelect.vue";
 import BaseButton from "@/ui/base/BaseButton.vue";
 import BaseListItem from "@/ui/base/BaseListItem.vue";
+import BaseSortableList from "@/ui/base/BaseSortableList.vue";
 import AppIcon from "@/ui/base/AppIcon.vue";
 
-const props = defineProps<{ modelValue: Record<string, unknown> }>();
+const props = defineProps<{
+  modelValue: Record<string, unknown>;
+  identityBlock: Record<string, unknown>;
+}>();
 const emit = defineEmits<{ (e: "update:modelValue", v: Record<string, unknown>): void }>();
 const { t } = useI18n();
 
@@ -20,6 +23,15 @@ function update(key: string, value: unknown) {
 function syncReplicatedValue(e: Event) {
   const textarea = e.target as HTMLTextAreaElement;
   textarea.parentElement?.setAttribute("data-replicated-value", textarea.value);
+}
+
+function moveArrayItem<T>(items: T[], from: number, to: number) {
+  if (from === to || from < 0 || to < 0) return items;
+  const next = [...items];
+  const [item] = next.splice(from, 1);
+  if (!item) return items;
+  next.splice(to, 0, item);
+  return next;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -47,7 +59,39 @@ function isNew(drafts: Map<number, { isNew: boolean }>, i: number) {
 const editingTraits = ref(new Set<number>());
 const editingFeats = ref(new Set<number>());
 const editingFeatures = ref(new Set<number>());
+type DragSection = "trait" | "feature" | "feat" | "pair";
 const editingPairs = ref(new Set<number>());
+
+function sectionIsEditing(section: DragSection) {
+  if (section === "trait") return editingTraits.value.size > 0;
+  if (section === "feature") return editingFeatures.value.size > 0;
+  if (section === "feat") return editingFeats.value.size > 0;
+  return editingPairs.value.size > 0;
+}
+
+function moveSectionRow(section: DragSection, from: number, to: number) {
+  if (sectionIsEditing(section)) return;
+  if (section === "trait") {
+    localTraits.value = moveArrayItem(localTraits.value, from, to);
+    update("racial_traits", localTraits.value);
+  } else if (section === "feature") {
+    localFeatures.value = moveArrayItem(localFeatures.value, from, to);
+    update("class_features", localFeatures.value);
+  } else if (section === "feat") {
+    localFeats.value = moveArrayItem(localFeats.value, from, to);
+    update("feats", localFeats.value);
+  } else {
+    localPairs.value = moveArrayItem(localPairs.value, from, to);
+    emitCustomFields(localPairs.value);
+  }
+}
+
+function rowDragClasses(section: DragSection) {
+  return {
+    draggableCard: true,
+    canDrag: !sectionIsEditing(section),
+  };
+}
 
 // ── Racial traits ─────────────────────────────────────────────────────────────
 type RacialTrait = { name: string; notes: string };
@@ -59,6 +103,7 @@ const traitDrafts = ref(new Map<number, TraitDraft>());
 watch(
   () => props.modelValue.racial_traits,
   (newVal) => {
+    if (editingTraits.value.size > 0) return;
     const fromParent = (newVal as RacialTrait[]) ?? [];
     if (JSON.stringify(fromParent) !== JSON.stringify(localTraits.value)) {
       localTraits.value = [...fromParent];
@@ -123,6 +168,7 @@ const featDrafts = ref(new Map<number, FeatDraft>());
 watch(
   () => props.modelValue.feats,
   (newVal) => {
+    if (editingFeats.value.size > 0) return;
     const fromParent = (newVal as Feat[]) ?? [];
     if (JSON.stringify(fromParent) !== JSON.stringify(localFeats.value)) {
       localFeats.value = [...fromParent];
@@ -179,7 +225,10 @@ function cancelFeat(i: number) {
 
 // ── Class source options ──────────────────────────────────────────────────────
 const classSourceOptions = computed(() =>
-  DND5E_CLASSES.map(c => ({ value: c, label: t(`character.classes.${c}`) })),
+  ((props.identityBlock.classes as { name?: string }[] | undefined) ?? [])
+    .map((cls) => cls.name?.trim())
+    .filter((name): name is string => Boolean(name))
+    .map((name) => ({ value: name, label: t(`character.classes.${name}`, name) })),
 );
 
 // ── Class features ────────────────────────────────────────────────────────────
@@ -192,6 +241,7 @@ const featureDrafts = ref(new Map<number, FeatureDraft>());
 watch(
   () => props.modelValue.class_features,
   (newVal) => {
+    if (editingFeatures.value.size > 0) return;
     const fromParent = (newVal as ClassFeature[]) ?? [];
     if (JSON.stringify(fromParent) !== JSON.stringify(localFeatures.value)) {
       localFeatures.value = [...fromParent];
@@ -259,6 +309,7 @@ const pairDrafts = ref(new Map<number, PairDraft>());
 watch(
   () => props.modelValue.custom_fields,
   (newVal) => {
+    if (editingPairs.value.size > 0) return;
     const fromParent = Object.entries((newVal as Record<string, string>) ?? {}).map(([k, v]) => ({ key: k, value: v }));
     const localNonEmpty = localPairs.value.filter((p) => p.key.trim());
     if (JSON.stringify(fromParent) !== JSON.stringify(localNonEmpty)) {
@@ -329,33 +380,46 @@ function cancelCustomField(i: number) {
         </BaseButton>
       </div>
       <div v-if="!localTraits.length" class="empty-hint">—</div>
-      <BaseListItem v-for="(trait, i) in localTraits" :key="i" dense>
+      <BaseSortableList
+        :count="localTraits.length"
+        :disabled="sectionIsEditing('trait')"
+        :placeholder-min-height="50"
+        :placeholder-radius="14"
+        @reorder="moveSectionRow('trait', $event.from, $event.to)"
+      >
+        <template #default="{ index }">
+      <BaseListItem
+        dense
+        :class="rowDragClasses('trait')"
+      >
         <div class="feature-row">
-          <template v-if="!editingTraits.has(i)">
+          <template v-if="!editingTraits.has(index)">
             <div class="display-content">
-              <span class="display-name">{{ trait.name || "—" }}</span>
-              <span v-if="trait.notes" class="display-notes">{{ trait.notes }}</span>
+              <span class="display-name">{{ localTraits[index]?.name || "—" }}</span>
+              <span v-if="localTraits[index]?.notes" class="display-notes">{{ localTraits[index]?.notes }}</span>
             </div>
-            <button class="action-btn" @click="startEditTrait(i)"><AppIcon :icon="PencilIcon" :size="14" /></button>
-            <button class="del-btn" @click="removeTrait(i)"><AppIcon :icon="TrashIcon" :size="14" /></button>
+            <button class="action-btn" @click="startEditTrait(index)"><AppIcon :icon="PencilIcon" :size="14" /></button>
+            <button class="del-btn" @click="removeTrait(index)"><AppIcon :icon="TrashIcon" :size="14" /></button>
           </template>
           <template v-else>
             <div class="feature-edit">
-              <BaseInput :model-value="trait.name" :placeholder="t('character.features.traitName')" @update:model-value="updateTrait(i, 'name', $event)" />
-              <div class="notes-grow-wrap" :data-replicated-value="trait.notes">
+              <BaseInput :model-value="localTraits[index]?.name ?? ''" :placeholder="t('character.features.traitName')" @update:model-value="updateTrait(index, 'name', $event)" />
+              <div class="notes-grow-wrap" :data-replicated-value="localTraits[index]?.notes">
                 <textarea
                   :placeholder="t('character.features.traitNotes')"
-                  :value="trait.notes"
+                  :value="localTraits[index]?.notes"
                   rows="1"
-                  @input="(e) => { syncReplicatedValue(e); updateTrait(i, 'notes', (e.target as HTMLTextAreaElement).value); }"
+                  @input="(e) => { syncReplicatedValue(e); updateTrait(index, 'notes', (e.target as HTMLTextAreaElement).value); }"
                 />
               </div>
             </div>
-            <button class="action-btn confirm-btn" :disabled="!trait.name.trim()" @click="confirmTrait(i)"><AppIcon :icon="CheckIcon" :size="14" /></button>
-            <button class="action-btn cancel-btn" @click="cancelTrait(i)"><AppIcon :icon="XMarkIcon" :size="14" /></button>
+            <button class="action-btn confirm-btn" :disabled="!localTraits[index]?.name.trim()" @click="confirmTrait(index)"><AppIcon :icon="CheckIcon" :size="14" /></button>
+            <button class="action-btn cancel-btn" @click="cancelTrait(index)"><AppIcon :icon="XMarkIcon" :size="14" /></button>
           </template>
         </div>
       </BaseListItem>
+        </template>
+      </BaseSortableList>
     </div>
 
     <!-- Class features -->
@@ -367,39 +431,52 @@ function cancelCustomField(i: number) {
         </BaseButton>
       </div>
       <div v-if="!localFeatures.length" class="empty-hint">—</div>
-      <BaseListItem v-for="(feat, i) in localFeatures" :key="i" dense>
+      <BaseSortableList
+        :count="localFeatures.length"
+        :disabled="sectionIsEditing('feature')"
+        :placeholder-min-height="50"
+        :placeholder-radius="14"
+        @reorder="moveSectionRow('feature', $event.from, $event.to)"
+      >
+        <template #default="{ index }">
+      <BaseListItem
+        dense
+        :class="rowDragClasses('feature')"
+      >
         <div class="feature-row">
-          <template v-if="!editingFeatures.has(i)">
+          <template v-if="!editingFeatures.has(index)">
             <div class="display-content">
               <div class="display-primary">
-                <span class="display-name">{{ feat.name || "—" }}</span>
-                <span v-if="feat.source" class="source-tag">{{ t(`character.classes.${feat.source}`, feat.source) }}</span>
+                <span class="display-name">{{ localFeatures[index]?.name || "—" }}</span>
+                <span v-if="localFeatures[index]?.source" class="source-tag">{{ t(`character.classes.${localFeatures[index]?.source}`, localFeatures[index]?.source) }}</span>
               </div>
-              <span v-if="feat.notes" class="display-notes">{{ feat.notes }}</span>
+              <span v-if="localFeatures[index]?.notes" class="display-notes">{{ localFeatures[index]?.notes }}</span>
             </div>
-            <button class="action-btn" @click="startEditFeature(i)"><AppIcon :icon="PencilIcon" :size="14" /></button>
-            <button class="del-btn" @click="removeFeature(i)"><AppIcon :icon="TrashIcon" :size="14" /></button>
+            <button class="action-btn" @click="startEditFeature(index)"><AppIcon :icon="PencilIcon" :size="14" /></button>
+            <button class="del-btn" @click="removeFeature(index)"><AppIcon :icon="TrashIcon" :size="14" /></button>
           </template>
           <template v-else>
             <div class="feature-edit">
               <div class="feature-edit-main">
-                <BaseInput :model-value="feat.name" :placeholder="t('character.features.featureName')" @update:model-value="updateFeature(i, 'name', $event)" style="flex: 1" />
-                <BaseSelect :model-value="feat.source" :options="classSourceOptions" :placeholder="t('character.features.featureSource')" :width="140" @update:model-value="updateFeature(i, 'source', $event)" />
+                <BaseInput :model-value="localFeatures[index]?.name ?? ''" :placeholder="t('character.features.featureName')" @update:model-value="updateFeature(index, 'name', $event)" style="flex: 1" />
+                <BaseSelect :model-value="localFeatures[index]?.source ?? ''" :options="classSourceOptions" :placeholder="t('character.features.featureSource')" :width="140" @update:model-value="updateFeature(index, 'source', $event)" />
               </div>
-              <div class="notes-grow-wrap" :data-replicated-value="feat.notes">
+              <div class="notes-grow-wrap" :data-replicated-value="localFeatures[index]?.notes">
                 <textarea
                   :placeholder="t('character.features.featureNotes')"
-                  :value="feat.notes"
+                  :value="localFeatures[index]?.notes"
                   rows="1"
-                  @input="(e) => { syncReplicatedValue(e); updateFeature(i, 'notes', (e.target as HTMLTextAreaElement).value); }"
+                  @input="(e) => { syncReplicatedValue(e); updateFeature(index, 'notes', (e.target as HTMLTextAreaElement).value); }"
                 />
               </div>
             </div>
-            <button class="action-btn confirm-btn" :disabled="!feat.name.trim() || !feat.source" @click="confirmFeature(i)"><AppIcon :icon="CheckIcon" :size="14" /></button>
-            <button class="action-btn cancel-btn" @click="cancelFeature(i)"><AppIcon :icon="XMarkIcon" :size="14" /></button>
+            <button class="action-btn confirm-btn" :disabled="!localFeatures[index]?.name.trim() || !localFeatures[index]?.source" @click="confirmFeature(index)"><AppIcon :icon="CheckIcon" :size="14" /></button>
+            <button class="action-btn cancel-btn" @click="cancelFeature(index)"><AppIcon :icon="XMarkIcon" :size="14" /></button>
           </template>
         </div>
       </BaseListItem>
+        </template>
+      </BaseSortableList>
     </div>
 
     <!-- Feats -->
@@ -411,33 +488,46 @@ function cancelCustomField(i: number) {
         </BaseButton>
       </div>
       <div v-if="!localFeats.length" class="empty-hint">—</div>
-      <BaseListItem v-for="(feat, i) in localFeats" :key="i" dense>
+      <BaseSortableList
+        :count="localFeats.length"
+        :disabled="sectionIsEditing('feat')"
+        :placeholder-min-height="50"
+        :placeholder-radius="14"
+        @reorder="moveSectionRow('feat', $event.from, $event.to)"
+      >
+        <template #default="{ index }">
+      <BaseListItem
+        dense
+        :class="rowDragClasses('feat')"
+      >
         <div class="feature-row">
-          <template v-if="!editingFeats.has(i)">
+          <template v-if="!editingFeats.has(index)">
             <div class="display-content">
-              <span class="display-name">{{ feat.name || "—" }}</span>
-              <span v-if="feat.notes" class="display-notes">{{ feat.notes }}</span>
+              <span class="display-name">{{ localFeats[index]?.name || "—" }}</span>
+              <span v-if="localFeats[index]?.notes" class="display-notes">{{ localFeats[index]?.notes }}</span>
             </div>
-            <button class="action-btn" @click="startEditFeat(i)"><AppIcon :icon="PencilIcon" :size="14" /></button>
-            <button class="del-btn" @click="removeFeat(i)"><AppIcon :icon="TrashIcon" :size="14" /></button>
+            <button class="action-btn" @click="startEditFeat(index)"><AppIcon :icon="PencilIcon" :size="14" /></button>
+            <button class="del-btn" @click="removeFeat(index)"><AppIcon :icon="TrashIcon" :size="14" /></button>
           </template>
           <template v-else>
             <div class="feature-edit">
-              <BaseInput :model-value="feat.name" :placeholder="t('character.features.featName')" @update:model-value="updateFeat(i, 'name', $event)" />
-              <div class="notes-grow-wrap" :data-replicated-value="feat.notes">
+              <BaseInput :model-value="localFeats[index]?.name ?? ''" :placeholder="t('character.features.featName')" @update:model-value="updateFeat(index, 'name', $event)" />
+              <div class="notes-grow-wrap" :data-replicated-value="localFeats[index]?.notes">
                 <textarea
                   :placeholder="t('character.features.featNotes')"
-                  :value="feat.notes"
+                  :value="localFeats[index]?.notes"
                   rows="1"
-                  @input="(e) => { syncReplicatedValue(e); updateFeat(i, 'notes', (e.target as HTMLTextAreaElement).value); }"
+                  @input="(e) => { syncReplicatedValue(e); updateFeat(index, 'notes', (e.target as HTMLTextAreaElement).value); }"
                 />
               </div>
             </div>
-            <button class="action-btn confirm-btn" :disabled="!feat.name.trim()" @click="confirmFeat(i)"><AppIcon :icon="CheckIcon" :size="14" /></button>
-            <button class="action-btn cancel-btn" @click="cancelFeat(i)"><AppIcon :icon="XMarkIcon" :size="14" /></button>
+            <button class="action-btn confirm-btn" :disabled="!localFeats[index]?.name.trim()" @click="confirmFeat(index)"><AppIcon :icon="CheckIcon" :size="14" /></button>
+            <button class="action-btn cancel-btn" @click="cancelFeat(index)"><AppIcon :icon="XMarkIcon" :size="14" /></button>
           </template>
         </div>
       </BaseListItem>
+        </template>
+      </BaseSortableList>
     </div>
 
     <!-- Custom fields -->
@@ -449,33 +539,46 @@ function cancelCustomField(i: number) {
         </BaseButton>
       </div>
       <div v-if="!localPairs.length" class="empty-hint">—</div>
-      <BaseListItem v-for="(pair, i) in localPairs" :key="i" dense>
+      <BaseSortableList
+        :count="localPairs.length"
+        :disabled="sectionIsEditing('pair')"
+        :placeholder-min-height="50"
+        :placeholder-radius="14"
+        @reorder="moveSectionRow('pair', $event.from, $event.to)"
+      >
+        <template #default="{ index }">
+      <BaseListItem
+        dense
+        :class="rowDragClasses('pair')"
+      >
         <div class="feature-row">
-          <template v-if="!editingPairs.has(i)">
+          <template v-if="!editingPairs.has(index)">
             <div class="display-content">
-              <span class="display-name">{{ pair.key || "—" }}</span>
-              <span v-if="pair.value" class="display-notes">{{ pair.value }}</span>
+              <span class="display-name">{{ localPairs[index]?.key || "—" }}</span>
+              <span v-if="localPairs[index]?.value" class="display-notes">{{ localPairs[index]?.value }}</span>
             </div>
-            <button class="action-btn" @click="startEditPair(i)"><AppIcon :icon="PencilIcon" :size="14" /></button>
-            <button class="del-btn" @click="removeCustomField(i)"><AppIcon :icon="TrashIcon" :size="14" /></button>
+            <button class="action-btn" @click="startEditPair(index)"><AppIcon :icon="PencilIcon" :size="14" /></button>
+            <button class="del-btn" @click="removeCustomField(index)"><AppIcon :icon="TrashIcon" :size="14" /></button>
           </template>
           <template v-else>
             <div class="feature-edit">
-              <BaseInput :model-value="pair.key" :placeholder="t('character.features.customKey')" @update:model-value="updateCustomField(i, 'key', $event)" />
-              <div class="notes-grow-wrap" :data-replicated-value="pair.value">
+              <BaseInput :model-value="localPairs[index]?.key ?? ''" :placeholder="t('character.features.customKey')" @update:model-value="updateCustomField(index, 'key', $event)" />
+              <div class="notes-grow-wrap" :data-replicated-value="localPairs[index]?.value">
                 <textarea
                   :placeholder="t('character.features.customValue')"
-                  :value="pair.value"
+                  :value="localPairs[index]?.value"
                   rows="1"
-                  @input="(e) => { syncReplicatedValue(e); updateCustomField(i, 'value', (e.target as HTMLTextAreaElement).value); }"
+                  @input="(e) => { syncReplicatedValue(e); updateCustomField(index, 'value', (e.target as HTMLTextAreaElement).value); }"
                 />
               </div>
             </div>
-            <button class="action-btn confirm-btn" :disabled="!pair.key.trim()" @click="confirmCustomField(i)"><AppIcon :icon="CheckIcon" :size="14" /></button>
-            <button class="action-btn cancel-btn" @click="cancelCustomField(i)"><AppIcon :icon="XMarkIcon" :size="14" /></button>
+            <button class="action-btn confirm-btn" :disabled="!localPairs[index]?.key.trim()" @click="confirmCustomField(index)"><AppIcon :icon="CheckIcon" :size="14" /></button>
+            <button class="action-btn cancel-btn" @click="cancelCustomField(index)"><AppIcon :icon="XMarkIcon" :size="14" /></button>
           </template>
         </div>
       </BaseListItem>
+        </template>
+      </BaseSortableList>
     </div>
 
   </div>
@@ -487,6 +590,19 @@ function cancelCustomField(i: number) {
 .section-header { display: flex; align-items: center; justify-content: space-between; }
 .section-title { font-size: 14px; font-weight: 600; color: var(--c-text); }
 .empty-hint { font-size: 13px; color: var(--c-text-muted); }
+.draggableCard {
+  transition:
+    opacity 140ms ease,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.draggableCard.canDrag {
+  cursor: grab;
+}
+
+.draggableCard.canDrag:active {
+  cursor: grabbing;
+}
 
 /* Row shell */
 .feature-row { display: flex; align-items: flex-start; gap: 8px; }
@@ -542,4 +658,5 @@ function cancelCustomField(i: number) {
 }
 .del-btn:hover { color: var(--c-danger, #e53e3e); }
 .btn-icon-text { display: inline-flex; align-items: center; gap: 5px; }
+
 </style>

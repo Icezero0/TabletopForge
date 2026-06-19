@@ -31,6 +31,7 @@ declare module 'vue' {
     BaseNumberInput: typeof import('./src/ui/base/BaseNumberInput.vue')['default']
     BasePill: typeof import('./src/ui/base/BasePill.vue')['default']
     BaseSelect: typeof import('./src/ui/base/BaseSelect.vue')['default']
+    BaseSortableList: typeof import('./src/ui/base/BaseSortableList.vue')['default']
     BaseTagInput: typeof import('./src/ui/base/BaseTagInput.vue')['default']
     BaseTextarea: typeof import('./src/ui/base/BaseTextarea.vue')['default']
     BaseToastViewport: typeof import('./src/ui/base/BaseToastViewport.vue')['default']

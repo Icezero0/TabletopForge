@@ -481,7 +481,8 @@ const preparedSpellSet = computed(() => {
   return new Set(Array.isArray(prepared) ? prepared.map(String) : []);
 });
 
-function isPreparedSpell(name: string) {
+function isPreparedSpell(name: string, level?: string) {
+  if (level === "0") return true;
   return preparedSpellSet.value.has(name);
 }
 
@@ -795,7 +796,8 @@ async function updateTokenSpellDerived(
   }
 }
 
-async function togglePreparedSpell(name: string) {
+async function togglePreparedSpell(name: string, level?: string) {
+  if (level === "0") return;
   if (!canEditVisibleState.value || saving.value) return;
   const tokenId = props.inspection?.tokenId;
   if (tokenId == null) return;
@@ -1204,9 +1206,9 @@ function openCharacterSheet() {
                       :key="sp"
                       type="button"
                       class="spellName spellButton"
-                      :class="{ prepared: isPreparedSpell(sp) }"
+                      :class="{ prepared: isPreparedSpell(sp, row.lvl) }"
                       :disabled="!canEditVisibleState || saving"
-                      @click="togglePreparedSpell(sp)"
+                      @click="togglePreparedSpell(sp, row.lvl)"
                     >
                       {{ sp }}
                     </button>
@@ -2514,8 +2516,8 @@ function openCharacterSheet() {
 }
 
 .spellName {
-  font-size: 11px;
-  padding: 2px 7px;
+  font-size: 10px;
+  padding: 2px 6px;
   border-radius: 5px;
   background: color-mix(in srgb, var(--c-primary) 10%, var(--c-bg-subtle));
   border: 1px solid color-mix(in srgb, var(--c-primary) 25%, transparent);
