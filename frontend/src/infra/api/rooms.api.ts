@@ -470,6 +470,7 @@ export type TokenStateSummary = {
 export type RoomToken = {
   id: number;
   room_id: number;
+  library_resource_id?: number | null;
   asset_id: number | null;
   linked_character_id: number;
   name: string;

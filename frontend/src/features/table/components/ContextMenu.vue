@@ -29,6 +29,7 @@ const props = defineProps<{
   gameRole: GameRole | "unknown";
   currentUserId?: number | null;
   characterOwnerById: Map<number, number>;
+  hasTokenClipboard?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -36,6 +37,9 @@ const emit = defineEmits<{
   deleteMap: [mapId: number];
   deleteDrawing: [drawingId: number];
   deleteToken: [tokenId: number];
+  copyToken: [tokenId: number];
+  cutToken: [tokenId: number];
+  pasteToken: [];
   inspectToken: [tokenId: number];
   addTokenToCombat: [tokenId: number];
   editTextDrawing: [drawingId: number];
@@ -615,6 +619,21 @@ onBeforeUnmount(() => {
         <template v-if="canManageSelectedToken">
           <button
             type="button"
+            class="menuItem"
+            @click="onAction(() => emit('copyToken', selectedToken!.id))"
+          >
+            {{ t("table.menu.copyToken") }}
+          </button>
+          <button
+            type="button"
+            class="menuItem"
+            @click="onAction(() => emit('cutToken', selectedToken!.id))"
+          >
+            {{ t("table.menu.cutToken") }}
+          </button>
+          <div class="menuDivider" />
+          <button
+            type="button"
             class="menuItem danger"
             @click="onAction(() => emit('deleteToken', selectedToken!.id))"
           >
@@ -676,6 +695,14 @@ onBeforeUnmount(() => {
           @click="onAction(() => emit('openDiceRoll', userDiceDraft()))"
         >
           掷骰
+        </button>
+        <button
+          type="button"
+          class="menuItem"
+          :disabled="!hasTokenClipboard"
+          @click="onAction(() => emit('pasteToken'))"
+        >
+          {{ t("table.menu.pasteToken") }}
         </button>
       </template>
       <template v-else-if="selection?.type === 'drawing' && canEraseDrawing">

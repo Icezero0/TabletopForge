@@ -199,6 +199,7 @@ class TokenStateSummary(BaseModel):
 class RoomTokenResponse(BaseModel):
     id: int
     room_id: int
+    library_resource_id: int | None = None
     asset_id: int | None = None
     linked_character_id: int
     name: str

@@ -14,6 +14,7 @@ import {
   type RoomFogMapMask,
   type RoomFogState,
   type RoomScene,
+  type RoomToken,
 } from "@/infra/api/rooms.api";
 import { patchLibraryResourceGrid, type LibraryResource } from "@/infra/api/library.api";
 import BaseLayout from "@/ui/layout/BaseLayout.vue";
@@ -483,6 +484,14 @@ const contextMenuOpen = ref(false);
 const contextMenuX = ref(0);
 const contextMenuY = ref(0);
 const chatPanelCollapsed = ref(false);
+
+type TokenClipboardMode = "copy" | "cut";
+type TokenClipboard = {
+  mode: TokenClipboardMode;
+  token: RoomToken;
+};
+
+const tokenClipboard = ref<TokenClipboard | null>(null);
 
 watch(tabletopMaps, (maps) => {
   if (!maps.length) {
@@ -1749,6 +1758,106 @@ async function handleContextDeleteToken(tokenId: number) {
   }
 }
 
+function cloneTokenForClipboard(token: RoomToken): RoomToken {
+  return JSON.parse(JSON.stringify(token)) as RoomToken;
+}
+
+function handleCopyToken(tokenId: number) {
+  const token = tabletopTokens.value.find((item) => item.id === tokenId);
+  if (!token || !tokenCanManage(token)) return;
+  tokenClipboard.value = {
+    mode: "copy",
+    token: cloneTokenForClipboard(token),
+  };
+}
+
+async function handleCutToken(tokenId: number) {
+  const token = tabletopTokens.value.find((item) => item.id === tokenId);
+  if (!token || !tokenCanManage(token)) return;
+  tokenClipboard.value = {
+    mode: "cut",
+    token: cloneTokenForClipboard(token),
+  };
+  await handleContextDeleteToken(tokenId);
+}
+
+function tokenPastePointFromClient(clientX: number, clientY: number, token: RoomToken) {
+  const point = scenePointFromViewport(clientX, clientY);
+  return {
+    x: point.x - token.width / 2,
+    y: point.y - token.height / 2,
+  };
+}
+
+async function createPastedToken(
+  token: RoomToken,
+  point: { x: number; y: number },
+) {
+  if (!roomId.value) return null;
+  const basePayload = {
+    name: token.name,
+    x: point.x,
+    y: point.y,
+    linked_character_id: token.linked_character_id,
+  };
+  if (token.library_resource_id != null) {
+    try {
+      return await tabletopStore.createToken(roomId.value, {
+        ...basePayload,
+        library_resource_id: token.library_resource_id,
+      });
+    } catch {
+      // The resource may belong to another user or may have been deleted. Fall back to character spawn.
+    }
+  }
+  return await tabletopStore.spawnCharacterToken(roomId.value, token.linked_character_id, {
+    name: token.name,
+    x: point.x,
+    y: point.y,
+  });
+}
+
+async function handlePasteToken(options?: { clientX?: number; clientY?: number }) {
+  const item = tokenClipboard.value;
+  if (!item || !roomId.value) return;
+  const token = item.token;
+  const point = options?.clientX != null && options.clientY != null
+    ? tokenPastePointFromClient(options.clientX, options.clientY, token)
+    : (() => {
+        const center = viewportCenterPoint();
+        return { x: center.x - token.width / 2, y: center.y - token.height / 2 };
+      })();
+  try {
+    const created = await createPastedToken(token, point);
+    if (!created) return;
+    const updated = await tabletopStore.updateToken(roomId.value, created.id, {
+      name: token.name,
+      x: point.x,
+      y: point.y,
+      width: token.width,
+      height: token.height,
+      rotation: token.rotation,
+      visible: token.visible,
+      locked: token.locked,
+      panel: token.panel ?? undefined,
+    });
+    selectToken(updated.id);
+    selectedCharacterListId.value = null;
+    if (updated.linked_character_id != null && canInspectToken(updated)) {
+      inspectCharacter({
+        characterId: updated.linked_character_id,
+        tokenId: updated.id,
+        tokenInstanceName: updated.name,
+      });
+    }
+  } catch (error) {
+    toasts.push({
+      message: getBackendErrorMessage(error) || t("table.characterList.spawnFailed"),
+      tone: "danger",
+    });
+  }
+}
+
 function isEditingText() {
   const el = document.activeElement;
   if (!el) return false;
@@ -1779,6 +1888,28 @@ function handleGlobalKeyDown(event: KeyboardEvent) {
     if (activeInspection.value) {
       event.preventDefault();
       handleCloseInspection();
+      return;
+    }
+  }
+  if ((event.ctrlKey || event.metaKey) && !event.shiftKey) {
+    if (isEditingText()) return;
+    const key = event.key.toLowerCase();
+    if (key === "c" || key === "x") {
+      const sel = selection.value;
+      if (sel?.type !== "token") return;
+      const token = tabletopTokens.value.find((item) => item.id === sel.id);
+      if (!token || !tokenCanManage(token)) return;
+      event.preventDefault();
+      if (key === "c") {
+        handleCopyToken(sel.id);
+      } else {
+        void handleCutToken(sel.id);
+      }
+      return;
+    }
+    if (key === "v" && tokenClipboard.value) {
+      event.preventDefault();
+      void handlePasteToken();
       return;
     }
   }
@@ -2484,12 +2615,16 @@ watch(
             :game-role="currentUserGameRole"
             :current-user-id="currentUserId"
             :character-owner-by-id="characterOwnerById"
+            :has-token-clipboard="tokenClipboard != null"
             @close="closeContextMenu"
             @align-map-to-grid="handleContextAlignMapToGrid"
             @fill-map-fog="handleFillMapFog"
             @delete-map="handleContextDeleteMap"
             @delete-drawing="handleContextDeleteDrawing"
             @delete-token="handleContextDeleteToken"
+            @copy-token="handleCopyToken"
+            @cut-token="handleCutToken"
+            @paste-token="handlePasteToken({ clientX: contextMenuX, clientY: contextMenuY })"
             @inspect-token="handleInspectToken"
             @add-token-to-combat="handleAddTokenToCombat"
             @edit-text-drawing="handleEditTextDrawing"

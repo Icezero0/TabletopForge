@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import {
   ArrowPathIcon,
@@ -32,6 +32,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 const tabletopStore = useTabletopStore();
 
+const rootEl = ref<HTMLElement | null>(null);
 const audioEl = ref<HTMLAudioElement | null>(null);
 const soundResources = ref<LibraryResource[]>([]);
 const resourcesLoading = ref(false);
@@ -273,6 +274,19 @@ function togglePanel(panel: "volume" | "playlist" | "library") {
   libraryOpen.value = panel === "library" ? !libraryOpen.value : false;
 }
 
+function closePanels() {
+  volumeOpen.value = false;
+  playlistOpen.value = false;
+  libraryOpen.value = false;
+}
+
+function onDocumentPointerDown(event: PointerEvent) {
+  if (!volumeOpen.value && !playlistOpen.value && !libraryOpen.value) return;
+  const target = event.target;
+  if (target instanceof Node && rootEl.value?.contains(target)) return;
+  closePanels();
+}
+
 function onTimeUpdate() {
   if (!audioEl.value || seekingValue.value != null) return;
   localTime.value = audioEl.value.currentTime || 0;
@@ -334,10 +348,18 @@ watch(
   },
   { immediate: true },
 );
+
+onMounted(() => {
+  document.addEventListener("pointerdown", onDocumentPointerDown, true);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", onDocumentPointerDown, true);
+});
 </script>
 
 <template>
-  <div class="musicModule">
+  <div ref="rootEl" class="musicModule">
     <audio
       ref="audioEl"
       :src="currentAudioUrl"
