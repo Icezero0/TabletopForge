@@ -1,84 +1,142 @@
-# Token 模块设计
+# 指示物 / Token 模块设计
 
-版本：v0.4  
-状态：Draft
-
----
-
-# 1 模块目标
-
-Token 模块用于维护地图桌面 **Token band（基准 z-index 100）** 上的可操作对象，包括玩家角色 Token、怪物 Token 等。叠放规则见 `tabletop_scene.md` §3.2。
+版本：v0.5  
+状态：Living Draft（2026-06-19 对齐当前实现）
 
 ---
 
-# 2 核心属性
+# 1 模块定位
 
-Token 包含：
+本模块描述 DND5E 房间桌面中的 room token，以及它和角色卡、资源库 token 的关系。
 
-- 所属房间
-- 资源图片（可选；见 character_card §3.4 缺省首字）
-- 绑定角色（`character_id`；同一角色定义可对应多个 Token 实例以复用）
-- 名称
-- 类型（`character` | `monster` | 后续扩展）
-- 场景坐标、尺寸、旋转
-- 类内 z-index（相对其它 Token；effective z = 100 + 类内序号，见 `tabletop_scene.md` §3.2.2）
-- 锁定状态（可选，与地图底图锁定区分）
-- 关联用户（玩家 Token 可选）
-
-怪物类型 Token 另关联怪物信息（MVP 为大文本字段，见 `character_card.md`）。
+当前项目中文 UI 正式称呼为“指示物”；代码中仍大量使用 `token`。
 
 ---
 
-# 3 前端交互
+# 2 两类 Token 概念
 
-- 从房间角色库 **复用** 已有定义创建 Token
-- 创建 / 编辑 Token（GM 任意；PL 仅自己创建的角色定义）
-- 拖拽、缩放（权限内）
-- 选中 Token
-- **删除**：选中 → **右键 Context Menu → 删除**（未选中不可删）
-- 绑定角色
-- 地图上的 **HP 预览**（角色 Token）；怪物 Token 对 member 不显示精确 HP
+## 2.1 资源库 Token
 
-角色 Token 点击打开角色详情。怪物 Token：GM 看全量 **CharacterState**；PL 仅看 **累计受伤害 / 伤害记录**。
+资源库 token 是 `library_resources(type=token)`，表示可复用的指示物素材。
 
-**缺省图**：绑定角色无 Token 图时，显示 **名称首字**（与 `character_card.md` §3.4 一致）。
+用途：
 
----
+- 提供 room token 头像来源。
+- 供角色卡次要指示物配置引用。
+- 供角色卡主要指示物对应的资源库 token 绑定角色生命周期。
 
-# 4 权限规则
+生命周期：
 
-通过 `game_role` 判定，见 `08_permission_design.md` §6.4：
+- 角色存在时，应有一个绑定角色生命周期的主要资源库 token。
+- 角色头像 / token 图像变化时，主要资源库 token 同步更新。
+- 角色删除后，主要资源库 token 的占用释放，才允许删除对应资源。
+- 次要指示物配置引用的资源库 token 也会参与占用统计。
 
-- **GM**：所有 Token 增删改、移动。
-- **PL**：移动并管理绑定 **自己创建角色** 的 Token；不可新建 GM 怪物 Token。
+注意：room token 对资源库 token 不是强依赖。资源库 token 被删除或不可读时，前端回退到名称首字头像。
 
----
+## 2.2 Room Token
 
-# 5 可见性与 HP
+Room token 是房间桌面上的实例，存储在 `room_tokens`。它是场景中可移动、可选择、可展示信息面板的对象。
 
-| 对象 | GM | PL | OB |
-|---|---|---|---|
-| 角色 Token HP | CharacterState 全量 | 己方全量；他人按策略 | 只读摘要 |
-| 怪物 Token HP | 精确 HP | 仅伤害记录 | 仅伤害记录 |
-| 怪物详情正文 | 可读可编 | 不可编辑 GM 怪物正文 | 只读 |
+主要字段：
 
-权威 HP 在 **CharacterState**；对 PL 的 API / WS 过滤怪物精确 HP。
+- `room_id`
+- `library_resource_id`
+- `linked_character_id`
+- `owner_user_id`
+- `name`
+- `x` / `y` / `width` / `height` / `rotation`
+- `z_index`
+- `visible`
+- `locked`
+- `panel`
 
----
-
-# 6 实时事件
-
-- TOKEN_CREATED
-- TOKEN_MOVED
-- TOKEN_UPDATED
-- TOKEN_DELETED
+Room token 不直接保存完整角色卡，而是保存生成时的面板快照；后续可在信息面板中独立修改。
 
 ---
 
-# 7 后续扩展
+# 3 主要指示物
 
-- Token 状态图标、条件血条样式
-- 可见性分层、战争迷雾联动
-- 临时控制权（资源级授权）
-- 范围模板、移动路径记录
-- 多场景下 `scene_id` 归属
+主要指示物由角色卡自动派生，不再作为用户手动编辑的 `token_config`。
+
+来源：
+
+- 名称：角色卡名称。
+- 头像：`token_image_asset_id` 优先，其次 `portrait_asset_id`。
+- 信息面板：从角色卡属性、状态、法术、资源、背包、特性等生成。
+- 资源库 token：`characters.primary_token_resource_id`。
+
+生成 room token 时，主要指示物会直接从角色卡当前数据生成快照，并使用主要资源库 token 作为头像资源。
+
+---
+
+# 4 次要指示物
+
+次要指示物仍保存在 `character_token_configs`。
+
+用途：
+
+- 召唤物、变身形态、随从、特殊标记等。
+- 用户可编辑名称、头像资源、面板初始数据、特性、资源、背包等。
+
+次要指示物生成 room token 时，以其 `panel_initial` 作为面板快照来源。
+
+---
+
+# 5 信息面板与隐藏数据
+
+Room token 信息面板按 tab 展示：
+
+- 概览
+- 能力
+- 法术
+- 资源
+- 背包
+- 特性
+
+隐藏数据：
+
+- GM 可在 token 信息面板开启/关闭隐藏数据。
+- 房间角色也有隐藏数据设置；通过该角色生成的新 token 默认继承。
+- 非 GM 视角下，隐藏数据会被马赛克遮盖，但仍可展示累计伤害。
+- 累计伤害由 `max_hp - current_hp` 计算，不作为独立权威字段保存。
+
+---
+
+# 6 实时与竞争控制
+
+持久化修改通过 HTTP：
+
+- `POST /rooms/{room_id}/tokens`
+- `PATCH /rooms/{room_id}/tokens/{token_id}`
+- `DELETE /rooms/{room_id}/tokens/{token_id}`
+- `POST /rooms/{room_id}/characters/{character_id}/spawn-token`
+
+实时预览通过 WebSocket：
+
+- `token_transform_preview`
+
+拖拽这类人类级持续操作会占用对象，避免多人同时拖拽竞争；只读选择与右键瞬时操作不应占用对象。占用状态会以用户头像/名称浮标展示。
+
+---
+
+# 7 权限
+
+| 操作 | GM | PL | OB |
+| --- | --- | --- | --- |
+| 查看可见 token | ✓ | ✓ | ✓ |
+| 创建/删除任意 token | ✓ | — | — |
+| 移动/编辑任意 token | ✓ | — | — |
+| 移动/编辑自己角色对应 token | ✓ | ✓ | — |
+| 从自己角色生成 token | ✓ | ✓ | — |
+| 修改隐藏数据 | ✓ | — | — |
+
+战争迷雾覆盖的 token 对 PL/OB 不响应点击；若只覆盖一部分，未覆盖区域仍可点击。
+
+---
+
+# 8 后续
+
+- 为 token 面板快照建立更严格的 schema。
+- 补充 room token 与 scene snapshot 的测试。
+- 梳理资源库 token 占用统计与角色删除释放的边界测试。

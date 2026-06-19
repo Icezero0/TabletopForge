@@ -6,7 +6,7 @@
 
 **MVP 分步实现边界**（工作笔记，非正式设计）：[`working-note/README.md`](working-note/README.md)。
 
-TabletopForge 是一个面向 TRPG / DND 跑团场景的在线协作桌面系统，目标是提供房间、角色卡、地图桌面、Token、聊天、RP、骰子、日志与实时同步能力。
+TabletopForge 是一个以房间为协作边界的在线桌游 / 跑团平台。当前主要可用模式是 DND5E 跑团桌面，并已开始通过 `Room.type` 拆分 ThunderStone 等其他游戏模式。系统目标是提供房间、成员权限、实时同步、角色/卡牌资料、桌面交互、聊天、掷骰、日志等能力。
 
 ## 文档结构
 
@@ -22,7 +22,7 @@ docs/
 ├── 06_websocket_protocol.md    # WebSocket 协议设计
 ├── 07_database_design.md       # 数据库设计
 ├── 08_permission_design.md     # 权限设计
-├── 09_module_design/           # 核心业务模块设计（tabletop / token / 角色卡等）
+├── 09_module_design/           # 核心业务模块设计（tabletop / token / 角色卡 / ThunderStone 等）
 └── 10_repository_status.md     # 仓库现状（代码与文档落地对照，随实现更新）
 ```
 

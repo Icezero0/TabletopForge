@@ -1,237 +1,233 @@
 # TabletopForge 仓库现状
 
-版本：v0.4  
+版本：v0.6  
 状态：Living Document  
-最后核对：2026-06-07（角色 Token 配置 + 资源库引用 + 当前桌面实现核对）
+最后核对：2026-06-19（房间类型 / DND5E 模式拆分 / ThunderStone 原型 / 当前数据库迁移核对）  
 仓库：`Icezero0/TabletopForge`（`main`）
 
 ---
 
 # 1 文档定位
 
-本文档记录 TabletopForge **当前代码与文档的落地状态**，用于：
+本文档记录 TabletopForge **当前代码已经落地的状态**。若与早期 PRD、架构或模块设计文档冲突，以本文档和当前前后端代码为准。
 
-- 快速了解仓库已实现与未实现的能力
-- 对照 `00_overview.md` 中的 Phase 1–5 判断进度
-- 在开工新模块前确认依赖与缺口
+维护约定：
 
-本文档不替代各专项设计文档；**页面级 PRD** 见 `01_product_requirements.md` §5；接口字段、协议细节、权限矩阵仍以 `05_api_design.md`、`06_websocket_protocol.md`、`08_permission_design.md` 等为准。
-
-**维护约定**：完成较大功能合并（新表、新模块、阶段里程碑）后更新本文档的「实现对照表」与「阶段判断」章节。
+- 完成新表、新业务模块、房间模式拆分、实时协议扩展后，应优先更新本文档。
+- 具体字段和协议仍需同步维护 `05_api_design.md`、`06_websocket_protocol.md`、`07_database_design.md`。
+- `09_module_design/` 中部分文档仍保留早期设想，不能直接视为当前实现。
 
 ---
 
-# 2 项目定位
+# 2 当前定位
 
-TabletopForge 是面向 TRPG / DND 跑团的在线协作桌面系统，以**房间**为协作边界。目标能力包括角色卡、地图 Token、聊天与 RP、骰子、操作日志与 WebSocket 实时同步。
+TabletopForge 已从单一 DND 跑团桌面，推进为：
 
-- 产品设计总览：`00_overview.md`（v0.2 Draft）
-- 规则优先 DND5E，架构保留 `ruleset` 扩展空间
-- 远程仓库：`https://github.com/Icezero0/TabletopForge.git`
+```text
+房间基础层
+  ├─ 成员 / 权限 / 邀请 / 通知 / 聊天 / 基础 WebSocket
+  ├─ 房间类型 Room.type
+  └─ 不依赖具体游戏模式
+
+DND5E 房间模式
+  ├─ 地图桌面 / 指示物 / 角色卡 / 掷骰 / 战斗 / 场景 / 迷雾 / 音乐
+  └─ 当前主要可用模式
+
+ThunderStone 房间模式
+  ├─ DBG 电子化方向
+  ├─ 当前只有前端原型布局
+  └─ 卡牌资产与结构化定义整理中
+```
 
 ---
 
 # 3 技术栈与目录
 
-| 层 | 技术 | 规模（约） |
+| 层 | 技术 / 目录 | 当前状态 |
 |---|---|---|
-| 前端 | Vue 3 + Vite 7 + TypeScript + Pinia + vue-router + vue-i18n + axios | 角色、房间、桌面、素材库等已形成实际页面与 feature 目录 |
-| 后端 | FastAPI 模块化单体 + SQLAlchemy + Alembic | auth/users/rooms/messages/notifications/feedback/assets/library/characters + realtime |
-| 测试 | pytest | API + unit 测试覆盖已落地模块；最新 Token Config 仍需补专项用例 |
-| 文档 | `docs/` 00–09 系列 + `09_module_design/` | 19 篇设计文档 |
+| 前端 | Vue 3 + Vite 7 + TypeScript + Pinia + vue-router + vue-i18n | 已有 DND5E 房间模式、ThunderStone 原型、资源库、角色卡、房间工作区 |
+| 后端 | FastAPI + SQLAlchemy + Alembic | 模块化单体；房间、角色、资源库、骰子、场景、实时层均已落地 |
+| 数据 | SQLite dev / Alembic | 当前迁移 head：`20260618_0034_add_room_type` |
+| 文档 | `docs/` | 本文档已更新；部分专项文档仍需继续追平 |
+| ThunderStone 数据 | `data/thunderstone/source/cards` | 已导入卡牌图片与 localizer work state，尚未生成正式 catalog |
+
+---
+
+# 4 房间与游戏模式
+
+## 4.1 房间基础层
+
+已落地：
+
+- 房间 CRUD、公开/私有、加入审批。
+- 成员身份：
+  - `room_role`：房间管理身份，DB 列名为 `role`。
+  - `game_role`：游戏身份，`GM | PL | OB`。
+- 玩家主色 `player_color`。
+- 房间成员、邀请、权限与房间设置逻辑已在前端抽为 `useRoomGovernance`。
+- 房间基础 WebSocket 已在前端抽为 `useRoomRealtimeSession`，负责：
+  - 进入/离开房间
+  - presence
+  - 房间信息与成员刷新
+  - 普通消息
+  - 掷骰日志
+  - session close
+
+## 4.2 Room.type
+
+`rooms.type` 已落地，当前取值：
 
 ```text
-TabletopForge/
-├── docs/           # 产品设计 / 架构 / API / WS / DB / 权限 / 模块设计
-├── frontend/       # Vue SPA
-├── backend/        # FastAPI + alembic + tests
-└── README.md       # 文档入口索引
+DND5E
+ThunderStone
 ```
 
+创建房间时选择类型，创建后不允许修改。历史房间迁移默认 `DND5E`。
+
+前端入口：
+
+- `frontend/src/pages/room/RoomPage.vue`：按 `room.type` 分发。
+- `Dnd5eRoomMode.vue`：现有 DND5E 房间。
+- `ThunderStoneRoomMode.vue`：ThunderStone 原型。
+
+## 4.3 DND5E 模式
+
+当前 DND5E 模式已经包含：
+
+- 地图桌面、缩放、平移、网格标定。
+- 地图资源库与场上地图。
+- 绘制工具、测距、Pointer。
+- 指示物创建、拖拽、图层、右键菜单、信息面板。
+- 对象占用：只在拖拽等人类级长操作中占用，允许多人只读查看信息。
+- 角色列表、房间角色、角色可见性、隐藏数据。
+- 角色卡与 token config。
+- 掷骰日志、暗骰、主体、预设、公式编辑器。
+- 战斗面板、自动先攻、回合、加入战斗、设置当前回合、本轮/下轮行动。
+- 战争迷雾、GM/非 GM 透明度控制。
+- 背景音乐、播放列表和本地音量。
+- 场景保存/切换。
+- 个人备忘录。
+
+## 4.4 ThunderStone 模式
+
+当前仅为原型：
+
+- 前端有村庄区域、地下城区域、玩家区域的静态布局。
+- 未落地后端专用模型。
+- 当前讨论方向：
+  - 卡牌图片与文字分离。
+  - 使用 `.card_localizer_work/*_image.png` 作为空白卡牌底图。
+  - 使用 `work_state.json` 的 `texts` 生成草稿结构化卡牌定义。
+  - 后续建立卡牌状态、牌区、牌堆、原子动作与效果脚本系统。
+
 ---
 
-# 4 文档规划与代码落地对照
+# 5 已实现模块总览
 
-产品阶段划分见 `00_overview.md` 第 10 节（Phase 1–5）。**当前代码已经越过纯 Phase 1 地基**：基础房间、权限、普通聊天、资源库、跑团桌面、地图/绘制/Token、角色卡、房间角色库、角色状态与 InfoPanel 均已有落地；RP、骰子、操作日志、战斗辅助仍主要停留在设计文档。
-
-## 4.1 已实现
-
-| 能力 | 后端模块 / 路径 | 前端页面 / Feature | 数据库表 |
+| 能力 | 后端模块 / 路径 | 前端位置 | 主要数据 |
 |---|---|---|---|
-| 注册 / 登录 / JWT | `auth`, `users` | `/auth/login`, `/auth/register` | `users` |
-| 站点身份 `site_role` | `site/permissions` | 反馈管理页等 | `users.site_role` |
-| 房间 CRUD / 可见性 | `rooms/room` | 首页创建房间、公开房间列表 | `rooms` |
-| 成员与 `room_role` + `game_role` | `rooms/membership`, `rooms/permissions`, `rooms/game_permissions` | 房间成员 Tab、双身份展示与改 game_role、`PlayerColorPicker` | `room_members`（`role` + `game_role` + `player_color`） |
-| 入房审批 | `rooms/join_request` | `JoinRequestsPage`、房间 Requests Tab | `room_join_requests` |
-| 站内通知 | `notifications` | `NotificationsPage` | `notifications` |
-| 房间普通聊天 | `messages` + realtime 广播 | `RoomChatTab`, `ChatPanel` | `messages` |
-| 头像 / 头像历史 / 反馈截图 / 底层 image/audio | `assets`, `users` | 资料编辑、联系页截图上传；资源库页面 | `assets`, `user_avatar_history` |
-| 用户反馈 | `feedback` | `ContactPage`, `FeedbackAdminPage` | `feedbacks` |
-| 个人资源库（map_background / token / sound） | `library` | `LibraryPage` | `library_resources` |
-| 角色卡（DnD 5e） | `characters` | `CharactersPage`（列表）、`CharacterEditPage`（新建/编辑，7 Tab）、`CharacterImportDialog` | `characters`, `character_states` |
-| 角色 Token 配置 | `characters` + `library` | `CharacterTokenTab`, `TokenCard`, `TokenPanelEditorDialog` | `character_token_configs`，可关联 `library_resources` |
-| AI 角色导入预览 | `characters/import_service` | 编辑页「AI 导入」；`POST /characters/import-preview` | — |
-| WebSocket 实时 | `realtime/*` | `wsClient`, `useRoomRealtimeSession` | — |
-| 个人备忘录（按房间） | `rooms/personal_memo` | `PersonalMemo` | `room_personal_memos` |
-
-HTTP 路由（`backend/app/api/v1/router.py`）当前注册：
-
-- `auth`, `assets`, `users`, `rooms`, `notifications`, `room_join_request`, `messages`, `feedback`, `library`, `characters`
-
-ORM 模型（当前代码定义）：
-`User`, `UserAvatarHistory`, `Asset`, `Room`, `RoomMember`, `RoomJoinRequest`,
-`RoomPersonalMemo`, `RoomTabletopSettings`, `RoomMap`, `RoomDrawing`,
-`RoomToken`, `RoomCharacter`, `Notification`, `Message`, `Feedback`,
-`LibraryResource`, `Character`, `CharacterState`, `CharacterTokenConfig`。
-
-数据库迁移链：
-
-- `20260604_0001_initial_schema`
-- `20260604_0002_add_room_member_game_role`
-- `20260604_0003_add_room_personal_memos`
-- `20260605_0004_add_asset_hash_ref_count_and_avatar_history`
-- `20260604_0004_add_room_tabletop`
-- `20260606_0005_add_library_resources`
-- `20260606_0006_add_characters`
-- `20260606_0007_add_room_tokens`
-- `20260606_0008_extend_characters_kind_token_image`
-- `20260606_0009_add_character_states`
-- `20260606_0010_add_room_characters`
-- `20260606_0011_add_room_member_player_color`
-- `20260606_0012_migrate_character_kinds`
-- `20260607_0013_add_character_token_configs`
-- `20260607_0014_add_library_resource_to_token_config`（current head）
-
-## 4.2 规划模块与落地差异
-
-| 模块（设计文档） | 说明 |
-|---|---|
-| RP 消息 | `09_module_design/chat_and_rp.md`；`rp_messages` 尚未落地 |
-| 地图桌面（MVP 扁平） | `rooms/tabletop`；`room_tabletop_settings`, `room_maps`, `room_drawings`, **`room_tokens`** 已落地；地图/绘制/Token HTTP + WS 已接入 |
-| **房间角色库 / CharacterState** | **Phase 2–4 已落地**：`room_characters`、`character_states`；`GET/POST /rooms/{id}/characters` + **`POST .../characters/link`**（全局库关联）；`characters.kind`（`pc_main`/`pc_additional`/`npc`）；`kind=npc` 时 PL 仅 `damage_taken`（presenter）；GM PATCH 降 HP 累计伤害；WS `state_summary_public` |
-| Token | **Phase 1–4 已落地**：`room_tokens` CRUD、WS、`TokenLayer`；`linked_character_id`、`spawn-token`、`state_summary`（HP/AC/PP）、`character_state_updated` WS |
-| InfoPanel / 场上列表 | **Phase 3–5 已落地**：`InfoPanel`（六维 + State；不展示 `custom_fields`）；`InGameCharacterList`；`AddRoomCharacterDialog` + `CharacterSpawnPopover`（合并全局库、`link` 上场、GM 创建者）+ `MapSpawnPopover`（地图切换）；Context Menu「查看信息」 |
-| 角色 Token 配置 | **2026-06-07 已落地**：`character_token_configs`；角色编辑页 Token Tab 可生成主要 Token、添加次要 Token、上传图片、编辑 panel 初始值；primary config 缺少 `library_resource_id` 时后端自动创建 `library_resources(type=token)` 并维护 `usage_count` |
-| 骰子 / DND5E 规则 | `09_module_design/dice.md`, `dnd5e_rules.md` |
-| 操作日志 | `09_module_design/operation_log.md` |
-| 战斗辅助 | `09_module_design/combat_assistant.md` |
-| 资源库 Token/声音素材类型 | 后端 `library` 模块已落地 `map_background` / `token` / `sound`；业务 asset **`token_image`** 已用于地图 Token 和角色 Token 配置 |
-| 跑团桌面（Table） | `01_product_requirements.md` §4.2、`09_module_design/tabletop_scene.md` 等；当前房间页已实现全屏 TableStage + 悬浮面板工作区 |
-
-**身份说明**：`room_members.game_role`（`GM` | `PL` | `OB`）已落地，与 `room_role`（DB 列 `role`）分离；Tabletop 权限已在地图、绘制、Token、角色状态等服务中消费，规则集中在 `game_permissions.py`。
-
-房间页（`frontend/src/pages/room/RoomPage.vue`）已实现 **全屏地图 + 悬浮可收起面板**（`features/table/`）：`TableStage` + `MapViewport` 铺满视口；地图/绘制/**Token** 协作；底栏 **`CharacterSpawnPopover`**（房间库 + 全局库合并、未入库 `link` 上场、GM 显示创建者）与 **`MapSpawnPopover`**（地图列表切换）+ 左上 **InGameCharacterList**；Token **HP/AC/PP 预览**（`npc` 对 PL 仅伤害）；右侧 **InfoPanel** 单槽。
+| 注册 / 登录 / JWT | `auth`, `users` | 登录/注册页 | `users` |
+| 用户资料 / 头像 | `users`, `assets` | 资料页 | `users`, `user_avatar_history`, `assets` |
+| 站点权限 | `site/permissions` | 反馈/站点管理 | `users.site_role` |
+| 房间基础 | `rooms/room` | 首页、公开房间、房间页 | `rooms` |
+| 成员 / 邀请 / 审批 | `rooms/membership`, `rooms/join_request` | `GovernanceDock`, `useRoomGovernance` | `room_members`, `room_join_requests` |
+| 通知 | `notifications` | 通知页 | `notifications` |
+| 普通聊天 | `messages` | 会话面板 | `messages` |
+| 资源库 | `library`, `assets` | 资源库页、房间素材面板 | `library_resources`, `assets` |
+| 角色卡 | `character` | 角色列表、角色编辑页 | `characters`, `character_states`, `character_token_configs` |
+| DND 桌面 | `rooms/tabletop` | `features/table/*` | `room_maps`, `room_drawings`, `room_tokens`, `room_tabletop_settings` |
+| 房间角色 | `rooms/characters` | 房间角色列表、指示物生成 | `room_characters` |
+| 掷骰 | `dice`, `rooms/dice` | 掷骰日志/编辑器/预设 | `room_dice_rolls`, `dice_presets` |
+| 场景 | `rooms/scenes` | 素材面板「切换场景」 | `room_scenes` |
+| 个人备忘录 | `rooms/personal_memo` | 右下备忘录 | `room_personal_memos` |
+| WebSocket | `realtime/*` | `wsClient`, room/tabletop realtime composables | 无单独表 |
 
 ---
 
-# 5 架构与通信（当前落地）
+# 6 数据库迁移现状
 
-与 `02_architecture.md` 一致：
-
-- **前后端分离**：HTTP 写入权威状态；WebSocket 广播服务端确认后的事件。
-- **模块化单体**：`modules/{auth,users,rooms,messages,notifications,feedback,assets,site,library}` + `realtime/`。
-- **协作边界**：已落地数据（消息、成员、审批等）均按 `room_id` 归属。
-- **权限分层**：`site_role`、`room_role`、`game_role` 已实现；Tabletop 业务校验已接入地图、绘制、Token 与角色状态写入。
+当前迁移链已经从早期 `0014` 推进到：
 
 ```text
-Client (Vue)
-  ├─ HTTP API  → FastAPI (Service → Repository → DB)
-  └─ WebSocket → realtime/ (channels, presence, rest_sync, publisher)
+20260618_0034_add_room_type
 ```
 
----
+重要新增能力：
 
-# 6 前端路由与状态
+- `room_dice_rolls`
+- `room_scenes`
+- `dice_presets`
+- `characters.resources`
+- `room_character.hide_data`
+- `RoomTabletopSettings.combat_state`
+- `RoomTabletopSettings.music_state`
+- `RoomTabletopSettings.fog_state`
+- `characters.primary_token_resource_id`
+- `rooms.type`
 
-路由定义：`frontend/src/router/routes.ts`。
-
-| 路径 | 名称 | 需登录 | 说明 |
-|---|---|---|---|
-| `/auth/login`, `/auth/register` | login, register | 否 | 已登录会重定向首页 |
-| `/` | home | 是 | 我的房间、创建房间 |
-| `/rooms/:id` | room | 是 | 房间工作区；首次进入有 sync gate |
-| `/profile` | profile | 是 | 资料与头像 |
-| `/join-requests` | join-requests | 是 | 待处理的入房审批 |
-| `/public-rooms` | public-rooms | 是 | 公开房间列表 |
-| `/notifications` | notifications | 是 | 站内通知 |
-| `/contact` | contact | 是 | 用户反馈 |
-| `/library` | library | 是 | 用户资源库（地图 / Token / 声音素材） |
-| `/characters` | characters | 是 | 角色卡列表 |
-| `/characters/new` | character-new | 是 | 新建角色卡 |
-| `/characters/:id` | character-edit | 是 | 编辑角色卡 |
-| `/feedback-admin` | feedback-admin | 是 | 站点管理员处理反馈 |
-| `/site-admin` | site-admin | 是 | 站点管理 |
-
-主要 Pinia Store：`auth`, `rooms`, `messages`, `notifications`, `entities`, `toasts`, `media-viewer`。
-
-房间相关 composable：`useRoomWorkspaceLayout`, `useRoomRealtimeSession`, `useRoomJoinRequests`, `useRoomMemberActions`。
+详见 `07_database_design.md` 的「当前实现补充」章节。
 
 ---
 
-# 7 实时层现状
+# 7 WebSocket 现状
 
-目录：`backend/app/realtime/`。
+后端实时层仍位于 `backend/app/realtime/`。
 
-包含：协议（`protocol`）、频道（`channels`）、WS 认证、房间 handler、在线 presence、`rest_sync`（HTTP 变更后推送）、`publisher`、`dispatcher` 等。
+前端已拆分：
 
-与 `06_websocket_protocol.md` 设计方向一致。已接入 tabletop 事件（settings/map/drawing/**token**）、角色状态更新、房间成员/房间信息 signal、普通消息、通知、presence、pointer/laser、session close；骰子结果等游戏事件尚未接入。
+- `useRoomRealtimeSession`：房间基础事件。
+- `useTabletopRealtimeEvents`：DND/tabletop 专用事件。
 
----
+已使用事件包括：
 
-# 8 测试覆盖概况
-
-- **API 测试**：auth/users、rooms/messages/notifications、assets/feedback、room tabletop、room tokens、room characters、GM NPC visibility、character import 等（`backend/tests/api/`）。
-- **单元测试**：auth、rooms repository、feedback、realtime 各子模块（`backend/tests/unit/`）。
-
-已落地模块具备基础测试；最新 `character_token_configs` / `library_resource_id` 引用维护建议补专项测试；未实现域暂无对应用例。
-
----
-
-# 9 阶段进度判断
-
-| 文档阶段（`00_overview.md` §10） | 状态 |
-|---|---|
-| Phase 1：基础房间与权限 | **大部分完成**；房间、成员、入房审批、普通聊天、通知、站点身份、游戏身份均已落地 |
-| 跑团桌面 MVP（`01` §4.2） | **Step 5 已完成并进入深化**：地图/绘制/Token/角色绑定/InfoPanel/场上列表/玩家主色/地图 Popover/全局库 link 上场已落地；2026-06-07 起继续深化角色 Token 配置 |
-| Phase 4：RP 与骰子 | **未开始**（普通聊天已具备；不在跑团桌面 MVP） |
-| Phase 5：战斗辅助 | **未开始** |
-
-## 9.1 近期演进线索（提交历史摘要）
-
-从 Git 历史可见大致路径：
-
-1. 继承 icinema 基础建设
-2. 文档体系 v0.2 整理
-3. 清理与 asset 资源库落地
-4. 统一 initial schema（2026-06-04）
-5. 前端房间 / 聊天 / 实时会话打磨
-6. 角色卡模块落地（2026-06-06）：`characters` 表、CRUD API、角色编辑页（DnD 5e 结构化数据）、角色列表页、脏数据守卫
-7. 房间 Popover 增强（2026-06-06）：`POST /rooms/{id}/characters/link`；前端 `spawnCharacters.ts` 合并全局库；GM 创建者展示（`4730ec6`）
-8. 角色 Token 配置深化（2026-06-07）：`character_token_configs`、`library_resource_id` 关联、角色编辑 Token Tab、主要/次要 Token panel 初始值。
-
-## 9.2 建议开发顺序
-
-与 [`01_product_requirements.md`](01_product_requirements.md) §4.2 一致：
-
-1. 补齐 `character_token_configs` 相关测试：创建/更新/删除 config、primary 自动创建 `library_resources(type=token)`、`usage_count` 增减。
-2. 将角色 Token 配置真正用于上场 Token 选择：spawn 时支持选择 primary/secondary token config，而不是只取 `character.token_image_asset_id || portrait_asset_id`。
-3. 梳理 `backend/app/db/models.py` 的集中导出，避免新模型只存在于业务模块中而文档/迁移维护时漏判。
-4. 推进 RP 与骰子：普通聊天已具备，下一步应引入 RP 消息结构、骰子表达式、结果广播和房间内可见性。
-5. 推进操作日志与战斗辅助：优先记录 Token/HP/地图/角色状态等已落地对象的关键变更。
-6. 每个较大阶段后同步更新 `05_api_design.md`、`07_database_design.md` 与本文档。
+- `room_info`
+- `room_members`
+- `room_user_presence`
+- `session_closed`
+- `message`
+- `dice_roll`
+- `room_characters`
+- `tabletop_settings_updated`
+- `tabletop_snapshot_replaced`
+- `map_created / map_updated / map_deleted`
+- `drawing_created / drawing_updated / drawing_deleted`
+- `token_created / token_updated / token_deleted`
+- `token_transform_preview`
+- `character_state_updated`
+- `room_character_updated`
+- `pointer_presence`
+- `pointer_laser`
+- `object_selection`
 
 ---
 
-# 10 相关文档索引
+# 8 文档同步情况
 
-| 主题 | 文档 |
-|---|---|
-| 系统边界与 Phase | `00_overview.md` |
-| 模块划分与数据流 | `02_architecture.md` |
-| 前端结构 | `03_frontend_design.md` |
-| 后端分层 | `04_backend_design.md` |
-| HTTP API | `05_api_design.md` |
-| WebSocket | `06_websocket_protocol.md` |
-| 表结构（设计态） | `07_database_design.md` |
-| 权限矩阵 | `08_permission_design.md` |
-| 业务模块细节 | `09_module_design/*.md` |
+本轮已对齐的文档：
+
+- `00_overview.md`：已补房间类型、DND5E / ThunderStone 分离与当前能力摘要。
+- `05_api_design.md`：已补 room type、DND5E tabletop、scene、dice、dice presets 等当前接口。
+- `06_websocket_protocol.md`：已补当前事件摘要，但仍未写全每个 payload。
+- `07_database_design.md`：已补当前实现摘要，但仍未按 ORM 逐表展开所有字段。
+- `09_module_design/dice.md`：已改为当前实现态。
+- `09_module_design/combat_assistant.md`：已改为当前实现态。
+- `09_module_design/tabletop_scene.md`：已补场景、迷雾、音乐等当前实现。
+- `09_module_design/thunderstone.md`：已新增 ThunderStone 原型与卡牌资产整理说明。
+
+仍明显落后的文档：
+
+- `01_product_requirements.md`：仍偏早期 DND 跑团产品阶段，含大量 MVP 历史表述。
+- `03_frontend_design.md`：仍偏早期固定面板布局与旧工作区规划。
+- `04_backend_design.md`：仍偏早期模块划分，未体现 room mode 分离。
+- `08_permission_design.md`：需要补齐当前战斗、迷雾、音乐、场景、掷骰预设等权限细节。
+- `09_module_design/asset_library.md`、`token_system.md`、`character_card.md`：已补当前摘要；后续仍可继续补齐字段级细节与示例。
+
+---
+
+# 9 近期建议
+
+1. 为 ThunderStone 建立卡牌 catalog 生成脚本与正式数据模型。
+2. 将 `07_database_design.md` 按当前 ORM 逐表追平。
+3. 将 `06_websocket_protocol.md` 补全 payload 示例。
+4. 为 DND5E / ThunderStone 的房间模式边界补一份架构说明。
+5. 追平 `01_product_requirements.md` 与 `03_frontend_design.md`，避免 MVP 历史描述误导后续实现。

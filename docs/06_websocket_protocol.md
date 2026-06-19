@@ -1,7 +1,7 @@
 # TabletopForge WebSocket 协议设计
 
-版本：v0.2  
-状态：Draft
+版本：v0.3  
+状态：Draft（2026-06-19 已补当前实现摘要）
 
 ---
 
@@ -17,12 +17,14 @@ WebSocket 用于房间内实时事件同步，包括：
 
 - 成员在线状态
 - 普通聊天
-- RP 消息
 - 角色状态变化
 - 场景切换
 - Token 移动
 - 骰子结果
-- 操作日志
+- Pointer / 对象占用
+- DND5E tabletop 状态同步
+
+RP 消息、操作日志仍属于后续方向。
 
 ---
 
@@ -105,7 +107,7 @@ ERROR
 
 # 6 业务事件
 
-当前后端地基已实现的事件类型为：
+当前后端已实现的主要事件类型为：
 
 ```text
 notification
@@ -114,14 +116,39 @@ room_members
 room_user_presence
 session_closed
 message
+dice_roll
+room_characters
+tabletop_settings_updated
+tabletop_snapshot_replaced
+map_created
+map_updated
+map_deleted
+drawing_created
+drawing_updated
+drawing_deleted
+token_created
+token_updated
+token_deleted
+token_transform_preview
+character_state_updated
+room_character_updated
+pointer_presence
+pointer_laser
+object_selection
 ```
 
-下面列出的角色、场景、Token、骰子、日志、战斗事件属于后续业务模块扩展方向。
+前端当前拆分为：
+
+```text
+useRoomRealtimeSession      # 房间基础事件
+useTabletopRealtimeEvents   # DND5E/tabletop 专用事件
+```
 
 ## 6.1 房间成员事件
 
 ```text
 room_members
+room_user_presence
 session_closed
 ```
 
@@ -134,14 +161,9 @@ message
 ## 6.3 角色事件
 
 ```text
-CHARACTER_CREATED
-CHARACTER_UPDATED
-CHARACTER_DELETED
-CHARACTER_STATE_CHANGED
-CHARACTER_HP_CHANGED
-CHARACTER_RESOURCE_CHANGED
-CHARACTER_EFFECT_ADDED
-CHARACTER_EFFECT_REMOVED
+room_characters
+character_state_updated
+room_character_updated
 ```
 
 ## 6.4 跑团桌面 Tabletop 事件（MVP）
@@ -150,21 +172,27 @@ CHARACTER_EFFECT_REMOVED
 
 ```text
 tabletop_settings_updated
+tabletop_snapshot_replaced
 map_created
 map_updated
 map_deleted
 drawing_created
 drawing_updated
 drawing_deleted
+token_created
+token_updated
+token_deleted
+token_transform_preview
 pointer_presence
 pointer_laser
+object_selection
 ```
 
 **Pointer COMMAND**（须已 `room_enter`；发送方 `game_role` 为 GM/PL；OB 仅接收）：
 
 ```text
 pointer_presence   # data: { room_id, x, y } 场景坐标
-pointer_laser      # data: { room_id, active, x1, y1, x2?, y2? }；active=false 表示松手结束
+pointer_laser      # data: { room_id, active, x, y }；前端本地渲染 fading trail
 ```
 
 **Pointer EVENT**（广播）：
@@ -190,10 +218,8 @@ pointer_laser      # data: { room_id, active, x1, y1, x2?, y2? }；active=false 
     "user_id": 2,
     "display_name": "Alice",
     "active": true,
-    "x1": 10,
-    "y1": 20,
-    "x2": 80,
-    "y2": 60
+    "x": 80,
+    "y": 60
   }
 }
 ```
@@ -219,29 +245,36 @@ pointer_laser      # data: { room_id, active, x1, y1, x2?, y2? }；active=false 
 }
 ```
 
-## 6.5 场景归档事件（后续，非 MVP）
+## 6.5 场景归档事件
 
 ```text
-SCENE_CREATED
-SCENE_UPDATED
-SCENE_CHANGED
-MAP_UPDATED
+tabletop_snapshot_replaced
 ```
 
-## 6.6 Token 事件
+场景自身 CRUD 当前主要通过 HTTP 完成；切换场景后以 `tabletop_snapshot_replaced` 通知各端重载快照。
+
+## 6.6 Token / 对象占用事件
 
 ```text
-TOKEN_CREATED
-TOKEN_MOVED
-TOKEN_UPDATED
-TOKEN_DELETED
+token_created
+token_updated
+token_deleted
+token_transform_preview
+object_selection
 ```
+
+说明：
+
+- `token_transform_preview` 用于拖拽中实时预览，不通过 HTTP 高频提交。
+- `object_selection` 用于对象占用/释放提示，避免拖拽竞争；只读查看信息不应被占用阻塞。
 
 ## 6.7 骰子事件
 
 ```text
-DICE_ROLLED
+dice_roll
 ```
+
+掷骰写入 `room_dice_rolls` 后广播；前端按当前 active scene 过滤。
 
 ## 6.8 日志事件
 
@@ -249,14 +282,15 @@ DICE_ROLLED
 OPERATION_LOG_CREATED
 ```
 
+尚未落地。
+
 ## 6.9 战斗事件
 
 ```text
-COMBAT_STARTED
-COMBAT_ENDED
-TURN_CHANGED
-ROUND_CHANGED
+tabletop_settings_updated
 ```
+
+当前战斗状态存储在 `room_tabletop_settings.combat_state`，通过 tabletop settings 更新广播同步。尚未拆出独立 combat event。
 
 ---
 

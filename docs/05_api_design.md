@@ -1,7 +1,7 @@
 # TabletopForge HTTP API 设计
 
-版本：v0.3  
-状态：Draft
+版本：v0.4  
+状态：Draft（2026-06-19 对齐当前实现）
 
 ---
 
@@ -70,6 +70,12 @@ PATCH  /rooms/{room_id}
 DELETE /rooms/{room_id}
 ```
 
+说明：
+
+- `POST /rooms` 支持 `type`，当前取值为 `DND5E` / `ThunderStone`；未传时默认为 `DND5E`。
+- `type` 创建后不可修改，`PATCH /rooms/{room_id}` 只修改名称、可见性、入房审核模式等房间基础信息。
+- 房间基础层只负责房间、成员、权限、邀请、个人备忘录和 WebSocket 会话。具体游戏内容由房间类型对应的前端模式承载。
+
 ---
 
 # 7 成员与审批 API
@@ -93,8 +99,16 @@ GET    /rooms/{room_id}/personal-memo
 PUT    /rooms/{room_id}/personal-memo
 
 GET    /rooms/{room_id}/tabletop
+GET    /rooms/{room_id}/scenes
+POST   /rooms/{room_id}/scenes
+GET    /rooms/{room_id}/scenes/{scene_id}
+PATCH  /rooms/{room_id}/scenes/{scene_id}
+POST   /rooms/{room_id}/scenes/{scene_id}/snapshot
+POST   /rooms/{room_id}/scenes/{scene_id}/activate
+DELETE /rooms/{room_id}/scenes/{scene_id}
 PATCH  /rooms/{room_id}/tabletop/settings
 POST   /rooms/{room_id}/maps
+POST   /rooms/{room_id}/maps/from-resource
 PATCH  /rooms/{room_id}/maps/{map_id}
 DELETE /rooms/{room_id}/maps/{map_id}
 POST   /rooms/{room_id}/drawings
@@ -106,6 +120,9 @@ DELETE /rooms/{room_id}/tokens/{token_id}
 GET    /rooms/{room_id}/characters
 POST   /rooms/{room_id}/characters
 POST   /rooms/{room_id}/characters/link
+DELETE /rooms/{room_id}/characters/{room_character_id}
+PATCH  /rooms/{room_id}/characters/{room_character_id}/visibility
+PATCH  /rooms/{room_id}/characters/{room_character_id}/data-visibility
 POST   /rooms/{room_id}/characters/{character_id}/spawn-token
 ```
 
@@ -190,10 +207,12 @@ DELETE /characters/{character_id}   # 删除角色（仅 owner 可操作）
 - `GET /characters` 支持分页参数 `page` / `page_size`，仅返回当前用户的角色。
 - `POST /characters` / `PATCH` 请求体包含 `name`、`system`、`portrait_asset_id`、
   `token_image_asset_id`、`identity`、`flavor`、`attributes`、`features`、`spells`、
-  `equipment`、`extras`、`token_configs` 等字段。
-- `token_configs` 为角色 Token 配置 upsert 列表，支持 `is_primary`、`name`、`asset_id`、
-  `library_resource_id`、`panel_initial`、`sort_order`。主要 Token 缺少 `library_resource_id`
-  时，后端可自动创建 `library_resources(type=token)` 并维护 usage count。
+  `resources`、`equipment`、`extras`、`token_configs` 等字段。
+- 主要指示物不再由用户手动维护 `token_configs`：后端会为角色维护 `primary_token_resource_id`，
+  并根据角色卡名称、头像与面板数据派生主要指示物。角色头像或 token 图像变化时，主要资源库 token 会同步更新。
+- `token_configs` 只用于次要指示物配置，支持 `name`、`asset_id`、`library_resource_id`、
+  `panel_initial`、`sort_order`。次要指示物仍可绑定资源库 token。
+- `resources` 是角色卡资源列表，包含名称、上限、恢复方式、备注等 UI 需要字段。资源可从职业等级自动计算通用资源，再同步到指示物配置/room token 快照。
 - `PATCH` 仅更新请求体中显式包含的字段（`model_fields_set`），允许传 `null` 清空可空字段
   （`portrait_asset_id`、`spells`）而不影响其他字段。
 - 权限：需登录；全局角色写操作仅限 `owner_id == current_user.id`；已加入房间的角色可被房间成员按 `game_role` 读取状态摘要。
@@ -211,7 +230,7 @@ PATCH /characters/{character_id}/state
 
 - 角色创建时自动 bootstrap `character_states`。
 - owner 可编辑自己的角色状态；GM 可编辑房间内任意角色状态。
-- NPC 对 PL/OB 隐藏精确 HP，返回 public summary 时以 `damage_taken` 等信息替代。
+- 隐藏数据由房间角色与 room token 面板控制。隐藏数据开启时，非 GM 视角会遮盖面板数据；累计伤害由 `max_hp - current_hp` 在前端计算展示。
 
 触发事件：
 
@@ -219,20 +238,21 @@ PATCH /characters/{character_id}/state
 
 ---
 
-# 12 跑团桌面 Tabletop API（MVP，扁平 room 模型，已实现）
+# 12 DND5E 跑团桌面 API（已实现）
 
-> Campaign / Session / Scene 多场景 API 见下文「后续」；MVP 以房间为边界，见 `working-note/04-map-core.md`。
+这些接口服务当前 DND5E 房间模式。ThunderStone 房间类型不会直接复用 DND5E 桌面模型。
 
 ```text
 GET    /rooms/{room_id}/tabletop
 PATCH  /rooms/{room_id}/tabletop/settings
-POST   /rooms/{room_id}/maps              # multipart: file=图片
+POST   /rooms/{room_id}/maps              # multipart: file=图片, name?, comment?
+POST   /rooms/{room_id}/maps/from-resource
 PATCH  /rooms/{room_id}/maps/{map_id}
 DELETE /rooms/{room_id}/maps/{map_id}
 POST   /rooms/{room_id}/drawings
 PATCH  /rooms/{room_id}/drawings/{drawing_id}
 DELETE /rooms/{room_id}/drawings          # body: { "ids": [1, 2] }
-POST   /rooms/{room_id}/tokens            # multipart: name/x/y/file?/linked_character_id?
+POST   /rooms/{room_id}/tokens
 PATCH  /rooms/{room_id}/tokens/{token_id}
 DELETE /rooms/{room_id}/tokens/{token_id}
 POST   /rooms/{room_id}/characters/{character_id}/spawn-token
@@ -243,61 +263,79 @@ POST   /rooms/{room_id}/characters/{character_id}/spawn-token
 | 操作 | GM | PL | OB |
 |---|---|---|---|
 | GET tabletop | ✓ | ✓ | ✓ |
-| PATCH settings（grid_cell_ft/px） | ✓ | — | — |
+| PATCH settings（grid/combat/music/fog） | ✓ | 当前回合角色 owner 可提交合法结束回合状态 | — |
 | POST/PATCH/DELETE maps | ✓ | — | — |
 | POST/PATCH drawings | ✓ | ✓ | — |
 | DELETE drawings（含批量） | ✓ | ✓ | — |
-| POST/PATCH/DELETE tokens | ✓ | 自己拥有/绑定的 Token | — |
+| POST/PATCH/DELETE tokens | ✓ | 自己拥有/绑定的指示物 | — |
 | spawn character token | ✓ | 自己拥有的角色 | — |
 
 `GET /tabletop` 响应：`settings`、`maps[]`、`drawings[]`、`tokens[]` 快照。
 
-`POST /maps`：上传 `map_background` asset 并创建 `room_maps` 行；当前支持每房间多张地图，由 z_index 与前端 Map Popover 管理选择/切换。
+`settings` 当前包含：
 
-触发 WS 事件：`tabletop_settings_updated`、`map_created`、`map_updated`、`map_deleted`、`drawing_created`、`drawing_updated`、`drawing_deleted`、`token_created`、`token_updated`、`token_deleted`、`character_state_updated`（见 `06_websocket_protocol.md`）。
+- `grid_cell_ft` / `grid_cell_px`
+- `combat_state`
+- `music_state`
+- `fog_state`
+
+`POST /maps`：上传地图图片并创建资源库地图资源，再创建 `room_maps` 行。  
+`POST /maps/from-resource`：从现有 `library_resources(type=map_background)` 创建房间地图实例。删除地图时会清理该地图对应的战争迷雾 mask。
+
+指示物头像来源是资源库 token。资源库 token 被删除或不可读时，前端回退到名称首字头像。
+
+触发 WS 事件：`tabletop_settings_updated`、`map_created`、`map_updated`、`map_deleted`、`drawing_created`、`drawing_updated`、`drawing_deleted`、`token_created`、`token_updated`、`token_deleted`、`character_state_updated`、`room_character_updated`（见 `06_websocket_protocol.md`）。
 
 ---
 
-## 12.1 后续：场景与地图 API（非 MVP）
+## 12.1 场景 API（已实现）
+
+场景是 DND5E 房间桌面状态的快照容器。切换场景时，当前 tabletop 会先保存到当前场景，再载入目标场景快照。掷骰日志也按当前场景归属，删除场景时其关联掷骰记录随之删除。
 
 ```text
-POST   /rooms/{room_id}/scenes
 GET    /rooms/{room_id}/scenes
-GET    /scenes/{scene_id}
-PATCH  /scenes/{scene_id}
-DELETE /scenes/{scene_id}
-POST   /rooms/{room_id}/current-scene
-PATCH  /scenes/{scene_id}/map
+POST   /rooms/{room_id}/scenes
+GET    /rooms/{room_id}/scenes/{scene_id}
+PATCH  /rooms/{room_id}/scenes/{scene_id}
+POST   /rooms/{room_id}/scenes/{scene_id}/snapshot
+POST   /rooms/{room_id}/scenes/{scene_id}/activate
+DELETE /rooms/{room_id}/scenes/{scene_id}
 ```
 
-实现 Campaign/Session/Scene 归档后再定义。
+- 创建场景会创建空场景，而不是复制当前 tabletop。
+- `snapshot` 手动保存当前 tabletop 到指定场景。
+- `activate` 切换当前场景，并触发 `tabletop_snapshot_replaced` 与 `room_characters`。
+- 现有房间迁移后应至少有默认场景承接原 tabletop 状态。
 
 ---
 
-# 13 Token API（旧场景模型规划，非当前实现）
+# 13 房间角色 API（已实现）
 
-当前实现见 §12 的扁平 room tabletop API。下列 scene 路径为多场景模型后续规划。
+房间角色是角色卡在房间内的可见性、隐藏数据状态与上场入口。角色卡本身仍归属用户角色库。
 
 ```text
-POST   /scenes/{scene_id}/tokens
-GET    /scenes/{scene_id}/tokens
-GET    /tokens/{token_id}
-PATCH  /tokens/{token_id}
-DELETE /tokens/{token_id}
+GET    /rooms/{room_id}/characters
+POST   /rooms/{room_id}/characters
+POST   /rooms/{room_id}/characters/link
+DELETE /rooms/{room_id}/characters/{room_character_id}
+PATCH  /rooms/{room_id}/characters/{room_character_id}/visibility
+PATCH  /rooms/{room_id}/characters/{room_character_id}/data-visibility
+POST   /rooms/{room_id}/characters/{character_id}/spawn-token
 ```
 
-常见 PATCH 操作：
+说明：
 
-- 移动
-- 缩放
-- 旋转
-- 锁定
-- 隐藏
-- 绑定角色
+- `POST /rooms/{room_id}/characters` 是房间内快速创建角色入口，支持上传头像文件和 JSON 字段。
+- `POST /characters/link` 将当前用户角色库中的角色加入房间。
+- `visibility` 控制角色在房间角色列表和关联指示物中的隐藏表现。
+- `data-visibility` 控制角色信息面板隐藏数据；由该角色生成的指示物默认继承隐藏数据状态，但单个 room token 仍可单独调整。
+- `spawn-token` 从角色卡/次要指示物配置生成 room token。主要指示物由角色卡名称、头像和面板数据派生，并使用角色绑定的主要资源库 token。
 
 触发事件：
 
-- 后续多场景 Token 模块实现后定义；当前 room token 事件见 §12。
+- `room_characters`
+- `token_created`
+- `token_deleted`
 
 ---
 
@@ -310,7 +348,7 @@ DELETE /tokens/{token_id}
 - `image`：用户资源库中的通用图片。
 - `audio`：用户资源库中的通用音频。
 - `map_background`：房间地图底图。
-- `token_image`：地图 Token / 角色 Token 图片。
+- `token_image`：指示物头像图片。
 
 ```text
 POST   /assets
@@ -363,20 +401,57 @@ DELETE /library/resources/{resource_id}
 
 ---
 
-# 16 骰子 API
+# 16 骰子 API（已实现）
 
 ```text
 POST /rooms/{room_id}/dice-rolls
 GET  /rooms/{room_id}/dice-rolls
 ```
 
+`POST /rooms/{room_id}/dice-rolls` 请求体：
+
+```json
+{
+  "actor_type": "user",
+  "actor_token_id": null,
+  "label": "",
+  "formula": "d20+3",
+  "visibility": "public"
+}
+```
+
+说明：
+
+- `actor_type` 为 `user` 或 `token`。选择 token 作为主体时，会在日志中保存 token 当时的显示名与头像资产。
+- `visibility` 为 `public` / `blind`。暗骰仅 GM 收到完整结果；非 GM 不应看到该暗骰记录。
+- 掷骰记录绑定当前 `scene_id`。`GET` 支持 `scene_id`、`before_id`、`limit`，默认一页 30 条，最大 100 条。
+- 公式由底层 dice engine 解析；DND5E 的检定、豁免、技能、先攻等语义由上层 UI 生成公式和标签。
+
 触发事件：
 
-- 后续实现骰子模块后定义。
+- `dice_roll`
 
 ---
 
-# 17 操作日志 API
+# 17 掷骰预设 API（已实现）
+
+```text
+GET    /dice-presets
+POST   /dice-presets
+PATCH  /dice-presets/{preset_id}
+DELETE /dice-presets/{preset_id}
+```
+
+说明：
+
+- 掷骰预设归当前用户所有。
+- 预设支持树形分组：`kind=folder` 表示分组，`kind=preset` 表示实际预设。
+- 预设字段包括 `name`、`parent_id`、`formula`、`label`、`visibility`、`sort_order`。
+- 删除分组时会删除其子级预设/分组。
+
+---
+
+# 18 操作日志 API（规划）
 
 ```text
 GET /rooms/{room_id}/operation-logs
@@ -392,7 +467,7 @@ GET /rooms/{room_id}/operation-logs
 
 ---
 
-# 18 反馈 API
+# 19 反馈 API
 
 ```text
 POST /feedback
@@ -406,7 +481,7 @@ PATCH /feedback/admin/{feedback_id}
 
 ---
 
-# 19 错误返回
+# 20 错误返回
 
 建议统一错误结构：
 

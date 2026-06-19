@@ -1,127 +1,311 @@
-# 场景与地图模块设计
+# 场景与地图桌面模块设计
 
-版本：v0.4  
-状态：Draft
+版本：v0.6  
+状态：Implemented / Living Document  
+最后核对：2026-06-19
 
 ---
 
 # 1 模块目标
 
-维护房间内 **单活跃地图桌面**（MVP）：背景地图、常显网格、绘制层、视口与 Pointer。测距与 Campaign/Session/Scene 归档见后续章节。
+本模块描述 DND5E 房间模式中的桌面能力：地图、视口、网格、绘制、测距、Pointer、战争迷雾、背景音乐、场景快照与图层关系。
+
+注意：这些能力属于 DND5E 房间模式，不应默认绑定到 ThunderStone 等其他游戏模式。
 
 ---
 
-# 2 核心概念
+# 2 当前前端结构
 
-## 2.1 Scene（后续，非 MVP）
-
-与地图对应的游戏场景；纳入 **Campaign / Session / Scene** 体系后，用于跑团历史与多场景切换。见 `01_product_requirements.md` §4.3。
-
-## 2.2 Map（MVP）
-
-当前房间可有多张底图（GM 管理）；叠放基准 **z-index 0**（见 §3.2），类内 `z_index` 排序。
-
-## 2.3 Grid
-
-始终显示的方格网格。网格在 **SceneCanvas transform 内**、叠于地图与绘制之上（`SelectionOverlay` 在其上以便操作），随视口平移/缩放与场景同步移动；**不占用** §3.2 三大类 band，且不拦截指针。
-
-## 2.4 Drawing
-
-全员（GM/PL）可绘制；OB 只读。叠放基准 **z-index 200**（见 §3.2）。
-
----
-
-# 3 MVP 范围
-
-## 3.1 单活跃桌面
-
-每房间一个活跃 Map；不实现 Campaign/Session 切换。
-
-## 3.2 图层 z-index
-
-### 3.2.1 三大类基准（固定）
-
-地图始终在最下，绘制始终在最上；**Context Menu「图层」不得跨类改变**下列基准。
-
-| 大类 | 基准 z-index |
-|---|---|
-| 地图底图 / 地图对象 | **0** |
-| Token | **100** |
-| 绘制（含文本框） | **200** |
-
-选中框、Pointer、Context Menu 等 **视口 UI 叠层** 与上述三档分开描述（见 `03_frontend_design.md` §4.2.3），不占用 0 / 100 / 200。
-
-### 3.2.2 同类内排序
-
-每类元素各自维护 **同类相对顺序**（持久化字段可仍称 `z_index`，语义为类内序号或 band 内绝对值）。
+主要文件：
 
 ```text
-effectiveZ(map)   = 0   + orderWithinMaps      // 建议区间 [0, 99]
-effectiveZ(token) = 100 + orderWithinTokens    // 建议区间 [100, 199]
-effectiveZ(draw)    = 200 + orderWithinDrawings // 建议区间 [200, 299]
+frontend/src/pages/room/Dnd5eRoomMode.vue
+frontend/src/features/table/components/TableStage.vue
+frontend/src/features/table/components/MapViewport.vue
+frontend/src/features/table/components/MapLayer.vue
+frontend/src/features/table/components/DrawingLayer.vue
+frontend/src/features/table/components/TokenLayer.vue
+frontend/src/features/table/components/FogOverlay.vue
+frontend/src/features/table/components/PointerOverlay.vue
+frontend/src/features/table/components/MeasureOverlay.vue
+frontend/src/features/table/components/TopToolBar.vue
+frontend/src/features/table/components/BottomAssetBar.vue
 ```
 
-- 仅与 **同类兄弟** 比较；任意 Token 的 effective z 仍小于任意绘制、大于任意地图。
-- 新建对象默认可取同类当前最大序号 + 步长（实现时定步长，如 1 或 10）。
+主要状态：
 
-### 3.2.3 Context Menu「图层」
-
-- 上移 / 下移 / 置顶 / 置底等 **只重排同类**（与邻居交换，或对该类批量 reindex）。
-- **不要求** `z_index ± 1`；序号挤满时可 reindex（如 0, 10, 20…）。
-- **禁止** 通过图层菜单把对象排到其它 band（例如 Token 不能排到绘制之上）。
-
-## 3.3 地图底图（GM，`game_role`）
-
-上传、缩放适配网格、拖拽（未锁定）、锁定、删除（选中 + 菜单）、**地图类内** z-index（§3.2.2–3.2.3）。
-
-## 3.4 视口
-
-手型工具：平移 / 缩放。
-
-## 3.5 测距（MVP 不做）
-
-**第一版 MVP 不包含测距工具**（含原「两点拖拽测距」）。
-
-**后续方案**（产品讨论）：
-
-1. 进入测距 / 移动模式，以 **Token 圆心** 记录移动轨迹，自动累计路径长度（ft）。
-2. DM 标记 **困难地形** 后，分段统计困难地形长度。
-3. Token 菜单 **移动**：测算距离与可达（暂不考虑跳跃、困难地形规则）。
-
-实现前保留网格 ft 尺度，供手动估算。
-
-## 3.6 自定义绘制
-
-笔刷、线、方、圆、**文本框**（字号、颜色）；线宽与颜色；橡皮擦、框选删除。GM 与 PL 可画；OB 不可。
+```text
+useTabletopStore
+useRoomRealtimeSession        # 房间基础 WS
+useTabletopRealtimeEvents     # tabletop 专用 WS
+```
 
 ---
 
-# 4 权限规则
+# 3 后端数据
 
-见 `08_permission_design.md` §6.4（`game_role`）。
+当前实时桌面状态仍以 room 级表保存：
+
+```text
+room_tabletop_settings
+room_maps
+room_drawings
+room_tokens
+```
+
+场景快照：
+
+```text
+room_scenes
+```
+
+`room_tabletop_settings` 当前包含：
+
+```text
+grid_cell_ft
+grid_cell_px
+combat_state
+music_state
+fog_state
+```
 
 ---
 
-# 5 实时事件
+# 4 图层模型
 
-- MAP_* / DRAWING_* / POINTER_*（实现清单见 WS 协议文档）
+当前核心图层顺序：
+
+```text
+地图
+Token
+绘制
+战争迷雾
+测距 / Pointer / 临时绘制预览 / 选择框 / 菜单等交互层
+```
+
+说明：
+
+- 战争迷雾需要覆盖地图、token、绘制。
+- draw / pointer / 测距等工具层高于战争迷雾，便于 GM/PL 操作与指示。
+- 被战争迷雾完全覆盖的 token 不应响应点击；若只覆盖一部分，未覆盖区域仍可点击。
+- Context Menu 的 z-index 必须高于各浮动面板和桌面对象。
+
+同类图层排序：
+
+- 地图只在地图类内调整。
+- token 只在 token 类内调整。
+- 绘制只在绘制类内调整。
+- token 右键菜单的图层操作已收拢到“图层”次级菜单。
 
 ---
 
-# 6 后续：Campaign / Session / Scene
+# 5 地图
 
-| 概念 | 含义 |
-|---|---|
-| **Campaign** | 一个团的整体故事线 |
-| **Session** | 某次游玩场次（开始到结束） |
-| **Scene** | 场景，与地图对应 |
+地图来源于资源库 `library_resources(type=map_background)`。
 
-用于跑团历史与多地图归档；**排在 MVP 之后**。
+能力：
+
+- 上传地图。
+- 从资源库添加地图。
+- 上传后先填写地图名称与备注，再标记网格。
+- 地图网格标定。
+- 锁定 / 解锁。
+- 删除。
+- 右键地图填充战争迷雾。
+- 多地图在同一场景中可共存。
+
+上传地图后会创建 asset 与 library resource，再应用到当前房间。
 
 ---
 
-# 7 设计原则
+# 6 视口
 
-1. 网格为对齐基准；底图缩放适配网格。
-2. 测距与移动规则后置，避免 MVP 阻塞。
-3. 游戏权限只看 `game_role`，不看 `room_role`。
+能力：
+
+- 缩放。
+- 平移。
+- 重置视窗。
+- 选择工具 / 手型工具。
+- 在选择或手型状态下，按住鼠标滚轮可拖动视窗。
+- 双击战斗先攻轴 token 可平滑移动视窗到对应 token。
+
+视窗位置与缩放属于前端本地状态，可按房间/场景在本地保存。
+
+---
+
+# 7 绘制工具
+
+当前工具：
+
+- 笔刷。
+- 直线。
+- 矩形。
+- 圆形。
+- 文本。
+- 橡皮 / 删除。
+
+已调整：
+
+- 椭圆工具改为圆形。
+- 矩形与圆形支持轮廓 / 遮罩。
+- 遮罩透明度 0–100。
+- 默认拖动为矩形/圆形；按住 Ctrl 约束为正方形/正圆。
+- 绘制笔刷大小使用滑条，并有笔刷大小预览。
+- 绘制工具中 `Ctrl+Z` 移除上一条绘制。
+
+权限：
+
+- GM / PL 可绘制。
+- OB 只读。
+
+---
+
+# 8 测距与 Pointer
+
+测距：
+
+- 已作为桌面工具存在。
+- 用于场景坐标下的距离估算。
+
+Pointer：
+
+- 通过 WebSocket 实时同步位置。
+- pointer 位置通过网络传输，拖尾由前端本地渲染。
+- 当前激光表现为 fading trail，而不是从按下点到当前位置的直线。
+- 使用者本地也能看到拖尾。
+
+---
+
+# 9 战争迷雾
+
+战争迷雾属于 DND5E 桌面工具，仅 GM 可编辑。
+
+工具：
+
+- 填充战争迷雾。
+- 擦除战争迷雾。
+- 共用笔刷大小。
+- 工具栏有笔刷大小滑条。
+- 工具栏有非 GM 视角预览开关。
+- 工具栏有非 GM 迷雾不透明度滑条。
+
+显示：
+
+- GM 视角：半透明黑色遮罩，当前约 0.6。
+- PL / OB 视角：接近不透明黑色遮罩，当前约 0.95，可由房间设置同步。
+- 羽化已取消，避免边缘效果差。
+
+数据：
+
+- 当前 fog state 存于 `room_tabletop_settings.fog_state`。
+- 每个 room map 应拥有独立 fog mask；删除地图时，对应迷雾不应污染新地图。
+- 未来建议将 fog mask 正式转为灰度图资产或二进制数据，而不是无限积累笔刷操作。
+
+---
+
+# 10 背景音乐
+
+背景音乐工具位于桌面工具栏。
+
+能力：
+
+- GM 添加资源库音乐。
+- GM 上传音频，上传后先创建资源库对象，再应用到房间。
+- 播放 / 暂停。
+- 上一首 / 下一首。
+- 播放进度。
+- 单曲循环 / 列表循环 / 随机播放。
+- 播放列表。
+- 所有玩家可本地调整音量。
+
+同步：
+
+- 当前播放列表、曲目、进度、播放状态等存入 `room_tabletop_settings.music_state`。
+- 本地音量不进入房间状态。
+
+---
+
+# 11 场景
+
+场景功能已落地，不再是后续概念。
+
+数据：
+
+```text
+room_scenes
+```
+
+能力：
+
+- 素材面板中通过“切换场景”打开场景菜单。
+- 新建空场景。
+- 切换场景时，先保存当前 tabletop 到当前场景，再加载目标场景。
+- 编辑场景名称。
+- 删除场景。
+- 场景删除需要确认。
+
+场景快照应包含：
+
+- 地图。
+- 绘制。
+- token。
+- 战争迷雾。
+- 与场景绑定的掷骰日志。
+
+视窗位置和缩放属于每个用户的前端本地状态，也应按场景保存。
+
+---
+
+# 12 实时事件
+
+当前相关事件：
+
+```text
+tabletop_settings_updated
+tabletop_snapshot_replaced
+map_created
+map_updated
+map_deleted
+drawing_created
+drawing_updated
+drawing_deleted
+token_created
+token_updated
+token_deleted
+token_transform_preview
+pointer_presence
+pointer_laser
+object_selection
+```
+
+说明：
+
+- 拖拽 token 中途通过 `token_transform_preview` 走 WS 预览，结束时通过 HTTP PATCH 持久化。
+- Pointer 通过 WS 传位置，轨迹本地渲染。
+- 场景切换通过 `tabletop_snapshot_replaced` 通知客户端重载。
+
+---
+
+# 13 权限规则
+
+| 操作 | GM | PL | OB |
+|---|---|---|---|
+| 查看桌面 | ✓ | ✓ | ✓ |
+| 地图管理 | ✓ | — | — |
+| 绘制 | ✓ | ✓ | — |
+| 测距 | ✓ | ✓ | — |
+| Pointer | ✓ | ✓ | — |
+| 战争迷雾编辑 | ✓ | — | — |
+| 音乐播放状态 | ✓ | — | — |
+| 本地音量 | ✓ | ✓ | ✓ |
+| 场景管理 | ✓ | — | — |
+
+---
+
+# 14 后续
+
+- 正式化 `fog_state` schema。
+- 将 fog mask 从笔刷操作栈升级为灰度图/压缩 mask。
+- 拆出 DND5E tabletop 与房间基础 shell 的边界文档。
+- 为场景切换、战争迷雾、音乐状态补测试。
+- 将当前巨大的 `Dnd5eRoomMode.vue` 继续拆分。

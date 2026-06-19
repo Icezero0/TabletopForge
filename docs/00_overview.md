@@ -1,7 +1,7 @@
 # TabletopForge 系统设计总览
 
-版本：v0.2  
-状态：Draft
+版本：v0.3  
+状态：Draft（2026-06-19 已补当前实现摘要）
 
 ---
 
@@ -25,11 +25,11 @@
 
 # 2 产品概述
 
-TabletopForge 是一个面向 TRPG / DND 跑团场景的在线协作桌面系统。
+TabletopForge 起步于 TRPG / DND 跑团场景，目前已引入房间类型 `Room.type`，支持按房间类型加载不同游戏模式。当前主要可用模式为 DND5E，ThunderStone 为原型与资产整理阶段。
 
 系统以“房间”为核心协作空间。用户可以创建房间、加入房间，并在房间内完成角色卡管理、地图布置、Token 操作、普通聊天、角色扮演消息、骰子判定、操作日志记录与实时状态同步。
 
-系统优先支持 DND5E 场景，但整体设计应保留规则集扩展空间，后续可支持其他 TRPG 规则或自定义规则。
+系统以房间为协作边界。成员、权限、邀请、基础 WebSocket 等属于房间基础层；DND5E 桌面、ThunderStone DBG 牌区等属于具体游戏模式。
 
 ---
 
@@ -54,28 +54,36 @@ TabletopForge 的核心目标是：
 
 - 用户注册、登录、资料与头像
 - 反馈与反馈图片
-- 房间创建、加入、成员管理与 `site_role` / `room_role`
+- 房间创建、加入、成员管理与 `site_role` / `room_role` / `game_role`
+- 房间类型 `Room.type`：`DND5E` / `ThunderStone`
 - 普通聊天、站内通知
 - `assets`：头像 / 历史头像、反馈图、用户资源库（`image` / `audio`）
 - 个人资源库（`library_resources`）
-- **角色卡**（`characters`）：DnD 5e 结构化角色卡，支持新建、编辑（6 Tab）、列表浏览
-- WebSocket 实时同步（消息、成员等）
+- **角色卡**（`characters`）：DnD 5e 结构化角色卡、资源、法术、特性、专长、主要/次要指示物配置
+- DND5E 房间桌面：地图、绘制、指示物、信息面板、Pointer、测距
+- 掷骰日志、公式编辑、暗骰、主体、预设
+- 战斗面板、先攻轴、回合推进
+- 场景保存/切换、战争迷雾、背景音乐、个人备忘录
+- WebSocket 实时同步（消息、成员、presence、DND tabletop、掷骰等）
+- ThunderStone 房间模式原型与卡牌资产导入目录
 
-## 4.2 下一版 MVP 目标
+## 4.2 近期目标
 
-产品范围以 [`01_product_requirements.md`](01_product_requirements.md) §4.2 为准，摘要：
+当前近期目标：
 
-- 游戏主界面（Table）：视口缩放平移，地图 / Token / 绘制三层，网格常显
-- **`game_role`**（`GM` | `PL` | `OB`）与 **`room_role`** 分离；房主可当 PL
-- 角色 **稳定层 + 实时状态层**；Token 与地图、绘制；**不测距**（后续 Token 轨迹测距）
-- 单活跃地图桌面；操作日志（关键变更）
+- 继续清理房间基础层与具体游戏模式的边界。
+- 为 ThunderStone 生成卡牌结构化 catalog 草稿。
+- 补齐 DND5E 现有功能的专项文档与测试。
+- 整理数据库、API 与 WebSocket 文档，追平当前实现。
 
 ## 4.3 当前不包含
 
-- Campaign / Session / Scene 归档；测距与移动规则引擎
-- 多场景切换、RP 消息、骰子、DND5E 自动计算、战斗辅助
-- 完整规则书 / 法术库、战争迷雾、动态光照、宏系统
-- 多规则集完整实现
+- 完整 RP 消息体系与冒险日志。
+- 操作日志。
+- DND5E 完整规则书 / 法术库。
+- 动态光照、宏系统。
+- ThunderStone 完整后端模型、牌区状态、卡牌效果脚本。
+- 多规则集完整实现。
 
 这些能力作为后续扩展，见各模块设计与 Phase 2–5。
 
@@ -92,11 +100,12 @@ Frontend
 
 Backend
   ├─ Auth / Users
-  ├─ Rooms / Members / Permissions
-  ├─ Messages / RP Messages
+  ├─ Rooms / Members / Permissions / Room Modes
+  ├─ Messages
   ├─ Characters / Character States
-  ├─ Scenes / Maps / Tokens / Assets
-  ├─ Dice / Logs
+  ├─ DND5E Tabletop / Scenes / Maps / Tokens / Assets
+  ├─ Dice / Combat / Fog / Music
+  ├─ ThunderStone Prototype / Card Assets
   └─ Realtime
 ```
 
@@ -109,19 +118,20 @@ Backend
 | 模块         | 说明                                                                                    |
 | ------------ | --------------------------------------------------------------------------------------- |
 | 用户模块     | 处理注册、登录、用户资料和站点级身份                                                    |
-| 房间模块     | 跑团协作空间，承载成员、消息、角色、地图和日志                                          |
+| 房间模块     | 协作空间基础层，承载成员、权限、邀请、消息、个人备忘录和房间类型                         |
 | 成员模块     | 维护用户与房间的关系                                                                    |
 | 权限模块     | site_role、room_role 已实现；跑团 MVP 新增 game_role（GM/PL/OB） |
 | 消息模块     | 普通聊天消息                                                                            |
-| RP 消息模块  | 结构化角色扮演消息                                                                      |
+| RP / 冒险日志 | 仍在规划中；当前聊天面板已有“冒险日志”占位                                             |
 | 角色卡模块   | 维护角色基础资料、属性、技能、资源和设定                                                |
-| 角色状态模块 | 维护 HP、状态、资源、法术位等高频变更数据                                               |
+| 角色状态模块 | 维护 HP、状态等高频变更数据；角色资源目前随角色卡与指示物面板数据保存                    |
 | 规则计算模块 | 提供 DND5E 基础计算与扩展规则接口                                                       |
 | 骰子模块     | 支持骰子表达式、公开骰、暗骰和记录                                                      |
-| 场景地图模块 | 维护场景、地图背景、网格配置                                                            |
-| Token 模块   | 维护地图上的角色、怪物、NPC、物件等对象                                                 |
-| Assets 模块  | 管理头像、反馈图片、用户资源库（image/audio）；角色卡头像/图库图片                      |
-| 操作日志模块 | 记录关键业务操作，支持状态追溯                                                          |
+| DND5E 桌面模块 | 维护场景、地图、指示物、绘制、战争迷雾、背景音乐、战斗面板                              |
+| Token 模块   | 维护 DND5E 桌面上的 room token 快照与资源库 token 头像引用                              |
+| Assets / 资源库模块 | 管理头像、反馈图片、资源库地图/指示物/音频，以及底层文件引用计数                 |
+| 掷骰模块     | 支持公式掷骰、暗骰、场景内掷骰日志、用户掷骰预设                                        |
+| 操作日志模块 | 规划中；用于记录关键业务操作，支持状态追溯                                              |
 | 实时同步模块 | 广播房间内事件并维护在线状态                                                            |
 
 ---
@@ -142,9 +152,7 @@ game_role：游戏级身份
 - `room_role` 用于房间治理，例如入房审批、成员管理、房间信息维护。
 - `game_role` 用于游戏内操作，例如切换地图、移动 Token、修改角色状态、暗骰。
 
-当前后端已实现：`site_role`、`room_role`。
-
-跑团 MVP 目标：在 `room_members` 增加 **`game_role`**（`GM` | `PL` | `OB`）。Tabletop 权限见 [`08_permission_design.md`](08_permission_design.md) §6.4。
+当前后端已实现：`site_role`、`room_role`、`game_role`（`GM` | `PL` | `OB`）。Tabletop 权限见 [`08_permission_design.md`](08_permission_design.md) §6.4。
 
 ---
 
@@ -155,21 +163,23 @@ game_role：游戏级身份
 跑团主界面以 **地图视窗** 为核心，分区如下（详见 [`03_frontend_design.md`](03_frontend_design.md) §4.2）：
 
 1. **顶栏工具** — 手型、绘制、测距、Pointer  
-2. **左侧** — 场上角色列表 + 悬浮聊天  
+2. **左侧** — 房间管理、角色列表、素材面板  
 3. **中央 MapViewport** — 地图、网格、Token、绘制  
-4. **底栏** — 添加地图 / 添加角色（素材）  
-5. **右侧** — 单槽信息查看 + 个人备忘录（按房间、仅自己可见）
+4. **底部** — 战斗先攻轴  
+5. **左下** — 会话面板（聊天 / 掷骰日志 / 冒险日志占位）  
+6. **右侧** — 单槽信息查看 + 个人备忘录（按房间、仅自己可见）
 
 ```text
 RoomPage
 ├── TopToolBar
-├── TopLeftDock（角色列表 + 悬浮聊天）
+├── LeftDock（房间管理 + 角色列表 + 素材）
 ├── MapViewport
+├── CombatPanel
+├── SessionPanel
 ├── RightInspector（InfoPanel + PersonalMemo）
-└── BottomAssetBar
 ```
 
-RP、骰子、多 Tab 侧栏等为后续扩展，不在跑团桌面 MVP 主布局内。
+掷骰日志已并入会话面板；冒险日志目前为占位，后续再实现结构化内容。
 
 ---
 
@@ -193,6 +203,8 @@ RP、骰子、多 Tab 侧栏等为后续扩展，不在跑团桌面 MVP 主布�
 ---
 
 # 10 阶段目标
+
+以下为历史阶段规划，用于理解项目演进；当前实现进度以 `10_repository_status.md` 和各模块文档为准。
 
 ## Phase 1：基础房间与权限
 
@@ -221,7 +233,7 @@ RP、骰子、多 Tab 侧栏等为后续扩展，不在跑团桌面 MVP 主布�
 - 地图上传、缩放适配网格、锁定、绘制工具（测距后续）
 - Token 创建、移动、缩放、删除（右键菜单）
 - Token 实时同步
-- 多场景切换移至后续
+- 场景保存与切换已落地，当前以 `room_scenes.snapshot` 保存/恢复 tabletop 状态
 - **MVP 后**：跑团主界面悬浮面板可配置显隐 + 自由拖动（见 `01_product_requirements.md` §4.3）
 
 ## Phase 4：RP 与骰子

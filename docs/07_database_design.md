@@ -1,7 +1,7 @@
 # TabletopForge 数据库设计
 
 版本：v0.4  
-状态：Draft
+状态：Draft（部分章节仍保留早期设计；2026-06-19 已补当前实现摘要）
 
 ---
 
@@ -10,6 +10,33 @@
 本文档描述 TabletopForge 的核心数据表、字段方向、关系和索引建议。
 
 字段为初始设计，可在实现中根据 ORM 和迁移需求调整。
+
+---
+
+# 0 当前实现补充（2026-06-19）
+
+当前数据库已推进到 Alembic head：
+
+```text
+20260618_0034_add_room_type
+```
+
+相比本文早期设计，已经新增或调整：
+
+- `rooms.type`：房间类型，当前 `DND5E | ThunderStone`，历史房间默认 `DND5E`。
+- `room_tabletop_settings.combat_state`：DND5E 战斗状态 JSON。
+- `room_tabletop_settings.music_state`：房间背景音乐状态 JSON。
+- `room_tabletop_settings.fog_state`：战争迷雾状态 JSON。
+- `room_scenes`：场景快照表，已落地，不再只是后续设计。
+- `room_dice_rolls`：房间掷骰日志，已按 `scene_id` 作用域迁移。
+- `dice_presets`：用户掷骰预设，支持分组/排序。
+- `characters.resources`：角色卡资源列表。
+- `characters.primary_token_resource_id`：角色主要指示物对应资源库 token。
+- `room_characters.hide_data`：角色信息隐藏数据开关。
+- `characters.kind` 已删除；角色类型不再通过该字段表达。
+- `room_tokens.library_resource_id` 可为 `NULL`；资源库 token 删除后 room token 可回退到首字头像。
+
+后续应按当前 ORM 逐表追平本文档。
 
 ---
 
@@ -91,10 +118,18 @@ updated_at
 ```text
 id
 name
+type
 owner_id
 visibility
 join_audit_mode
 created_at
+```
+
+`type` 当前用于选择房间游戏模式，已有取值：
+
+```text
+DND5E
+ThunderStone
 ```
 
 ## 3.2 room_members
@@ -264,7 +299,6 @@ id
 owner_id           FK → users.id，CASCADE DELETE
 name               VARCHAR(255)，从 identity.name 冗余，方便列表查询
 player_name        VARCHAR(255)
-kind               VARCHAR(16)，pc_main | pc_additional | npc，默认 pc_main
 portrait_asset_id  FK → assets.id，SET NULL（角色卡头像）
 token_image_asset_id FK → assets.id，SET NULL（地图 Token 圆图，AssetType.TOKEN_IMAGE）
 system             VARCHAR(50)，固定 "dnd5e"
@@ -275,6 +309,8 @@ features           JSON  — 种族特性、职业特性、自定义字段
 spells             JSON NULLABLE — 法术书、施法属性、法术位等
 equipment          JSON  — 物品列表
 extras             JSON  — 自由备注
+resources          JSON  — 角色资源列表
+primary_token_resource_id FK → library_resources.id，SET NULL（主要指示物资源库 token）
 created_at
 updated_at
 ```
@@ -303,7 +339,7 @@ max_hp             INT NULLABLE
 temp_hp            INT，默认 0
 armor_class        INT NULLABLE
 conditions         JSON，默认 {}
-damage_taken       INT，默认 0（Phase 4 怪物伤害记录用）
+damage_taken       INT，默认 0（历史兼容字段；当前隐藏数据展示的累计伤害以前端 `max_hp - current_hp` 计算为准）
 updated_at
 ```
 
@@ -317,8 +353,9 @@ API：`GET/PATCH /characters/{id}/state`；创建角色（全局或房间库）�
 id
 room_id            FK → rooms.id
 character_id       FK → characters.id
-kind               VARCHAR(16)，pc_main | pc_additional | npc
 added_by_user_id   FK → users.id
+is_hidden          bool，GM 控制角色可见性
+hide_data          bool，隐藏角色信息数据；由该角色生成的 room token 默认继承
 created_at
 ```
 
@@ -353,7 +390,7 @@ created_at
 
 # 7 地图桌面
 
-> **MVP（Step 4）**：扁平 room 表 `room_tabletop_settings`、`room_maps`、`room_drawings`（见 §7.0）。§7.1–7.2 的 `scenes` / `scene_maps` 为后续多场景归档预留。
+> 当前 DND5E 桌面仍以 room 级 `room_maps` / `room_drawings` / `room_tokens` 为实时状态表；多场景能力通过 `room_scenes.snapshot` 保存和恢复当前 tabletop 状态。
 
 ## 7.0 MVP：room tabletop（已实现中）
 
@@ -365,6 +402,9 @@ created_at
 room_id          PK, FK rooms
 grid_cell_ft     float，默认 5
 grid_cell_px     int，默认 40
+combat_state     JSON NULLABLE，DND5E 战斗状态
+music_state      JSON NULLABLE，房间音乐播放状态
+fog_state        JSON NULLABLE，战争迷雾状态
 updated_at
 ```
 
@@ -399,9 +439,9 @@ created_at, updated_at
 
 ---
 
-## 7.1 scenes（后续，非 MVP）
+## 7.1 room_scenes（已实现）
 
-用途：房间内场景。
+用途：房间内场景快照。切换场景时，当前 tabletop 状态保存为当前场景，再加载目标场景快照。
 
 核心字段：
 
@@ -409,13 +449,14 @@ created_at, updated_at
 id
 room_id
 name
-description
-sort_order
+snapshot          JSON，场景快照
+is_active         bool，当前激活场景
+created_by_user_id
 created_at
 updated_at
 ```
 
-## 7.2 scene_maps
+## 7.2 scene_maps（未实现）
 
 用途：场景地图配置。
 
@@ -440,26 +481,27 @@ updated_at
 
 用途：地图上的可操作对象。
 
-**MVP 已落地**：表 `room_tokens`（Alembic `20260606_0007`）；扁平 `room_id`，**无** `scene_id`。API：`POST/PATCH/DELETE /rooms/{id}/tokens`；`POST .../characters/{id}/spawn-token`；快照 `GET /rooms/{id}/tabletop` 含 `tokens`（`state_summary`，按观看者权限展示 HP/AC/PP/伤害信息）；WS `token_created/updated/deleted`、`character_state_updated`（含 GM 全量 summary 与 public summary）。
+**已落地**：表 `room_tokens`；当前仍按 `room_id` 存储，场景切换通过 `room_scenes.snapshot` 保存/恢复 tabletop 状态。API：`POST/PATCH/DELETE /rooms/{id}/tokens`；`POST .../characters/{id}/spawn-token`；快照 `GET /rooms/{id}/tabletop` 含 `tokens`（`state_summary`，按观看者权限展示 HP/AC/PP/伤害信息）；WS `token_created/updated/deleted`、`character_state_updated`（含 GM 全量 summary 与 public summary）。
 
 核心字段：
 
 ```text
 id
 room_id
-asset_id              FK → assets.id，nullable
+library_resource_id   FK → library_resources.id，SET NULL，nullable
 linked_character_id   FK → characters.id，SET NULL
 name
-token_type
 x
 y
 width
 height
 rotation
 z_index
-visible
+is_hidden
+hide_data
 locked
 owner_user_id
+panel_data            JSON，room token 信息面板快照
 created_at
 updated_at
 ```
