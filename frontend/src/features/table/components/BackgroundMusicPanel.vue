@@ -48,6 +48,8 @@ const libraryOpen = ref(false);
 
 const isGm = computed(() => props.gameRole === "GM");
 const musicState = computed(() => props.musicState ?? defaultMusicState());
+const allowPlayerControl = computed(() => Boolean(musicState.value.allow_player_control));
+const canControlMusic = computed(() => isGm.value || (props.gameRole === "PL" && allowPlayerControl.value));
 const tracks = computed(() => musicState.value.tracks ?? []);
 const currentTrack = computed(() => {
   const list = tracks.value;
@@ -80,6 +82,7 @@ function defaultMusicState(): RoomMusicState {
     playing: false,
     position: 0,
     loop_mode: "list",
+    allow_player_control: false,
     updated_at: null,
   };
 }
@@ -128,7 +131,7 @@ function withTimestamp(state: RoomMusicState): RoomMusicState {
 }
 
 async function saveMusicState(next: RoomMusicState | null) {
-  if (!isGm.value || saving.value) return;
+  if (!canControlMusic.value || saving.value) return;
   saving.value = true;
   try {
     await tabletopStore.updateSettings(props.roomId, { music_state: next });
@@ -137,6 +140,14 @@ async function saveMusicState(next: RoomMusicState | null) {
   } finally {
     saving.value = false;
   }
+}
+
+async function setAllowPlayerControl(value: boolean) {
+  if (!isGm.value) return;
+  await saveMusicState(withTimestamp({
+    ...musicState.value,
+    allow_player_control: value,
+  }));
 }
 
 function trackFromResource(resource: LibraryResource): RoomMusicTrack | null {
@@ -216,7 +227,7 @@ async function stepTrack(delta: number) {
 }
 
 async function handleEnded() {
-  if (!isGm.value) return;
+  if (!canControlMusic.value) return;
   const state = musicState.value;
   if (!state.tracks.length) return;
   if (state.loop_mode === "single") {
@@ -317,7 +328,7 @@ watch(
 );
 
 watch(
-  isGm,
+  canControlMusic,
   (value) => {
     if (value && soundResources.value.length === 0) void fetchSoundResources();
   },
@@ -342,7 +353,7 @@ watch(
         <span class="trackName">{{ currentTrack?.name ?? t("table.music.noTrack") }}</span>
       </div>
 
-      <template v-if="isGm">
+      <template v-if="canControlMusic">
         <button
           type="button"
           class="iconBtn"
@@ -387,6 +398,19 @@ watch(
           />
           <span class="timeText">{{ formatTime(duration) }}</span>
         </div>
+
+        <button
+          v-if="isGm"
+          type="button"
+          class="controlToggle"
+          :class="{ on: allowPlayerControl }"
+          :title="t('table.music.allowPlayerControl')"
+          :disabled="saving"
+          @click="setAllowPlayerControl(!allowPlayerControl)"
+        >
+          <span class="toggleDot" aria-hidden="true" />
+          <span class="toggleText">PL</span>
+        </button>
 
         <button
           type="button"
@@ -551,7 +575,8 @@ watch(
 }
 
 .musicBtn,
-.iconBtn {
+.iconBtn,
+.controlToggle {
   height: 32px;
   padding: 0 10px;
   border: 1px solid transparent;
@@ -564,7 +589,8 @@ watch(
 }
 
 .musicBtn:hover:not(:disabled),
-.iconBtn:hover:not(:disabled) {
+.iconBtn:hover:not(:disabled),
+.controlToggle:hover:not(:disabled) {
   background: color-mix(in srgb, var(--c-primary) 10%, transparent);
   color: var(--c-text);
 }
@@ -584,9 +610,53 @@ watch(
 }
 
 .musicBtn:disabled,
+.controlToggle:disabled,
 .resourceRow:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.controlToggle {
+  width: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.controlToggle.on {
+  border-color: color-mix(in srgb, var(--c-primary) 42%, transparent);
+  background: color-mix(in srgb, var(--c-primary) 16%, transparent);
+  color: var(--c-text);
+}
+
+.toggleDot {
+  width: 16px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  position: relative;
+  opacity: 0.75;
+}
+
+.toggleDot::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+  transition: transform 0.15s ease;
+}
+
+.controlToggle.on .toggleDot::after {
+  transform: translateX(6px);
+}
+
+.toggleText {
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .uploadChoice input {

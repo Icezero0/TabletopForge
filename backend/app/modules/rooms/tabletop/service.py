@@ -26,6 +26,7 @@ from app.modules.rooms.tabletop.schemas import (
     RoomCombatState,
     RoomMapPatch,
     RoomMapResponse,
+    RoomMusicState,
     RoomTabletopSettingsPatch,
     RoomTabletopSettingsResponse,
     RoomTabletopSnapshotResponse,
@@ -478,11 +479,19 @@ class RoomTabletopService:
         changes_music = "music_state" in payload.model_fields_set
         changes_fog = "fog_state" in payload.model_fields_set
 
-        if game_role != GameRole.GM and (changes_settings or changes_music or changes_fog):
+        if game_role != GameRole.GM and (changes_settings or changes_fog):
             raise ForbiddenError(
                 "You do not have permission to perform this action",
                 reason=ErrorReason.ROOM_PERMISSION_DENIED,
                 details={"game_role": game_role},
+            )
+        if game_role != GameRole.GM and changes_music:
+            self._require_player_music_control_access(
+                current_state=RoomMusicState.model_validate(settings.music_state)
+                if settings.music_state is not None
+                else None,
+                next_state=payload.music_state,
+                game_role=game_role,
             )
         if game_role != GameRole.GM and changes_combat:
             await self._require_combat_state_update_access(
@@ -521,6 +530,38 @@ class RoomTabletopService:
         )
         await db.commit()
         return RoomTabletopSettingsResponse.model_validate(updated)
+
+    def _require_player_music_control_access(
+        self,
+        *,
+        current_state: RoomMusicState | None,
+        next_state: RoomMusicState | None,
+        game_role: GameRole,
+    ) -> None:
+        if game_role != GameRole.PL:
+            raise ForbiddenError(
+                "You do not have permission to perform this action",
+                reason=ErrorReason.ROOM_PERMISSION_DENIED,
+                details={"game_role": game_role},
+            )
+        if current_state is None or not current_state.allow_player_control:
+            raise ForbiddenError(
+                "You do not have permission to perform this action",
+                reason=ErrorReason.ROOM_PERMISSION_DENIED,
+                details={"game_role": game_role},
+            )
+        if next_state is None:
+            raise ForbiddenError(
+                "You do not have permission to perform this action",
+                reason=ErrorReason.ROOM_PERMISSION_DENIED,
+                details={"game_role": game_role},
+            )
+        if next_state.allow_player_control != current_state.allow_player_control:
+            raise ForbiddenError(
+                "You do not have permission to perform this action",
+                reason=ErrorReason.ROOM_PERMISSION_DENIED,
+                details={"game_role": game_role},
+            )
 
     async def _require_combat_state_update_access(
         self,

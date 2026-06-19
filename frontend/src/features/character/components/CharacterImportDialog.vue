@@ -21,6 +21,7 @@ const emit = defineEmits<{
 const { t } = useI18n();
 
 const rawText = ref("");
+const mode = ref<"file" | "ai">("file");
 const loading = ref(false);
 const error = ref("");
 const progress = ref(0);
@@ -57,6 +58,7 @@ watch(
       return;
     }
     rawText.value = "";
+    mode.value = "file";
     error.value = "";
     loading.value = false;
     progress.value = 0;
@@ -144,6 +146,40 @@ async function submit() {
   attempt.value = 0;
 }
 
+function normalizeImportedPayload(value: unknown): CharacterImportPreview {
+  const record = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const payload = (record.character && typeof record.character === "object" && !Array.isArray(record.character))
+    ? record.character as Record<string, unknown>
+    : record;
+  return payload as CharacterImportPreview;
+}
+
+async function importFile(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0] ?? null;
+  input.value = "";
+  if (!file) return;
+  loading.value = true;
+  error.value = "";
+  try {
+    if (!file.name.toLowerCase().endsWith(".json") && file.type !== "application/json") {
+      throw new Error("Unsupported import file");
+    }
+    const text = await file.text();
+    const parsed = JSON.parse(text.trim());
+    emit("imported", normalizeImportedPayload(parsed));
+    loading.value = false;
+    close();
+  } catch {
+    error.value = t("character.import.fileFailed");
+    loading.value = false;
+  } finally {
+    loading.value = false;
+  }
+}
+
 onUnmounted(() => stopFakeProgress());
 </script>
 
@@ -152,19 +188,36 @@ onUnmounted(() => stopFakeProgress());
     <div v-if="open" class="backdrop">
       <div class="dialog">
         <h3 class="title">{{ t("character.import.title") }}</h3>
-        <p class="hint">{{ t("character.import.hint") }}</p>
+        <div class="modeSwitch" role="tablist">
+          <button type="button" :class="{ active: mode === 'file' }" @click="mode = 'file'">
+            {{ t("character.import.fileImport") }}
+          </button>
+          <button type="button" :class="{ active: mode === 'ai' }" @click="mode = 'ai'">
+            {{ t("character.import.aiImport") }}
+          </button>
+        </div>
 
-        <BaseTextarea
-          v-model="rawText"
-          min-height="220px"
-          max-height="400px"
-          :rows="12"
-          :placeholder="t('character.import.placeholder')"
-          :maxlength="MAX_LENGTH"
-          :disabled="loading"
-        />
+        <template v-if="mode === 'file'">
+          <p class="hint">{{ t("character.import.fileHint") }}</p>
+          <label class="fileDrop">
+            <span>{{ t("character.import.chooseFile") }}</span>
+            <input type="file" accept=".json,application/json" :disabled="loading" @change="importFile" />
+          </label>
+        </template>
 
-        <p class="counter">{{ rawText.length }} / {{ MAX_LENGTH }}</p>
+        <template v-else>
+          <p class="hint">{{ t("character.import.hint") }}</p>
+          <BaseTextarea
+            v-model="rawText"
+            min-height="220px"
+            max-height="400px"
+            :rows="12"
+            :placeholder="t('character.import.placeholder')"
+            :maxlength="MAX_LENGTH"
+            :disabled="loading"
+          />
+          <p class="counter">{{ rawText.length }} / {{ MAX_LENGTH }}</p>
+        </template>
 
         <p v-if="loading" class="status-text">{{ statusText }}</p>
 
@@ -175,6 +228,7 @@ onUnmounted(() => stopFakeProgress());
             {{ t("common.cancel") }}
           </BaseButton>
           <BaseButton
+            v-if="mode === 'ai'"
             type="button"
             variant="primary"
             :loading="loading"
@@ -223,6 +277,55 @@ onUnmounted(() => stopFakeProgress());
   font-size: 13px;
   color: var(--c-text-muted);
   line-height: 1.5;
+}
+
+.modeSwitch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+  background: var(--c-bg-subtle);
+  width: fit-content;
+}
+
+.modeSwitch button {
+  min-width: 88px;
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--c-text-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.modeSwitch button.active {
+  background: color-mix(in srgb, var(--c-primary) 18%, transparent);
+  color: var(--c-text);
+  font-weight: 700;
+}
+
+.fileDrop {
+  min-height: 144px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--c-border);
+  border-radius: 8px;
+  background: var(--c-bg-subtle);
+  color: var(--c-text);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fileDrop:hover {
+  border-color: var(--c-accent);
+}
+
+.fileDrop input {
+  display: none;
 }
 
 

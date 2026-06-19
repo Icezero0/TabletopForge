@@ -34,6 +34,7 @@ class RoomMusicState(BaseModel):
     playing: bool = False
     position: float = Field(default=0, ge=0)
     loop_mode: str = Field(default="list", pattern="^(single|list|shuffle)$")
+    allow_player_control: bool = False
     updated_at: datetime | None = None
 
 

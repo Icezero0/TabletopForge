@@ -26,6 +26,7 @@ export type TokenPanelInitial = {
   spell_save_dc?: { value: number; breakdown?: string };
   spell_attack_bonus?: { value: number; breakdown?: string };
   spellbook?: Record<string, string[]>;
+  prepared_spells?: string[];
   resources?: { name: string; max: number; current?: number; recovery: string; notes?: string }[];
   inherit_items_from_character?: boolean;
 };

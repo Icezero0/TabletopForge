@@ -476,6 +476,15 @@ const tokenSpellLevelRows = computed(() => {
   return rows;
 });
 
+const preparedSpellSet = computed(() => {
+  const prepared = tokenPanel.value?.prepared_spells;
+  return new Set(Array.isArray(prepared) ? prepared.map(String) : []);
+});
+
+function isPreparedSpell(name: string) {
+  return preparedSpellSet.value.has(name);
+}
+
 function toggleSpellLevel(lvl: string) {
   const s = new Set(expandedSpellLevels.value);
   s.has(lvl) ? s.delete(lvl) : s.add(lvl);
@@ -775,6 +784,31 @@ async function updateTokenSpellDerived(
           ...current,
           value,
         },
+      },
+    });
+    tabletopStore.applyTokenUpdated(props.roomId, updated);
+    saveSuccess.value = true;
+  } catch (e) {
+    saveError.value = getBackendErrorMessage(e) || t("table.inspector.saveFailed");
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function togglePreparedSpell(name: string) {
+  if (!canEditVisibleState.value || saving.value) return;
+  const tokenId = props.inspection?.tokenId;
+  if (tokenId == null) return;
+  const next = new Set(preparedSpellSet.value);
+  if (next.has(name)) next.delete(name);
+  else next.add(name);
+  saving.value = true;
+  saveError.value = "";
+  saveSuccess.value = false;
+  try {
+    const updated = await patchRoomToken(props.roomId, tokenId, {
+      panel: {
+        prepared_spells: Array.from(next),
       },
     });
     tabletopStore.applyTokenUpdated(props.roomId, updated);
@@ -1165,7 +1199,17 @@ function openCharacterSheet() {
                     <span>{{ row.label }}</span>
                   </div>
                   <div class="spellNames">
-                    <span v-for="sp in row.spells" :key="sp" class="spellName">{{ sp }}</span>
+                    <button
+                      v-for="sp in row.spells"
+                      :key="sp"
+                      type="button"
+                      class="spellName spellButton"
+                      :class="{ prepared: isPreparedSpell(sp) }"
+                      :disabled="!canEditVisibleState || saving"
+                      @click="togglePreparedSpell(sp)"
+                    >
+                      {{ sp }}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2476,6 +2520,27 @@ function openCharacterSheet() {
   background: color-mix(in srgb, var(--c-primary) 10%, var(--c-bg-subtle));
   border: 1px solid color-mix(in srgb, var(--c-primary) 25%, transparent);
   color: var(--c-text);
+}
+
+.spellButton {
+  font: inherit;
+  cursor: pointer;
+}
+
+.spellButton:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--c-primary) 55%, transparent);
+  background: color-mix(in srgb, var(--c-primary) 16%, var(--c-bg-subtle));
+}
+
+.spellButton:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.spellButton.prepared {
+  border-color: color-mix(in srgb, var(--c-success, #22c55e) 62%, transparent);
+  background: color-mix(in srgb, var(--c-success, #22c55e) 22%, var(--c-bg-subtle));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c-success, #22c55e) 22%, transparent);
 }
 
 .emptyHint {

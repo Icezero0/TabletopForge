@@ -371,6 +371,7 @@ export type RoomMusicState = {
   playing: boolean;
   position: number;
   loop_mode: "single" | "list" | "shuffle";
+  allow_player_control?: boolean;
   updated_at: string | null;
 };
 
